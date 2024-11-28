@@ -1,0 +1,64 @@
+name: "target supported version"
+
+on:
+  workflow_call:
+    inputs:
+      support:
+        description: "The support level to target (STS, LTS, or Preview)."
+        type: string
+        required: true
+        default: "STS"
+
+jobs:
+  version-sweep:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Start the .NET version sweeper, scan projects/slns for non-LTS (or currrent) versions
+      - name: .NET version sweeper
+        id: dotnet-version-sweeper
+        uses: dotnet/versionsweeper@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          owner: ${{ github.repository_owner }}
+          name: ${{ github.repository }}
+          branch: ${{ github.ref }}
+      
+      - name: Create pull requests
+        if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
+        run: |
+          upgradeProjects: ${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}
+
+          # Install .NET Upgrade Assistant global tool
+          dotnet tool install --global upgrade-assistant
+
+          # Iterate all upgrade projects
+          for projectDir in "${upgradeProjects[@]}"; do
+            echo "Project Directory: $projectDir"
+
+            # Create a new branch
+            git checkout -b upgrade/$projectDir
+
+            # Perform the upgrade using upgrade-assistant
+            upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}
+
+            # Commit the changes
+            git add .
+            git commit -m ".NET Version Sweeper: Upgraded $projectDir"
+
+            # Push the branch to the repository
+            git push origin upgrade/$projectDir
+
+            # Create a pull request
+            gh pr create \
+              --base main \
+              --head upgrade/$projectDir \
+              --title "Upgraded $projectDir" \
+              --body "Proposed upgrade for $projectDir"
+          done
