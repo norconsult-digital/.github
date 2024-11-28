@@ -1,4 +1,4 @@
-name: "target supported version"
+name: "dotnet version checker"
 
 on:
   workflow_call:
@@ -20,7 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Start the .NET version sweeper, scan projects/slns for non-LTS (or currrent) versions
       - name: .NET version sweeper
         id: dotnet-version-sweeper
         uses: dotnet/versionsweeper@v2.0
@@ -30,6 +29,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
+          dir: "/"
       
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
