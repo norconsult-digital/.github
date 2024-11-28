@@ -29,6 +29,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
+          dir: ${{ github.workspace }}/scim-demo
       
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
