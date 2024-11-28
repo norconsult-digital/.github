@@ -1,0 +1,9 @@
+{
+  "name": "Norconsult Digital Workflow",
+  "description": "Workflow to keep .Net and .Net fraemwork versions up to date",
+  "iconName": "norconsult-digital-svg-white",
+  "categories": [
+      "Automation"
+  ],
+  "filePatterns": []
+}
