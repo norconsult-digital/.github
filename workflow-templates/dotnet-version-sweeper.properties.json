@@ -1,9 +1,15 @@
 {
-  "name": "Norconsult Digital Workflow",
-  "description": "Workflow to keep .Net and .Net fraemwork versions up to date",
+  "name": "⚙️ .NET & .NET Framework Version Maintenance",
+  "description": "✨ Automated workflow to keep .NET and .NET Framework projects updated with supported versions.",
   "iconName": "isy-logo-dark",
   "categories": [
-      "Automation"
+    "Automation",
+    "Maintenance",
+    "DevOps"
   ],
-  "filePatterns": []
+  "filePatterns": [
+    "*.csproj",
+    "*.vbproj",
+    "global.json"
+  ]
 }
