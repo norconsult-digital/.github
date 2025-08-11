@@ -36,31 +36,48 @@ jobs:
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
         run: |
           upgradeProjects="${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}"
+           
+           echo "Raw upgrade projects output:"
+           echo "$upgradeProjects"
 
-          # Install .NET Upgrade Assistant global tool
-          dotnet tool install --global upgrade-assistant
+    # Remove brackets and commas, then split into an array
+           upgradeProjectsClean=$(echo "$upgradeProjects" | tr -d '[],')
 
-          # Iterate all upgrade projects
-          for projectDir in "${upgradeProjects[@]}"; do
-            echo "Project Directory: $projectDir"
+    # Turn into array
+           read -r -a projectsArray <<< "$upgradeProjectsClean"
 
-            # Create a new branch
-            git checkout -b upgrade/$projectDir
+    # Configure git identity
+           git config user.name "github-actions[bot]"
+           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-            # Perform the upgrade using upgrade-assistant
-            upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}
+           # Install .NET Upgrade Assistant and add to PATH
+           dotnet tool install --global upgrade-assistant
+           export PATH="$PATH:$HOME/.dotnet/tools"
 
-            # Commit the changes
-            git add .
-            git commit -m ".NET Version Sweeper: Upgraded $projectDir"
+           for projectPath in "${projectsArray[@]}"; do
+             echo "Processing project path: $projectPath"
 
-            # Push the branch to the repository
-            git push origin upgrade/$projectDir
+            # Create a safe branch name using only the project name
+             projectName=$(basename "$projectPath" .csproj)
+             branchName="upgrade-${projectName}"
 
-            # Create a pull request
-            gh pr create \
-              --base main \
-              --head upgrade/$projectDir \
-              --title "Upgraded $projectDir" \
-              --body "Proposed upgrade for $projectDir"
-          done
+             echo "Using branch: $branchName"
+
+             # Create and switch to the branch
+             git checkout -b "$branchName"
+
+             # Run the upgrade on the .csproj file
+             upgrade-assistant upgrade "$projectPath" --non-interactive -t ${{ inputs.support }}
+
+            # Commit and push the changes
+             git add .
+             git commit -m ".NET Version Sweeper: Upgraded $projectName"
+             git push origin "$branchName"
+
+            # Create a PR
+             gh pr create \
+               --base main \
+               --head "$branchName" \
+               --title "Upgraded $projectName" \
+               --body "Proposed upgrade for $projectPath"
+           done
