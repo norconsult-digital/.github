@@ -1,6 +1,6 @@
 {
   "name": "⚙️ .NET & .NET Framework Version Maintenance",
-  "description": "✨ Automated workflow to keep .NET and .NET Framework projects updated with supported versions.",
+  "description": "✨ Automated workflow to maintain .NET and .NET Framework projects on supported versions.",
   "iconName": "isy-logo-dark",
   "categories": [
     "Automation",
