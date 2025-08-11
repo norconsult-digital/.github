@@ -7,9 +7,5 @@
     "Maintenance",
     "DevOps"
   ],
-  "filePatterns": [
-    "*.csproj",
-    "*.vbproj",
-    "global.json"
-  ]
+  "filePatterns": []
 }
