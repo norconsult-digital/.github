@@ -34,8 +34,12 @@ jobs:
       
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
         run: |
-          upgradeProjects: ${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}
+          IFS=';' read -r -a upgradeProjects <<< "${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}"
+
 
           # Install .NET Upgrade Assistant global tool
           dotnet tool install --global upgrade-assistant
