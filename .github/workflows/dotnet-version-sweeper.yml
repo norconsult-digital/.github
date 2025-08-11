@@ -36,7 +36,7 @@ jobs:
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
         run: |
           upgradeProjects="${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}"
-           
+            echo "Project Directory: $upgradeProjects"
             # Install .NET Upgrade Assistant global tool
           dotnet tool install --global upgrade-assistant
 
