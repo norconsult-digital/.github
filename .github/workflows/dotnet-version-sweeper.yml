@@ -54,8 +54,11 @@ jobs:
           for projectDir in "${upgradeProjects[@]}"; do
             echo "Upgrading project: $projectDir"
 
-            # Create a new branch
-            git checkout -b upgrade/$projectDir
+            # Sanitize branch name: get only the folder or project filename without extension
+            safeBranchName=$(basename "$projectDir" .csproj)
+
+            # Create a new branch with the sanitized name
+            git checkout -b "upgrade/$safeBranchName"
 
             # Perform the upgrade using upgrade-assistant
             upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}
@@ -65,7 +68,7 @@ jobs:
             git commit -m ".NET Version Sweeper: Upgraded $projectDir"
 
             # Push the branch to the repository
-            git push origin upgrade/$projectDir
+            git push origin "upgrade/$safeBranchName"
 
             # Create a pull request
             gh pr create \
