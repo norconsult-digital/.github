@@ -45,9 +45,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          IFS=$'\n' read -rd '' -a upgradeProjects <<< "${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}"
-            echo "Project Directory: ${upgradeProjects[@]}"
-            # Install .NET Upgrade Assistant global tool
+          # Install jq if not available (optional)
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+
+          # Parse the JSON array of projects into a bash array
+          upgradeProjectsJson='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
+          mapfile -t upgradeProjects < <(echo "$upgradeProjectsJson" | jq -r '.[]')
+
+          echo "Projects to upgrade: ${upgradeProjects[*]}"
+
+          # Install .NET Upgrade Assistant global tool
           dotnet tool install --global upgrade-assistant
 
           # Iterate all upgrade projects
