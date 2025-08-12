@@ -73,7 +73,7 @@ jobs:
             # Create a pull request
             gh pr create \
               --base main \
-              --head upgrade/$projectDir \
-              --title "Upgraded $projectDir" \
+              --head "upgrade/$safeBranchName" \
+              --title "Upgraded $safeBranchName" \
               --body "Proposed upgrade for $projectDir"
           done
