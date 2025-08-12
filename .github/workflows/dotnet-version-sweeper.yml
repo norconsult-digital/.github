@@ -19,6 +19,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: List all files in workspace for debugging
+        run: ls -R $GITHUB_WORKSPACE
       
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
