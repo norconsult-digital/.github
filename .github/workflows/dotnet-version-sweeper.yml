@@ -19,6 +19,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Run tests
+        run: dotnet test "$GITHUB_WORKSPACE/fluent-assertions-alternatives/Shouldly.Test/Shouldly.Test.csproj"
 
       - name: .NET version sweeper
         id: dotnet-version-sweeper
@@ -34,15 +36,17 @@ jobs:
       
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          upgradeProjects="${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}"
-            echo "Project Directory: $upgradeProjects"
+          IFS=$'\n' read -rd '' -a upgradeProjects <<< "${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}"
+            echo "Project Directory: ${upgradeProjects[@]}"
             # Install .NET Upgrade Assistant global tool
           dotnet tool install --global upgrade-assistant
 
           # Iterate all upgrade projects
           for projectDir in "${upgradeProjects[@]}"; do
-            echo "Project Directory: $projectDir"
+            echo "Upgrading project: $projectDir"
 
             # Create a new branch
             git checkout -b upgrade/$projectDir
