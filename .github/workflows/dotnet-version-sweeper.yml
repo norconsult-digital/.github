@@ -81,7 +81,10 @@ jobs:
             git checkout -b "upgrade/$safeBranchName"
 
             # Perform the upgrade using upgrade-assistant
-            upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}
+            upgrade-assistant upgrade "/b2c-poc/app/b2cPocBff/b2cPocBff.csproj" --non-interactive -t ${{ inputs.support }}
+
+            
+            # upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}
 
             # Commit the changes
             git add .
