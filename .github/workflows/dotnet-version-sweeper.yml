@@ -15,13 +15,18 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
-      contents: read
+      contents: write
     env:
       SUPPORT_LEVEL: ${{ inputs.support }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+
     
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+          
       - name: List all files in workspace for debugging
         run: ls -R $GITHUB_WORKSPACE
       
@@ -51,8 +56,6 @@ jobs:
              
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -x
          
@@ -61,42 +64,79 @@ jobs:
             sudo apt-get update && sudo apt-get install -y jq
           fi
 
+          # Setup GitHub CLI
+          echo "$GITHUB_TOKEN" | gh auth login --with-token
+
           # Parse the JSON array of projects into a bash array
           upgradeProjectsJson='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
+
+          # Check if upgradeProjectsJson is empty or null
+          if [[ -z "$upgradeProjectsJson" || "$upgradeProjectsJson" == "null" || "$upgradeProjectsJson" == "[]" ]]; then
+            echo "No projects to upgrade"
+            exit 0
+          fi
+
           mapfile -t upgradeProjects < <(echo "$upgradeProjectsJson" | jq -r '.[]')
+
+          # Check if array is empty
+          if [[ ${#upgradeProjects[@]} -eq 0 ]]; then
+            echo "No projects to upgrade"
+            exit 0
+          fi
 
           echo "Projects to upgrade: ${upgradeProjects[*]}"
 
+        
           # Install .NET Upgrade Assistant global tool
           dotnet tool install --global upgrade-assistant
+
+          # Store the base branch
+          baseBranch=$(git rev-parse --abbrev-ref HEAD)
+
 
           # Iterate all upgrade projects
           for projectDir in "${upgradeProjects[@]}"; do
             echo "Upgrading project: $projectDir"
 
+            # Return to base branch before creating new branch
+            git checkout "$baseBranch"
+            git pull origin "$baseBranch"
+
             # Sanitize branch name: get only the folder or project filename without extension
             safeBranchName=$(basename "$projectDir" .csproj)
+            branchName="upgrade/$safeBranchName-$(date +%s)"  # Add timestamp to avoid conflicts
+
 
             # Create a new branch with the sanitized name
-            git checkout -b "upgrade/$safeBranchName"
+            git checkout -b "$branchName" 
 
             # Perform the upgrade using upgrade-assistant
-            upgrade-assistant upgrade "/b2c-poc/app/b2cPocBff/b2cPocBff.csproj" --non-interactive -t ${{ inputs.support }}
-
-            
-            # upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}
+             if upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}; then
+              # Check if there are any changes to commit
+              if git diff --quiet && git diff --staged --quiet; then
+                echo "No changes made for $projectDir, skipping..."
+                git checkout "$baseBranch"
+                git branch -D "$branchName"
+                continue
+              fi
 
             # Commit the changes
             git add .
-            git commit -m ".NET Version Sweeper: Upgraded $projectDir"
+            git commit -m ".NET Version Sweeper: Upgraded $projectDir to ${{ inputs.support }}"
 
             # Push the branch to the repository
-            git push origin "upgrade/$safeBranchName"
+            git push origin "$branchName"
+
 
             # Create a pull request
             gh pr create \
-              --base main \
-              --head "upgrade/$safeBranchName" \
-              --title "Upgraded $safeBranchName" \
-              --body "Proposed upgrade for $projectDir"
+              --base "$baseBranch" \
+                --head "$branchName" \
+                --title "Upgrade $safeBranchName to .NET ${{ inputs.support }}" \
+                --body "Automated upgrade for $projectDir to .NET ${{ inputs.support }} support level."
+            else
+              echo "Upgrade failed for $projectDir"
+              git checkout "$baseBranch"
+              git branch -D "$branchName"
+            fi
           done
