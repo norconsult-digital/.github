@@ -16,6 +16,9 @@ jobs:
       issues: write
       pull-requests: write
       contents: read
+   env:
+      SUPPORT_LEVEL: ${{ inputs.support }}
+    
 
     steps:
       - uses: actions/checkout@v4
@@ -39,14 +42,19 @@ jobs:
           owner: ${{ github.repository_owner }}
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
-          
-          
-      
+
+      # Add this step before your "Create pull requests" step
+      - name: Configure Git User
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+             
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -x
           # Install jq if not available (optional)
           if ! command -v jq &> /dev/null; then
             sudo apt-get update && sudo apt-get install -y jq
