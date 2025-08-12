@@ -17,10 +17,7 @@ jobs:
       pull-requests: write
       contents: write
     env:
-      SUPPORT_LEVEL: ${{ inputs.support }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
-
-    
+      SUPPORT_LEVEL: ${{ inputs.support }} 
 
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +53,8 @@ jobs:
              
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
+        env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -x
          
@@ -64,9 +63,10 @@ jobs:
             sudo apt-get update && sudo apt-get install -y jq
           fi
 
-          # Setup GitHub CLI
-          echo "$GITHUB_TOKEN" | gh auth login --with-token
+          # GitHub CLI will automatically use the GITHUB_TOKEN environment variable
+          # No need to explicitly authenticate
 
+          
           # Parse the JSON array of projects into a bash array
           upgradeProjectsJson='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
 
