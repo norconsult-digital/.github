@@ -16,7 +16,7 @@ jobs:
       issues: write
       pull-requests: write
       contents: read
-   env:
+    env:
       SUPPORT_LEVEL: ${{ inputs.support }}
     
 
