@@ -63,9 +63,6 @@ jobs:
             sudo apt-get update && sudo apt-get install -y jq
           fi
 
-          # GitHub CLI will automatically use the GITHUB_TOKEN environment variable
-          # No need to explicitly authenticate
-
           
           # Parse the JSON array of projects into a bash array
           upgradeProjectsJson='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
@@ -95,48 +92,61 @@ jobs:
 
 
           # Iterate all upgrade projects
-          for projectDir in "${upgradeProjects[@]}"; do
-            echo "Upgrading project: $projectDir"
+          for projectPath in "${upgradeProjects[@]}"; do
+            echo "Processing project: $projectPath"
 
-            # Return to base branch before creating new branch
-            git checkout "$baseBranch"
-            git pull origin "$baseBranch"
-
-            # Sanitize branch name: get only the folder or project filename without extension
-            safeBranchName=$(basename "$projectDir" .csproj)
-            branchName="upgrade/$safeBranchName-$(date +%s)"  # Add timestamp to avoid conflicts
-
-
-            # Create a new branch with the sanitized name
-            git checkout -b "$branchName" 
-
-            # Perform the upgrade using upgrade-assistant
-             if upgrade-assistant upgrade "$projectDir" --non-interactive -t ${{ inputs.support }}; then
-              # Check if there are any changes to commit
-              if git diff --quiet && git diff --staged --quiet; then
-                echo "No changes made for $projectDir, skipping..."
-                git checkout "$baseBranch"
-                git branch -D "$branchName"
+              # Convert absolute path to relative path by removing /github/workspace/
+              relativePath="${projectPath#/github/workspace/}"
+      
+              echo "Relative path: $relativePath"
+      
+              # Check if the file actually exists
+              if [[ ! -f "$relativePath" ]]; then
+                echo "Project file does not exist: $relativePath, skipping..."
                 continue
-              fi
+                fi
 
-            # Commit the changes
-            git add .
-            git commit -m ".NET Version Sweeper: Upgraded $projectDir to ${{ inputs.support }}"
+                echo "Upgrading project: $relativePath"
 
-            # Push the branch to the repository
-            git push origin "$branchName"
+                # Return to base branch before creating new branch
+                git checkout "$baseBranch"
+                git pull origin "$baseBranch"
+
+                # Sanitize branch name: get only the folder or project filename without extension
+                safeBranchName=$(basename "$relativePath" .csproj)
+                branchName="upgrade/$safeBranchName-$(date +%s)"  # Add timestamp to avoid conflicts
 
 
-            # Create a pull request
-            gh pr create \
-              --base "$baseBranch" \
-                --head "$branchName" \
-                --title "Upgrade $safeBranchName to .NET ${{ inputs.support }}" \
-                --body "Automated upgrade for $projectDir to .NET ${{ inputs.support }} support level."
-            else
-              echo "Upgrade failed for $projectDir"
-              git checkout "$baseBranch"
-              git branch -D "$branchName"
-            fi
-          done
+                # Create a new branch with the sanitized name
+                git checkout -b "$branchName" 
+
+                # Perform the upgrade using upgrade-assistant with the relative path
+                if upgrade-assistant upgrade "$relativePath" --non-interactive -t ${{ inputs.support }}; then
+                  # Check if there are any changes to commit
+                  if git diff --quiet && git diff --staged --quiet; then
+                    echo "No changes made for $relativePath, skipping..."
+                    git checkout "$baseBranch"
+                    git branch -D "$branchName"
+                    continue
+                  fi
+
+                  # Commit the changes
+                  git add .
+                  git commit -m ".NET Version Sweeper: Upgraded $relativePath to ${{ inputs.support }}"
+
+                  # Push the branch to the repository
+                  git push origin "$branchName"
+
+
+                   # Create a pull request
+                   gh pr create \
+                     --base "$baseBranch" \
+                     --head "$branchName" \
+                     --title "Upgrade $safeBranchName to .NET ${{ inputs.support }}" \
+                    --body "Automated upgrade for $relativePath to .NET ${{ inputs.support }} support level."
+                 else
+                   echo "Upgrade failed for $relativePath"
+                   git checkout "$baseBranch"
+                   git branch -D "$branchName"
+                 fi
+               done
