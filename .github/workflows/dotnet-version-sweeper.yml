@@ -54,16 +54,15 @@ jobs:
       - name: Create pull requests
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
         env:
-           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -x
-         
+   
           # Install jq if not available (optional)
           if ! command -v jq &> /dev/null; then
             sudo apt-get update && sudo apt-get install -y jq
           fi
 
-          
           # Parse the JSON array of projects into a bash array
           upgradeProjectsJson='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
 
@@ -83,7 +82,6 @@ jobs:
 
           echo "Projects to upgrade: ${upgradeProjects[*]}"
 
-        
           # Define target framework based on support level
           case "${{ inputs.support }}" in
             "STS") TARGET_FRAMEWORK="net9.0" ;;
@@ -97,99 +95,95 @@ jobs:
           # Store the base branch
           baseBranch=$(git rev-parse --abbrev-ref HEAD)
 
-
           # Iterate all upgrade projects
           for projectPath in "${upgradeProjects[@]}"; do
             echo "Processing project: $projectPath"
 
-              # Convert absolute path to relative path by removing /github/workspace/
-              relativePath="${projectPath#/github/workspace/}"
-      
-              echo "Relative path: $relativePath"
-      
-              # Check if the file actually exists
-              if [[ ! -f "$relativePath" ]]; then
-                echo "Project file does not exist: $relativePath, skipping..."
-                continue
-                fi
+            # Convert absolute path to relative path by removing /github/workspace/
+            relativePath="${projectPath#/github/workspace/}"
 
-                echo "Upgrading project: $relativePath"
+            echo "Relative path: $relativePath"
 
-                # Check current target framework
-                currentFramework=$(grep -oP '<TargetFramework>\K[^<]*' "$relativePath" 2>/dev/null || echo "unknown")
-                echo "Current framework: $currentFramework"
-                echo "Target framework: $TARGET_FRAMEWORK"
+            # Check if the file actually exists
+            if [[ ! -f "$relativePath" ]]; then
+              echo "Project file does not exist: $relativePath, skipping..."
+              continue
+            fi
 
-                # Skip if already on target framework
-                if [[ "$currentFramework" == "$TARGET_FRAMEWORK" ]]; then
-                  echo "Project $relativePath is already on $TARGET_FRAMEWORK, skipping..."
-                  continue
-                fi
+            echo "Upgrading project: $relativePath"
 
-                # Return to base branch before creating new branch
-                git checkout "$baseBranch"
-                git pull origin "$baseBranch"
+            # Check current target framework
+            currentFramework=$(grep -oP '<TargetFramework>\K[^<]*' "$relativePath" 2>/dev/null || echo "unknown")
+            echo "Current framework: $currentFramework"
+            echo "Target framework: $TARGET_FRAMEWORK"
 
-                # Sanitize branch name: get only the folder or project filename without extension
-                safeBranchName=$(basename "$relativePath" .csproj)
-                branchName="upgrade/$safeBranchName-$(date +%s)" 
+            # Skip if already on target framework
+            if [[ "$currentFramework" == "$TARGET_FRAMEWORK" ]]; then
+              echo "Project $relativePath is already on $TARGET_FRAMEWORK, skipping..."
+              continue
+            fi
 
+            # Return to base branch before creating new branch
+            git checkout "$baseBranch"
+            git pull origin "$baseBranch"
 
-                # Create a new branch with the sanitized name
-                git checkout -b "$branchName" 
+            # Sanitize branch name: get only the folder or project filename without extension
+            safeBranchName=$(basename "$relativePath" .csproj)
+            branchName="upgrade/$safeBranchName-$(date +%s)"
 
-                # Manually upgrade the project file
-                echo "Manually upgrading $relativePath from $currentFramework to $TARGET_FRAMEWORK"
-      
-                # Backup the original file
-                cp "$relativePath" "$relativePath.backup"
-      
-                # Update TargetFramework
-                sed -i "s|<TargetFramework>[^<]*</TargetFramework>|<TargetFramework>$TARGET_FRAMEWORK</TargetFramework>|g" "$relativePath"
-      
-                # Also handle TargetFrameworks (plural) for multi-targeting projects
-                sed -i "s|<TargetFrameworks>[^<]*</TargetFrameworks>|<TargetFrameworks>$TARGET_FRAMEWORK</TargetFrameworks>|g" "$relativePath"
-      
-                # Show the changes made
-                echo "Changes made to $relativePath:"
-                diff "$relativePath.backup" "$relativePath" || true
-      
-                # Clean up backup
-                rm "$relativePath.backup"
+            # Create a new branch with the sanitized name
+            git checkout -b "$branchName" 
 
-                # Try to restore packages to validate the upgrade
-                echo "Restoring packages for $relativePath"
-                if dotnet restore "$relativePath"; then
-                  echo "✅ Package restore successful"
-                else
-                  echo "⚠️  Package restore failed, but continuing with PR creation"
-                fi
+            # Manually upgrade the project file
+            echo "Manually upgrading $relativePath from $currentFramework to $TARGET_FRAMEWORK"
 
-                # Check if there are any changes to commit
-                if git diff --quiet && git diff --staged --quiet; then
-                  echo "No changes made for $relativePath, skipping..."
-                  git checkout "$baseBranch"
-                  git branch -D "$branchName"
-                  continue
-                fi
+            # Backup the original file
+            cp "$relativePath" "$relativePath.backup"
 
-       
-                  # Commit the changes
-                  git add .
-                  git commit -m ".NET Version Sweeper: Upgraded $relativePath from $currentFramework to $TARGET_FRAMEWORK"
+            # Update TargetFramework
+            sed -i "s|<TargetFramework>[^<]*</TargetFramework>|<TargetFramework>$TARGET_FRAMEWORK</TargetFramework>|g" "$relativePath"
 
-                  # Push the branch to the repository
-                  git push origin "$branchName"
+            # Also handle TargetFrameworks (plural) for multi-targeting projects
+            sed -i "s|<TargetFrameworks>[^<]*</TargetFrameworks>|<TargetFrameworks>$TARGET_FRAMEWORK</TargetFrameworks>|g" "$relativePath"
 
+            # Show the changes made
+            echo "Changes made to $relativePath:"
+            diff "$relativePath.backup" "$relativePath" || true
 
-                   # Create a pull request
-                   gh pr create \
-                     --base "$baseBranch" \
-                     --head "$branchName" \
-                     --title "Upgrade $safeBranchName to .NET $TARGET_FRAMEWORK (${{ inputs.support }})" \
-                     --body "Automated upgrade for $relativePath from $currentFramework to $TARGET_FRAMEWORK (.NET ${{ inputs.support }} support level)"
+            # Clean up backup
+            rm "$relativePath.backup"
 
-             - Updated TargetFramework from \`$currentFramework\` to \`$TARGET_FRAMEWORK\`         
+            # Try to restore packages to validate the upgrade
+            echo "Restoring packages for $relativePath"
+            if dotnet restore "$relativePath"; then
+              echo "✅ Package restore successful"
+            else
+              echo "⚠️  Package restore failed, but continuing with PR creation"
+            fi
 
-                  echo "✅ Successfully created PR for $relativePath"
-               done
+            # Check if there are any changes to commit
+            if git diff --quiet && git diff --staged --quiet; then
+              echo "No changes made for $relativePath, skipping..."
+              git checkout "$baseBranch"
+              git branch -D "$branchName"
+              continue
+            fi
+
+            # Commit the changes
+            git add .
+            git commit -m ".NET Version Sweeper: Upgraded $relativePath from $currentFramework to $TARGET_FRAMEWORK"
+
+            # Push the branch to the repository
+            git push origin "$branchName"
+
+            # Create a pull request with proper multiline body
+            gh pr create \
+              --base "$baseBranch" \
+              --head "$branchName" \
+              --title "Upgrade $safeBranchName to .NET $TARGET_FRAMEWORK (${{ inputs.support }})" \
+              --body "Automated upgrade for $relativePath from $currentFramework to $TARGET_FRAMEWORK (.NET ${{ inputs.support }} support level)"
+              
+            
+
+          echo "Successfully created PR for $relativePath"
+          done
