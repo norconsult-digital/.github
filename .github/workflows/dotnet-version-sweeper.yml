@@ -120,8 +120,14 @@ jobs:
                 # Create a new branch with the sanitized name
                 git checkout -b "$branchName" 
 
-                # Perform the upgrade using upgrade-assistant with the relative path
-                if upgrade-assistant upgrade "$relativePath" --non-interactive -t ${{ inputs.support }}; then
+                # Perform the upgrade using upgrade-assistant with specific operation
+                echo "Running upgrade-assistant on: $relativePath"
+                if upgrade-assistant upgrade "$relativePath" \
+                   --non-interactive \
+                   --target-tfm-support ${{ inputs.support }} \
+                   --operation Upgraded \
+                   --skip-backup; then
+        
                   # Check if there are any changes to commit
                   if git diff --quiet && git diff --staged --quiet; then
                     echo "No changes made for $relativePath, skipping..."
@@ -144,6 +150,8 @@ jobs:
                      --head "$branchName" \
                      --title "Upgrade $safeBranchName to .NET ${{ inputs.support }}" \
                     --body "Automated upgrade for $relativePath to .NET ${{ inputs.support }} support level."
+
+                   echo "✅ Successfully created PR for $relativePath"
                  else
                    echo "Upgrade failed for $relativePath"
                    git checkout "$baseBranch"
