@@ -135,7 +135,7 @@ jobs:
           gh issue create \
               --title "$issueTitle" \
               --body "$issueBody" \
-              --label "dotnet-upgrade,automated,weekly-report"
+              --label ""enhancement,automated""
 
           echo "✅ Successfully created issue: $issueTitle"
 
