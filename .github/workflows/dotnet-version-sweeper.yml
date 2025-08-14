@@ -51,11 +51,11 @@ jobs:
           
           ## 🚨 LTS .NET Version Expiration Warning
 
-            **Generated:** $(date)
-            **Warning Threshold:** 90 days
+          **Generated:** $(date)
+          **Warning Threshold:** 90 days
 
           ### Projects using LTS versions expiring soon:
-              EOF
+          EOF
               echo "$net6_projects" | sed 's|^\./||; s/^/- 🔴 **EXPIRED** /' >> lts_issue.txt
               cat >> lts_issue.txt << 'EOF'
 
@@ -92,13 +92,13 @@ jobs:
               esac
 
               cat > upgrade_issue.txt << EOF
-             ## 📋 Weekly .NET Version Upgrade Report
+              ## 📋 Weekly .NET Version Upgrade Report
 
              **Target Framework:** $TARGET_FRAMEWORK
              **Generated:** $(date)
 
              ### Projects requiring upgrade:
-              EOF
+             EOF
 
               upgrade_count=0
               for projectPath in "${upgradeProjects[@]}"; do
@@ -115,7 +115,7 @@ jobs:
               if [[ $upgrade_count -gt 0 ]]; then
                 cat >> upgrade_issue.txt << 'EOF'
 
-                gh issue create \
+              gh issue create \
                   --title "Weekly .NET Version Upgrade Report - $(date +%Y-%m-%d)" \
                   --body-file upgrade_issue.txt \
                   --label "enhancement"
