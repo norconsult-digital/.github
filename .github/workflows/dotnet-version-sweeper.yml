@@ -38,21 +38,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check .NET 6 expiring soon
+          # Check for LTS versions expiring within 90 days
           current_date=$(date +%s)
-          net6_expire=$(date -d "2024-11-12" +%s)
           warning_date=$((current_date + 90*24*60*60))
           
+          # Check .NET 6 projects
+          net6_expire=$(date -d "2024-11-12" +%s)
           if [[ $net6_expire -le $warning_date ]]; then
             net6_projects=$(find . -name "*.csproj" -exec grep -l "net6.0" {} \; 2>/dev/null || true)
             if [[ -n "$net6_projects" ]]; then
               echo "## 🚨 .NET 6 LTS Expiring" > lts_issue.txt
-              echo "" >> lts_issue.txt
               echo "**Expires:** November 12, 2024" >> lts_issue.txt
-              echo "" >> lts_issue.txt
               echo "### Projects:" >> lts_issue.txt
               echo "$net6_projects" | sed 's|^\./||; s/^/- /' >> lts_issue.txt
-              echo "" >> lts_issue.txt
               echo "**Action:** Update to .NET 8 LTS" >> lts_issue.txt
               
               gh issue create \
@@ -62,35 +60,36 @@ jobs:
             fi
           fi
 
-          # Handle standard upgrades
+          # Handle standard upgrades - SIMPLIFIED VERSION
           upgradeProjects='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
           
           if [[ -n "$upgradeProjects" && "$upgradeProjects" != "null" && "$upgradeProjects" != "[]" ]]; then
+            # Set target based on input
+            TARGET="net9.0"
             case "${{ inputs.support }}" in
               "LTS") TARGET="net8.0" ;;
               "Preview") TARGET="net10.0" ;;
-              *) TARGET="net9.0" ;;
             esac
             
-            echo "## 📋 .NET Upgrade Report" > upgrade_issue.txt
-            echo "" >> upgrade_issue.txt
-            echo "**Target:** $TARGET" >> upgrade_issue.txt
-            echo "" >> upgrade_issue.txt
-            echo "### Projects:" >> upgrade_issue.txt
+            # Create simple upgrade issue
+            echo "## 📋 .NET Upgrade Report" > upgrade.txt
+            echo "**Target:** $TARGET" >> upgrade.txt
+            echo "### Projects:" >> upgrade.txt
             
+            # Simple approach - just list all projects from versionsweeper
             echo "$upgradeProjects" | jq -r '.[]' | while read -r project; do
-              relativePath="${project#/github/workspace/}"
-              if [[ -f "$relativePath" ]]; then
-                current=$(grep -oP '<TargetFramework>\K[^<]*' "$relativePath" 2>/dev/null || echo "unknown")
-                echo "- [ ] $relativePath (\`$current\` → \`$TARGET\`)" >> upgrade_issue.txt
-              fi
-            done 2>/dev/null || echo "- No projects found" >> upgrade_issue.txt
+              name=$(basename "$project")
+              echo "- [ ] $name" >> upgrade.txt
+            done 2>/dev/null || echo "- No projects found" >> upgrade.txt
             
-            echo "" >> upgrade_issue.txt
-            echo "**Action:** Update \`<TargetFramework>\` in .csproj files" >> upgrade_issue.txt
+            echo "**Steps:** Update \`<TargetFramework>\` to \`$TARGET\`" >> upgrade.txt
             
             gh issue create \
-                --title "Weekly .NET Upgrade - $(date +%Y-%m-%d)" \
-                --body-file upgrade_issue.txt \
-                --label "enhancement"
+              --title "Weekly .NET Upgrade - $(date +%Y-%m-%d)" \
+              --body-file upgrade.txt \
+              --label "enhancement"
+              
+            echo "✅ Created upgrade issue"
           fi
+
+          echo "✅ workflow completed"
