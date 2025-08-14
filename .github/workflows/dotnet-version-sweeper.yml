@@ -15,15 +15,15 @@ jobs:
     permissions:
       issues: write
       contents: read
-
+    
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-
+          
       - name: .NET version sweeper
         id: dotnet-version-sweeper
         uses: dotnet/versionsweeper@v4.3
@@ -41,14 +41,13 @@ jobs:
           # Check for LTS versions expiring within 90 days
           current_date=$(date +%s)
           warning_date=$((current_date + 90*24*60*60))
-
+          
           # Check .NET 6 projects
           net6_expire=$(date -d "2024-11-12" +%s)
           if [[ $net6_expire -le $warning_date ]]; then
             net6_projects=$(find . -name "*.csproj" -exec grep -l "net6.0" {} \; 2>/dev/null || true)
             if [[ -n "$net6_projects" ]]; then
               cat > lts_issue.txt << 'EOF'
-          
           ## 🚨 LTS .NET Version Expiration Warning
 
           **Generated:** $(date)
@@ -71,7 +70,7 @@ jobs:
                 --title "⚠️ URGENT: LTS .NET Versions Expiring Within 90 Days - $(date +%Y-%m-%d)" \
                 --body-file lts_issue.txt \
                 --label "critical,lts-expiring"
-
+                
               echo "✅ Successfully created LTS expiration warning issue"
             fi
           fi
