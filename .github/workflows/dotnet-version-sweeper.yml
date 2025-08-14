@@ -14,15 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      pull-requests: write
       contents: read
     
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 
-          
-      - name: List all files in workspace for debugging
-        run: ls -R $GITHUB_WORKSPACE
       
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
@@ -45,187 +43,117 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
              
-      - name: LTS expiration and standard upgrade check
+      - name: Check for LTS versions expiring within 90 days
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -x 
-
-          if ! command -v jq &> /dev/null; then
-            sudo apt-get update && sudo apt-get install -y jq
-          fi
-
-          # Define .NET LTS versions and their end-of-life dates
-          declare -A lts_versions=(
-            ["net6.0"]="2024-11-12"   # .NET 6 LTS expires November 12, 2024
-            ["net8.0"]="2026-11-10"   # .NET 8 LTS expires November 10, 2026
-          )
-
-          # Get current date in seconds since epoch
-          current_date=$(date +%s)
-          # Calculate date 90 days from now
-          warning_date=$((current_date + 90*24*60*60))
-
           echo "🔍 Checking for LTS versions expiring within 90 days..."
-
-          # Initialize variables
-          expiring_projects=""
-          lts_issue_created=false
-
-          # Find all .csproj files and check for expiring LTS versions
-          find . -name "*.csproj" -type f | while read -r projectFile; do
-            echo "📁 Checking project: $projectFile"
-            
-            # Extract TargetFramework from project file
-            currentFramework=$(grep -oP '<TargetFramework>\K[^<]*' "$projectFile" 2>/dev/null || echo "")
-
-            if [[ -n "$currentFramework" && -n "${lts_versions[$currentFramework]}" ]]; then
-              # Convert end-of-life date to seconds since epoch
-              eol_date=$(date -d "${lts_versions[$currentFramework]}" +%s)
-              
-              # Check if EOL is within 90 days
-              if [[ $eol_date -le $warning_date ]]; then
-                days_until_eol=$(( (eol_date - current_date) / 86400 ))
-                
-                echo "⚠️  WARNING: $projectFile uses $currentFramework which expires in $days_until_eol days (${lts_versions[$currentFramework]})"
-                
-                # Add to expiring projects list
-                relative_path="${projectFile#./}"
-                if [[ -z "$expiring_projects" ]]; then
-                  expiring_projects="$relative_path|$currentFramework|$days_until_eol|${lts_versions[$currentFramework]}"
-                else
-                  expiring_projects="$expiring_projects;$relative_path|$currentFramework|$days_until_eol|${lts_versions[$currentFramework]}"
-                fi
-              else
-                days_until_eol=$(( (eol_date - current_date) / 86400 ))
-                echo "✅ $projectFile uses $currentFramework which expires in $days_until_eol days (${lts_versions[$currentFramework]})"
-              fi
-            elif [[ -n "$currentFramework" ]]; then
-              echo "ℹ️  $projectFile uses $currentFramework (not an LTS version or unknown EOL date)"
-            fi
-          done
-
-          # Create LTS expiration warning issue if needed
-          if [[ -n "$expiring_projects" ]]; then
-            echo "🚨 Found LTS versions expiring within 90 days, creating issue..."
-            
-            issueTitle="⚠️ URGENT: LTS .NET Versions Expiring Within 90 Days - $(date +%Y-%m-%d)"
-            issueBody="## 🚨 LTS .NET Version Expiration Warning
-
-
-           # Parse expiring projects and add to issue body
-            echo "$expiring_projects" | while IFS='|' read -r project framework days_left eol_date; do
-              if [[ $days_left -lt 0 ]]; then
-                status="🔴 **EXPIRED**"
-                days_text="Expired $((-days_left)) days ago"
-              elif [[ $days_left -le 30 ]]; then
-                status="🟡 **CRITICAL**"
-                days_text="$days_left days remaining"
-              else
-                status="🟠 **WARNING**"
-                days_text="$days_left days remaining"
-              fi  
-
-              issueBody="${issueBody}
-          - [ ] $status **$project**
-            - Current: \`$framework\`
-            - End of Life: \`$eol_date\`
-            - Time Remaining: \`$days_text\`"
-            done
-
-           # Create the issue
-          gh issue create \
-              --title "$issueTitle" \
-              --body "$issueBody" \
-              --label "critical,lts-expiring"
-
-            echo "✅ Successfully created LTS expiration warning issue: $issueTitle"
-            lts_issue_created=true
-             else
-            echo "✅ No LTS versions expiring within 90 days found."
-             fi
-
-          # Now handle standard version upgrades from dotnet versionsweeper
-          upgradeProjectsJson='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
-
-          # Check if we have regular upgrades to process
-          if [[ -n "$upgradeProjectsJson" && "$upgradeProjectsJson" != "null" && "$upgradeProjectsJson" != "[]" ]]; then
-            
-            mapfile -t upgradeProjects < <(echo "$upgradeProjectsJson" | jq -r '.[]')
-
-            # Check if array is empty
-            if [[ ${#upgradeProjects[@]} -gt 0 ]]; then
-              
-              echo "Projects to upgrade: ${upgradeProjects[*]}"
-
-              # Define target framework based on support level
-              case "${{ inputs.support || 'STS' }}" in
-                "STS") TARGET_FRAMEWORK="net9.0" ;;
-                "LTS") TARGET_FRAMEWORK="net8.0" ;;
-                "Preview") TARGET_FRAMEWORK="net10.0" ;;
-                *) TARGET_FRAMEWORK="net9.0" ;;
-              esac
-
-              echo "Target framework: $TARGET_FRAMEWORK"
-
-              # Create standard upgrade issue
-              issueTitle="Weekly .NET Version Upgrade Report - $(date +%Y-%m-%d)"
-              issueBody="## 📋 Weekly .NET Version Upgrade Report
-
-
-               # Add each project to the issue body
-              upgrade_count=0
-              for projectPath in "${upgradeProjects[@]}"; do
-                # Convert absolute path to relative path
-                relativePath="${projectPath#/github/workspace/}"
-
-                echo "Processing project: $relativePath"
-
-                # Check if the file exists
-                if [[ ! -f "$relativePath" ]]; then
-                  echo "Project file does not exist: $relativePath, skipping..."
-                  continue
-                fi
-
-                # Check current target framework
-                currentFramework=$(grep -oP '<TargetFramework>\K[^<]*' "$relativePath" 2>/dev/null || echo "unknown")
-                
-                # Skip if already on target framework
-                if [[ "$currentFramework" == "$TARGET_FRAMEWORK" ]]; then
-                  echo "Project $relativePath is already on $TARGET_FRAMEWORK, skipping..."
-                  continue
-                fi
-
-                issueBody="${issueBody}
-             - [ ] **$relativePath**
-               - Current: \`$currentFramework\`
-               - Target: \`$TARGET_FRAMEWORK\`"
-                
-                             ((upgrade_count++))
-                           done
-
-              # Only create issue if we have projects to upgrade
-              if [[ $upgrade_count -gt 0 ]]; then
-                issueBody="${issueBody}
-
-
-                # Create the standard upgrade issue
-                gh issue create \
-                    --title "$issueTitle" \
-                    --body "$issueBody" \
-                    --label "enhancement"
-
-                echo "✅ Successfully created standard upgrade issue: $issueTitle"
-              else
-                echo "ℹ️  All projects are already on target framework $TARGET_FRAMEWORK"
-              fi
-            fi
-          else
-            echo "ℹ️  No standard version upgrades needed from dotnet versionsweeper."
-          fi
-   
-
           
+          # Simple date calculation: current date + 90 days
+          warning_date=$(date -d "+90 days" +%s)
+          net6_expire=$(date -d "2024-11-12" +%s)
+          net8_expire=$(date -d "2026-11-10" +%s)
+          
+          # Find expiring projects
+          expiring_projects=""
+          
+          # Check .NET 6 projects
+          if [[ $net6_expire -le $warning_date ]]; then
+            net6_projects=$(find . -name "*.csproj" -exec grep -l "net6.0" {} \; 2>/dev/null || true)
+            if [[ -n "$net6_projects" ]]; then
+              expiring_projects="$expiring_projects\n.NET 6.0 Projects (Expires Nov 12, 2024):\n$net6_projects"
+            fi
+          fi
+          
+          # Check .NET 8 projects  
+          if [[ $net8_expire -le $warning_date ]]; then
+            net8_projects=$(find . -name "*.csproj" -exec grep -l "net8.0" {} \; 2>/dev/null || true)
+            if [[ -n "$net8_projects" ]]; then
+              expiring_projects="$expiring_projects\n.NET 8.0 Projects (Expires Nov 10, 2026):\n$net8_projects"
+            fi
+          fi
+          
+          # Create issue if we found expiring projects
+          if [[ -n "$expiring_projects" ]]; then
+            echo "🚨 Creating LTS expiration warning issue..."
+            
+            cat > issue_body.txt << 'EOF'
+          ## 🚨 LTS .NET Versions Expiring Within 90 Days
+           **Generated on:** $(date)
+          
+          ### Projects needing attention:
+          EOF
+          
+            echo -e "$expiring_projects" >> issue_body.txt
+            
+            cat >> issue_body.txt << 'EOF'
+          
+          ### 🔧 Action Required:
+          - Update expired projects to .NET 8 LTS immediately
+          - Plan upgrades for projects expiring soon
+          
+          ### 📚 Resources:
+          - [.NET Release Schedule](https://dotnet.microsoft.com/platform/support/policy/dotnet-core)
+          - [Migration Guide](https://docs.microsoft.com/en-us/dotnet/core/migration/)
+          EOF
+          
+            gh issue create \
+                --title "⚠️ LTS .NET Versions Expiring - $(date +%Y-%m-%d)" \
+                --body-file issue_body.txt \
+                --label "critical,lts-expiring"
+                
+            echo "✅ Created LTS expiration issue"
+          else
+            echo "✅ No LTS versions expiring within 90 days"
+          fi
 
+      - name: Create upgrade issue from versionsweeper results
+        if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "📋 Creating standard upgrade issue..."
+          
+          # Get target framework
+          case "${{ inputs.support || 'STS' }}" in
+            "STS") TARGET="net9.0" ;;
+            "LTS") TARGET="net8.0" ;;
+            "Preview") TARGET="net10.0" ;;
+            *) TARGET="net9.0" ;;
+          esac
+          
+          # Get projects to upgrade
+          PROJECTS='${{ steps.dotnet-version-sweeper.outputs.upgrade-projects }}'
+          
+          cat > upgrade_issue.txt << EOF
+          ## 📋 Weekly .NET Version Upgrade Report
+          
+          **Target Framework:** $TARGET
+          **Generated on:** $(date)
+          
+          ### Projects to upgrade:
+          EOF
+          
+          # Add projects to the issue (simple approach)
+          echo "$PROJECTS" | jq -r '.[]' | while read -r project; do
+            echo "- [ ] $project" >> upgrade_issue.txt
+          done
+          
+          cat >> upgrade_issue.txt << 'EOF'
+          
+          ### 🔧 Steps:
+          1. Update `<TargetFramework>` in each .csproj file
+          2. Run `dotnet build` to test
+          3. Create PR when ready
 
-        
+          ---
+          *Auto-generated by .NET Version Sweeper*
+          EOF
+          
+          gh issue create \
+              --title "Weekly .NET Upgrade Report - $(date +%Y-%m-%d)" \
+              --body-file upgrade_issue.txt \
+              --label "enhancement"
+              
+          echo "✅ Created standard upgrade issue"
+          
