@@ -1,6 +1,9 @@
 name: "dotnet version checker"
 
 on:
+  schedule:
+    - cron: '0 9 * * 3'  # Run every Wednesday at 9:00 AM UTC
+  workflow_dispatch:     # Allow manual triggering
   workflow_call:
     inputs:
       support:
@@ -17,7 +20,7 @@ jobs:
       pull-requests: write
       contents: write
     env:
-      SUPPORT_LEVEL: ${{ inputs.support }} 
+      SUPPORT_LEVEL: ${{ inputs.support || 'STS' }} 
 
     steps:
       - uses: actions/checkout@v4
@@ -51,14 +54,14 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
              
-      - name: Create pull requests
+      - name: Create issues for updates
         if: steps.dotnet-version-sweeper.outputs.has-remaining-work == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -x
    
-          # Install jq if not available (optional)
+          # Install jq if not available 
           if ! command -v jq &> /dev/null; then
             sudo apt-get update && sudo apt-get install -y jq
           fi
@@ -83,7 +86,7 @@ jobs:
           echo "Projects to upgrade: ${upgradeProjects[*]}"
 
           # Define target framework based on support level
-          case "${{ inputs.support }}" in
+          case "${{ inputs.support || 'STS' }}" in
             "STS") TARGET_FRAMEWORK="net9.0" ;;
             "LTS") TARGET_FRAMEWORK="net8.0" ;;
             "Preview") TARGET_FRAMEWORK="net10.0" ;;
@@ -92,98 +95,50 @@ jobs:
 
           echo "Target framework: $TARGET_FRAMEWORK"
 
-          # Store the base branch
-          baseBranch=$(git rev-parse --abbrev-ref HEAD)
+          # Create issue title and body
+          issueTitle="Weekly .NET Version Upgrade Report - $(date +%Y-%m-%d)"
+          issueBody="## 📋 Weekly .NET Version Upgrade Report"
 
-          # Iterate all upgrade projects
+
+          # Add each project to the issue body
           for projectPath in "${upgradeProjects[@]}"; do
-            echo "Processing project: $projectPath"
-
-            # Convert absolute path to relative path by removing /github/workspace/
+            # Convert absolute path to relative path
             relativePath="${projectPath#/github/workspace/}"
 
-            echo "Relative path: $relativePath"
+            echo "Processing project: $relativePath"
 
-            # Check if the file actually exists
+            # Check if the file exists
             if [[ ! -f "$relativePath" ]]; then
               echo "Project file does not exist: $relativePath, skipping..."
               continue
             fi
 
-            echo "Upgrading project: $relativePath"
-
             # Check current target framework
             currentFramework=$(grep -oP '<TargetFramework>\K[^<]*' "$relativePath" 2>/dev/null || echo "unknown")
-            echo "Current framework: $currentFramework"
-            echo "Target framework: $TARGET_FRAMEWORK"
-
+            
             # Skip if already on target framework
             if [[ "$currentFramework" == "$TARGET_FRAMEWORK" ]]; then
               echo "Project $relativePath is already on $TARGET_FRAMEWORK, skipping..."
               continue
             fi
 
-            # Return to base branch before creating new branch
-            git checkout "$baseBranch"
-            git pull origin "$baseBranch"
-
-            # Sanitize branch name: get only the folder or project filename without extension
-            safeBranchName=$(basename "$relativePath" .csproj)
-            branchName="upgrade/$safeBranchName-$(date +%s)"
-
-            # Create a new branch with the sanitized name
-            git checkout -b "$branchName" 
-
-            # Manually upgrade the project file
-            echo "Manually upgrading $relativePath from $currentFramework to $TARGET_FRAMEWORK"
-
-            # Backup the original file
-            cp "$relativePath" "$relativePath.backup"
-
-            # Update TargetFramework
-            sed -i "s|<TargetFramework>[^<]*</TargetFramework>|<TargetFramework>$TARGET_FRAMEWORK</TargetFramework>|g" "$relativePath"
-
-            # Also handle TargetFrameworks (plural) for multi-targeting projects
-            sed -i "s|<TargetFrameworks>[^<]*</TargetFrameworks>|<TargetFrameworks>$TARGET_FRAMEWORK</TargetFrameworks>|g" "$relativePath"
-
-            # Show the changes made
-            echo "Changes made to $relativePath:"
-            diff "$relativePath.backup" "$relativePath" || true
-
-            # Clean up backup
-            rm "$relativePath.backup"
-
-            # Try to restore packages to validate the upgrade
-            echo "Restoring packages for $relativePath"
-            if dotnet restore "$relativePath"; then
-              echo "✅ Package restore successful"
-            else
-              echo "⚠️  Package restore failed, but continuing with PR creation"
-            fi
-
-            # Check if there are any changes to commit
-            if git diff --quiet && git diff --staged --quiet; then
-              echo "No changes made for $relativePath, skipping..."
-              git checkout "$baseBranch"
-              git branch -D "$branchName"
-              continue
-            fi
-
-            # Commit the changes
-            git add .
-            git commit -m ".NET Version Sweeper: Upgraded $relativePath from $currentFramework to $TARGET_FRAMEWORK"
-
-            # Push the branch to the repository
-            git push origin "$branchName"
-
-            # Create a pull request with proper multiline body
-            gh pr create \
-              --base "$baseBranch" \
-              --head "$branchName" \
-              --title "Upgrade $safeBranchName to .NET $TARGET_FRAMEWORK (${{ inputs.support }})" \
-              --body "Automated upgrade for $relativePath from $currentFramework to $TARGET_FRAMEWORK (.NET ${{ inputs.support }} support level)"
-              
-            
-
-          echo "Successfully created PR for $relativePath"
+            issueBody="${issueBody}
+          - [ ] **$relativePath**
+            - Current: \`$currentFramework\`
+            - Target: \`$TARGET_FRAMEWORK\`"
           done
+          issueBody="${issueBody}"
+
+
+
+           # Create the issue
+          gh issue create \
+              --title "$issueTitle" \
+              --body "$issueBody" \
+              --label "dotnet-upgrade,automated,weekly-report"
+
+          echo "✅ Successfully created issue: $issueTitle"
+
+
+
+         
