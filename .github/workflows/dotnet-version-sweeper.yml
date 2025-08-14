@@ -135,7 +135,7 @@ jobs:
           gh issue create \
               --title "$issueTitle" \
               --body "$issueBody" \
-              --label ""enhancement,automated""
+              --label "enhancement"
 
           echo "✅ Successfully created issue: $issueTitle"
 
