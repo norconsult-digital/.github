@@ -33,7 +33,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
-          dir: ./config         
+          dir: ./     
           
 
       - name: Create upgrade issues
