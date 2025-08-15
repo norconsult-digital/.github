@@ -19,19 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug JSON location
+      # Debug: verify config file exists
+      - name: Verify config file
         run: |
-          echo "Current working directory: $(pwd)"
-          echo "Files in current directory:"
-          ls -la
-          echo "Searching recursively for dotnet-versionsweeper.json:"
+          echo "Root directory: $GITHUB_WORKSPACE"
+          ls -la $GITHUB_WORKSPACE
           find . -name "dotnet-versionsweeper.json"
-          if [ -f "./dotnet-versionsweeper.json" ]; then
-            echo "Found config file, content:"
-            cat ./dotnet-versionsweeper.json
-          else
-            echo "Config file not found in root!"
-          fi
 
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
@@ -48,6 +41,8 @@ jobs:
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
           dir: ./  
+          pattern: "*.csproj;*.fsproj;*.vbproj;*.xproj;project.json"
+          sdkCompliance: false
              
           
 
