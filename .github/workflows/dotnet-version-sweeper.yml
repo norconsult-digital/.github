@@ -33,7 +33,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
-          dir: ./          # Ensure the JSON file is in the root of this path
+          dir: ./config         
           
 
       - name: Create upgrade issues
