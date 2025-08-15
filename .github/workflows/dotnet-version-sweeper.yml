@@ -34,7 +34,7 @@ jobs:
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
           dir: ./          # Ensure the JSON file is in the root of this path
-          config-file: dotnet-versionsweeper.json
+          
 
       - name: Create upgrade issues
         env:
