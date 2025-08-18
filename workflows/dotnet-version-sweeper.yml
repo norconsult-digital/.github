@@ -1,4 +1,4 @@
-name: "Check dotnet version .LTS version"
+name: "[platform]Check dotnet version .LTS version"
 
 on:
   schedule:
