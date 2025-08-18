@@ -1,0 +1,37 @@
+name: WMF-Reader-Nuget
+
+on:
+   push:
+    branches:
+    - 'main'
+    paths:
+    - 'common/src/service/WmfReader/**'
+   workflow_dispatch:
+
+jobs:
+  build:
+    uses: norconsult-digital/platform/.github/workflows/nuget-build-and-test.yml@main
+    with:
+      projectDir: 'common/src/service/WmfReader'
+      buildConfiguration: 'Release'
+    secrets:
+      ADO_NUGET_PAT: ${{ secrets.ADO_NUGET_PAT }}
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'yoshi-test'
+          environmentName: 'test'
+        - environment: 'yoshi-prod'
+          environmentName: 'prod'
+    uses: norconsult-digital/platform/.github/workflows/nuget-publish.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      projectDir: 'common/src/service/WmfReader'
+      buildConfiguration: 'Release'
+      deployAllEnvironments: true
+    secrets:
+      ADO_NUGET_PAT: ${{ secrets.ADO_NUGET_PAT }}

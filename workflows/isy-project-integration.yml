@@ -1,0 +1,53 @@
+name: Isy Project Integration
+
+on:
+  push:
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'frontend/src/apps/isy-project-integration/**'
+    - '.github/workflows/isy-project-integration.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'frontend/src/apps/isy-project-integration/**'
+    - '.github/workflows/isy-project-integration.yml'
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dockerFile: 'frontend/src/apps/isy-project-integration/Integration/Dockerfile'
+      dockerBuildContext: './'
+      repositoryName: 'isy360/isyproject-integration'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'bowser-test'
+          environmentName: 'test'
+          branches: '["main"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'bowser-stage'
+          environmentName: 'stage'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'bowser-prod'
+          environmentName: 'prod'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      allowedBranches: ${{ matrix.branches }}
+      repositoryName: 'isy360/isyproject-integration'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}

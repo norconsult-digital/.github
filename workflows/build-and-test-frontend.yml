@@ -1,0 +1,28 @@
+name: Build And Test Frontend
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'release/**'
+    paths:
+      - 'frontend/src/**'
+      - '.github/workflows/angular-build-and-test.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches:
+      - 'main'
+      - 'release/**'
+    paths:
+      - 'frontend/src/**'
+      - '.github/workflows/angular-build-and-test.yml'
+jobs:
+  build-and-test:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/angular-build-and-test.yml@main
+    with:
+      workspaceDir: 'frontend/src'
+      disableNxCloud: true
+    secrets:
+      NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}

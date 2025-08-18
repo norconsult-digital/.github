@@ -1,0 +1,59 @@
+name: Specification APP
+
+on:
+  push:
+    branches:
+    - 'main'
+    paths:
+    - 'frontend/src/apps/specification-app/**'
+    - 'frontend/src/apps/specification-app-host/**'
+    - 'frontend/src/libs/data/copilot-api/**'
+    - 'frontend/src/libs/data/register-api-data/**'
+    - 'frontend/src/libs/data/specification-api-data/**'
+    - 'frontend/src/libs/register/**'
+    - 'frontend/src/libs/register-copilot/**'
+    - '.github/workflows/specification-app.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+    branches:
+    - 'main'
+    paths:
+    - 'frontend/src/apps/specification-app/**'
+    - 'frontend/src/apps/specification-app-host/**'
+    - 'frontend/src/libs/data/copilot-api/**'
+    - 'frontend/src/libs/data/register-api-data/**'
+    - 'frontend/src/libs/data/specification-api-data/**'
+    - 'frontend/src/libs/register/**'
+    - 'frontend/src/libs/register-copilot/**'
+    - '.github/workflows/specification-app.yml'
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dockerFile: 'frontend/src/apps/specification-app-host/Dockerfile'
+      dockerBuildContext: './'
+      repositoryName: 'isy360/specification-app'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'yoshi-test'
+          environmentName: 'test'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-stage'
+          environmentName: 'stage'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-prod'
+          environmentName: 'prod'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      repositoryName: 'isy360/specification-app'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}

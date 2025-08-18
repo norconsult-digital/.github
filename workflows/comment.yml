@@ -1,0 +1,63 @@
+name: Comment
+
+on:
+  push:
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'comment/src/service/**'
+    - '.github/workflows/comment.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'comment/src/service/**'
+    - '.github/workflows/comment.yml'
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dockerFile: 'comment/src/service/Dockerfile'
+      dockerBuildContext: './'
+      repositoryName: 'isy360/comment'
+      testProjects: 'comment/src/service/Tests/**'
+      migrationBundleArguments: '--project comment/src/service/Isy.Services.Comment.Core.Migrations --startup-project comment/src/service/Isy.Services.Comment.Api'
+      migrationBundleAppSettingsPath: 'comment/src/service/Isy.Services.Comment.Api'
+      nugetConfigPath: comment/src/service
+      dotnetVersion: '8.*'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'bowser-test'
+          environmentName: 'test'
+          branches: '["main"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_NON_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.COMMENT_TEST_DB_CONNECTION }}
+        - environment: 'bowser-stage'
+          environmentName: 'stage'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.COMMENT_STAGE_DB_CONNECTION }}
+        - environment: 'bowser-prod'
+          environmentName: 'prod'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.COMMENT_PROD_DB_CONNECTION }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      allowedBranches: ${{ matrix.branches }}
+      repositoryName: 'isy360/comment'
+      migrationBundleArguments: '--project comment/src/service/Isy.Services.Comment.Core.Migrations --startup-project comment/src/service/Isy.Services.Comment.Api'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}
+      dbConnection: ${{ matrix.dbConnection }}

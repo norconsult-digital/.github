@@ -1,0 +1,22 @@
+name: Specification Load Tests
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs at 00:00 UTC every day
+  workflow_dispatch: 
+
+jobs:
+  loadtest:
+    strategy:
+      matrix:
+        include:
+          - name: 'dashboard'
+            loadTestConfig: 'specification/src/load-tests/dashboard.config.yaml'
+          - name: 'spec-details'
+            loadTestConfig: 'specification/src/load-tests/spec-details.config.yaml'
+    uses: norconsult-digital/platform/.github/workflows/load-testing-jobs.yml@main
+    with:
+      subscription: ${{ vars.ISY360_LOAD_SUBSCRIPTION }}
+      loadTestConfig: ${{ matrix.loadTestConfig }}
+      loadTestName: ${{ matrix.name }}
+      azureServicePrincipalId:  ${{ vars.AZURE_LOAD_TESTING_SERVICE_PRINCIPAL_ID }}

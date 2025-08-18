@@ -1,0 +1,63 @@
+name: BIM
+
+on:
+  push:
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'bim/src/service/model/**'
+    - '.github/workflows/bim.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'bim/src/service/model/**'
+    - '.github/workflows/bim.yml'
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dockerFile: 'bim/src/service/model/Dockerfile'
+      dockerBuildContext: './'
+      repositoryName: 'isy360/bim'
+      nugetConfigPath: bim/src/service/model
+      migrationBundleArguments: '--project bim/src/service/model/Isy.Bim.Infrastructure --startup-project bim/src/service/model/Isy.Bim.Api --context ModelsContext'
+      migrationBundleAppSettingsPath: 'bim/src/service/model/Isy.Bim.Api'
+      testProjects: 'bim/src/service/model/Tests/**'
+      dotnetVersion: '8.*'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'bowser-test'
+          environmentName: 'test'
+          branches: '["main"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_NON_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.BIM_TEST_DB_CONNECTION }}
+        - environment: 'bowser-stage'
+          environmentName: 'stage'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.BIM_STAGE_DB_CONNECTION }}
+        - environment: 'bowser-prod'
+          environmentName: 'prod'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.BIM_PROD_DB_CONNECTION }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      allowedBranches: ${{ matrix.branches }}
+      repositoryName: 'isy360/bim'
+      migrationBundleArguments: '--project bim/src/service/model/Isy.Bim.Infrastructure --startup-project bim/src/service/model/Isy.Bim.Api --context ModelsContext'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}
+      dbConnection: ${{ matrix.dbConnection }}

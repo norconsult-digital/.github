@@ -1,0 +1,68 @@
+name: Specification API
+
+on:
+  push:
+    branches:
+    - 'main'
+    paths:
+    - 'specification/src/**'
+    - 'common/src/service/TenantToken/**'
+    - '.github/workflows/specification-api.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+    branches:
+    - 'main'
+    paths:
+    - 'specification/src/**'
+    - 'common/src/service/TenantToken/**'
+    - '.github/workflows/specification-api.yml'
+
+env:
+  RUNNING_IN_PIPELINE: true
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dotnetVersion: '9.*'
+      dockerFile: 'specification/src/Api/Dockerfile'
+      repositoryName: 'isy360/specification-api'
+      testProjects: 'specification/src/**'
+      migrationBundleArguments: '--project specification/src/Infrastructure.EntityFrameworkCore --startup-project specification/src/Api --context SpecificationDbContext'
+      migrationBundleAppSettingsPath: 'specification/src/Api'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'yoshi-test'
+          environmentName: 'test'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_NON_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.SPECIFICATION_TEST_DB_CONNECTION }}
+          optionalDbConnection1: ${{ vars.SPECIFICATION_TEST_OPTIONAL_DB_CONNECTION_1 }}
+          optionalDbConnection2: ${{ vars.SPECIFICATION_TEST_OPTIONAL_DB_CONNECTION_2 }}
+        - environment: 'yoshi-stage'
+          environmentName: 'stage'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.SPECIFICATION_STAGE_DB_CONNECTION }}
+          optionalDbConnection1: ${{ vars.SPECIFICATION_STAGE_OPTIONAL_DB_CONNECTION_1 }}
+          optionalDbConnection2: ${{ vars.SPECIFICATION_STAGE_OPTIONAL_DB_CONNECTION_2 }}
+        - environment: 'yoshi-prod'
+          environmentName: 'prod'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.SPECIFICATION_PROD_DB_CONNECTION }}
+          optionalDbConnection1: ${{ vars.SPECIFICATION_PROD_OPTIONAL_DB_CONNECTION_1 }}
+          optionalDbConnection2: ${{ vars.SPECIFICATION_PROD_OPTIONAL_DB_CONNECTION_2 }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      repositoryName: 'isy360/specification-api'
+      migrationBundleArguments: 'specification/src/Api'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}
+      dbConnection: ${{ matrix.dbConnection }}
+      optionalDbConnection1: ${{ matrix.optionalDbConnection1 }}
+      optionalDbConnection2: ${{ matrix.optionalDbConnection2 }}

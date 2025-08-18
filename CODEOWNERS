@@ -1,0 +1,33 @@
+### Team Bowser ###
+/bim/ @norconsult-digital/bowser
+/change-management/ @norconsult-digital/bowser
+/comment/ @norconsult-digital/bowser
+/legacy/ @norconsult-digital/bowser
+/metadata/ @norconsult-digital/bowser
+/notification/ @norconsult-digital/bowser
+/plan/ @norconsult-digital/bowser
+/project/ @norconsult-digital/bowser
+/frontend/src/apps/isy-project-host/ @norconsult-digital/bowser
+/frontend/src/apps/isy-project-integration/ @norconsult-digital/bowser
+/frontend/src/apps/isy-project/ @norconsult-digital/bowser
+/frontend/src/libs/bim/ @norconsult-digital/bowser
+/frontend/src/libs/bim-core/ @norconsult-digital/bowser
+/frontend/src/libs/bim-forge-viewer/ @norconsult-digital/bowser
+/frontend/src/libs/bim-takeoff/ @norconsult-digital/bowser
+/frontend/src/libs/bim-takeoff-v2/ @norconsult-digital/bowser
+/frontend/src/libs/change-management/ @norconsult-digital/bowser
+/frontend/src/libs/comment/ @norconsult-digital/bowser
+/frontend/src/libs/legacy/ @norconsult-digital/bowser
+/frontend/src/libs/metadata/ @norconsult-digital/bowser
+/frontend/src/libs/plan/ @norconsult-digital/bowser
+/frontend/src/libs/project/ @norconsult-digital/bowser
+
+### Team Yoshi ###
+/register-copilot/ @norconsult-digital/yoshi
+/register/ @norconsult-digital/yoshi
+/specification/ @norconsult-digital/yoshi
+/frontend/src/apps/specification-app-host/ @norconsult-digital/yoshi
+/frontend/src/apps/specification-app/ @norconsult-digital/yoshi
+/frontend/src/libs/data/register-api-data/ @norconsult-digital/yoshi
+/frontend/src/libs/data/specification-api-data/ @norconsult-digital/yoshi
+/frontend/src/libs/register-copilot/ @norconsult-digital/yoshi
