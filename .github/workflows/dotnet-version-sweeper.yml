@@ -10,7 +10,7 @@ on:
         default: "STS"
 
 jobs:
-  version-sweep:
+  dotnet-version-sweeper:
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -40,11 +40,9 @@ jobs:
           owner: ${{ github.repository_owner }}
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
-          dir: ./  
+          dir: ./
           pattern: "*.csproj;*.fsproj;*.vbproj;*.xproj;project.json"
           sdkCompliance: false
-             
-          
 
       - name: Create upgrade issues
         env:
