@@ -1,0 +1,17 @@
+{
+  "ignore": [
+    "**/legacy/**/*.csproj",
+    "**/testprosjekter/**",
+    "**/bin/**",
+    "**/obj/**",
+    "**/packages/**",
+    "**/.vs/**",
+    "**/node_modules/**",
+    "**/TestResults/**",
+    "**/samples/**/*.csproj",
+    "**/utilities/**/*.csproj"
+  ],
+  "outOfSupportWithinDays": 90,
+  "actionType": "All",
+  "ltsOnly": true
+}
