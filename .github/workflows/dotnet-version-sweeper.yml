@@ -10,7 +10,7 @@ on:
         default: "STS"
 
 jobs:
-  version-sweep:
+  dotnet-version-sweeper:
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -18,6 +18,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Debug: verify config file exists
+      - name: Verify config file
+        run: |
+          echo "Root directory: $GITHUB_WORKSPACE"
+          ls -la $GITHUB_WORKSPACE
+          find . -name "dotnet-versionsweeper.json"
 
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
@@ -33,8 +40,9 @@ jobs:
           owner: ${{ github.repository_owner }}
           name: ${{ github.repository }}
           branch: ${{ github.ref }}
-          dir: ./     
-          
+          dir: ./
+          pattern: "*.csproj;*.fsproj;*.vbproj;*.xproj;project.json"
+          sdkCompliance: false
 
       - name: Create upgrade issues
         env:
