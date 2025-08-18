@@ -1,0 +1,63 @@
+name: Change Management
+
+on:
+  push:
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'change-management/src/service/**'
+    - '.github/workflows/change-management.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'change-management/src/service/**'
+    - '.github/workflows/change-management.yml'
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dockerFile: 'change-management/src/service/Dockerfile'
+      dockerBuildContext: './'
+      repositoryName: 'isy360/change-management'
+      testProjects: 'change-management/src/service/Tests/**'
+      migrationBundleArguments: '--project change-management/src/service/Isy.Services.ChangeManagement.Infrastructure.EntityFramework --startup-project change-management/src/service/Isy.Services.ChangeManagement.Api'
+      migrationBundleAppSettingsPath: 'change-management/src/service/Isy.Services.ChangeManagement.Api'
+      nugetConfigPath: 'change-management/src/service'
+      dotnetVersion: '8.*'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'bowser-test'
+          environmentName: 'test'
+          branches: '["main"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_NON_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.CHANGEMANAGEMENT_TEST_DB_CONNECTION }}
+        - environment: 'bowser-stage'
+          environmentName: 'stage'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.CHANGEMANAGEMENT_STAGE_DB_CONNECTION }}
+        - environment: 'bowser-prod'
+          environmentName: 'prod'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.CHANGEMANAGEMENT_PROD_DB_CONNECTION }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      repositoryName: 'isy360/change-management'
+      allowedBranches: ${{ matrix.branches }}
+      migrationBundleArguments: '--project change-management/src/service/Isy.Services.ChangeManagement.Infrastructure.EntityFramework --startup-project change-management/src/service/Isy.Services.ChangeManagement.Api'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}
+      dbConnection: ${{ matrix.dbConnection }}

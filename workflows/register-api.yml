@@ -1,0 +1,50 @@
+name: Register API
+
+on:
+  push:
+    branches:
+    - 'main'
+    paths:
+    - 'register/src/**'
+    - 'common/src/service/TenantToken/**'
+    - '.github/workflows/register-api.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+    branches:
+    - 'main'
+    paths:
+    - 'register/src/**'
+    - 'common/src/service/TenantToken/**'
+    - '.github/workflows/register-api.yml'
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dotnetVersion: '9.*'
+      dockerFile: 'register/src/Api/Dockerfile'
+      repositoryName: 'isy360/register-api'
+      testProjects: 'register/src/**'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'yoshi-test'
+          environmentName: 'test'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-stage'
+          environmentName: 'stage'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-prod'
+          environmentName: 'prod'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      repositoryName: 'isy360/register-api'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}

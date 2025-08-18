@@ -1,0 +1,71 @@
+name: Isy Project Resources
+
+on:
+  push:
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'ops/isyproject/resources/**'
+    - '.github/workflows/isy-project-resources.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'ops/isyproject/resources/**'
+    - '.github/workflows/isy-project-resources.yml'
+
+jobs:
+  publish:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/publish-bicep-files.yml@main
+    with:
+      bicepFolder: 'ops/isyproject/resources/bicep'
+
+  deploy:
+    needs: publish
+    strategy:
+      matrix:
+        include:
+        - environment: 'bowser-dev'
+          environmentName: 'test'
+          branches: '["main"]'
+          subscription: ${{ vars.ISY360_DEV_SUBSCRIPTION }}
+          resourceGroup: 'rg-isyproject-app-dev'
+          bicepParameterFile: 'isyproject.parameters.dev.json'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'bowser-test'
+          environmentName: 'test'
+          branches: '["main"]'
+          subscription: ${{ vars.ISY360_TEST_SUBSCRIPTION }}
+          resourceGroup: 'rg-isyproject-app-test'
+          bicepParameterFile: 'isyproject.parameters.test.json'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'bowser-stage'
+          environmentName: 'stage'
+          branches: '["release"]'
+          subscription: ${{ vars.ISY360_STAGE_SUBSCRIPTION }}
+          resourceGroup: 'rg-isyproject-app-stage'
+          bicepParameterFile: 'isyproject.parameters.stage.json'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'bowser-prod'
+          environmentName: 'prod'
+          branches: '["release"]'
+          subscription: ${{ vars.ISY360_PROD_SUBSCRIPTION }}
+          resourceGroup: 'rg-isyproject-app-prod'
+          bicepParameterFile: 'isyproject.parameters.prod.json'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+    uses: norconsult-digital/platform/.github/workflows/deploy-bicep-files.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      allowedBranches: ${{ matrix.branches }}
+      runWhatIf: true
+      subscription: ${{ matrix.subscription }}
+      resourceGroupName: ${{ matrix.resourceGroup }}
+      bicepFile: 'isyproject.bicep'
+      bicepParameterFile: ${{ matrix.bicepParameterFile }}
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}

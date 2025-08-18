@@ -1,0 +1,58 @@
+name: Specification API Resources
+
+on:
+  push:
+    branches:
+    - 'main'
+    paths:
+    - 'specification/ops/**'
+    - '.github/workflows/specification-api-resources.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+    branches:
+    - 'main'
+    paths:
+    - 'specification/ops/**'
+    - '.github/workflows/specification-api-resources.yml'
+
+jobs:
+  publish:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/publish-bicep-files.yml@main
+    with:
+      bicepFolder: 'specification/ops/resources/bicep'
+
+  deploy:
+    needs: publish
+    strategy:
+      matrix:
+        include:
+        - environment: 'yoshi-test'
+          environmentName: 'test'
+          subscription: ${{ vars.ISY360_TEST_SUBSCRIPTION }}
+          resourceGroup: 'rg-specification-api-test'
+          bicepParameterFile: 'specification.parameters.test.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-stage'
+          environmentName: 'stage'
+          subscription: ${{ vars.ISY360_STAGE_SUBSCRIPTION }}
+          resourceGroup: 'rg-specification-api-stage'
+          bicepParameterFile: 'specification.parameters.stage.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-prod'
+          environmentName: 'prod'
+          subscription: ${{ vars.ISY360_PROD_SUBSCRIPTION }}
+          resourceGroup: 'rg-specification-api-prod'
+          bicepParameterFile: 'specification.parameters.prod.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+    uses: norconsult-digital/platform/.github/workflows/deploy-bicep-files.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      runWhatIf: true
+      subscription: ${{ matrix.subscription }}
+      resourceGroupName: ${{ matrix.resourceGroup }}
+      bicepFile: 'specification.bicep'
+      bicepParameterFile: ${{ matrix.bicepParameterFile }}
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}

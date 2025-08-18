@@ -1,0 +1,63 @@
+name: Metadata
+
+on:
+  push:
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'metadata/src/service/**'
+    - '.github/workflows/metadata.yml'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    branches:
+    - 'main'
+    - 'refs/heads/release/**'
+    paths:
+    - 'metadata/src/service/**'
+    - '.github/workflows/metadata.yml'
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/dotnet-ci-jobs.yml@main
+    with:
+      dockerFile: 'metadata/src/service/Dockerfile'
+      dockerBuildContext: './'
+      repositoryName: 'isy360/metadata'
+      testProjects: 'metadata/src/service/Tests/**'
+      migrationBundleArguments: '--project metadata/src/service/Isy.Services.Metadata.Core.Migrations --startup-project metadata/src/service/Isy.Services.Metadata.Api'
+      migrationBundleAppSettingsPath: 'metadata/src/service/Isy.Services.Metadata.Api'
+      nugetConfigPath: metadata/src/service
+      dotnetVersion: '8.*'
+
+  deploy:
+    needs: build
+    strategy:
+      matrix:
+        include:
+        - environment: 'bowser-test'
+          environmentName: 'test'
+          branches: '["main"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_NON_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.METADATA_TEST_DB_CONNECTION }}
+        - environment: 'bowser-stage'
+          environmentName: 'stage'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.METADATA_STAGE_DB_CONNECTION }}
+        - environment: 'bowser-prod'
+          environmentName: 'prod'
+          branches: '["release"]'
+          azureServicePrincipalId: ${{ vars.AZURE_BOWSER_PROD_SERVICE_PRINCIPAL_ID }}
+          dbConnection: ${{ vars.METADATA_PROD_DB_CONNECTION }}
+    uses: norconsult-digital/platform/.github/workflows/dotnet-cd-jobs.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      allowedBranches: ${{ matrix.branches }}
+      repositoryName: 'isy360/metadata'
+      migrationBundleArguments: '--project metadata/src/service/Isy.Services.Metadata.Core.Migrations --startup-project metadata/src/service/Isy.Services.Metadata.Api'
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}
+      dbConnection: ${{ matrix.dbConnection }}

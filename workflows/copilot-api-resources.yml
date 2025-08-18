@@ -1,0 +1,91 @@
+name: Copilot Api Resources
+
+on:
+  push:
+    branches:
+    - 'main'
+    paths:
+    - 'copilot/ops/resources/**'
+    - '.github/workflows/copilot-api-resources.yml'
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+    branches:
+    - 'main'
+    paths:
+    - 'copilot/ops/resources/**'
+    - '.github/workflows/copilot-api-resources.yml'
+  workflow_dispatch:
+jobs:
+  publish:
+    if: github.event.pull_request.draft == false
+    uses: norconsult-digital/platform/.github/workflows/publish-bicep-files.yml@main
+    with:
+      bicepFolder: 'copilot/ops/resources/bicep'
+
+  deploy-copilot:
+    needs: publish
+    strategy:
+      matrix:
+        include:
+        - environment: 'yoshi-test'
+          environmentName: 'test'
+          subscription: ${{ vars.ISY360_TEST_SUBSCRIPTION }}
+          resourceGroup: 'rg-copilot-api-test-norwayeast'
+          bicepParameterFile: './copilot/copilot.parameters.test.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-stage'
+          environmentName: 'stage'
+          subscription: ${{ vars.ISY360_STAGE_SUBSCRIPTION }}
+          resourceGroup: 'rg-copilot-api-stage-norwayeast'
+          bicepParameterFile: './copilot/copilot.parameters.stage.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-prod'
+          environmentName: 'prod'
+          subscription: ${{ vars.ISY360_PROD_SUBSCRIPTION }}
+          resourceGroup: 'rg-copilot-api-prod-norwayeast'
+          bicepParameterFile: './copilot/copilot.parameters.prod.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+    uses: norconsult-digital/platform/.github/workflows/deploy-bicep-files.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      runWhatIf: true
+      subscription: ${{ matrix.subscription }}
+      resourceGroupName: ${{ matrix.resourceGroup }}
+      bicepFile: './copilot/copilot.bicep'
+      bicepParameterFile: ${{ matrix.bicepParameterFile }}
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}
+
+  deploy-openai:
+    needs: publish
+    strategy:
+      matrix:
+        include:
+        - environment: 'yoshi-test'
+          environmentName: 'test'
+          subscription: ${{ vars.ISY360_TEST_SUBSCRIPTION }}
+          resourceGroup: 'rg-copilot-api-test-swedencentral'
+          bicepParameterFile: './openai/copilot-openai.parameters.test.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_NON_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-stage'
+          environmentName: 'stage'
+          subscription: ${{ vars.ISY360_STAGE_SUBSCRIPTION }}
+          resourceGroup: 'rg-copilot-api-stage-swedencentral'
+          bicepParameterFile: './openai/copilot-openai.parameters.stage.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+        - environment: 'yoshi-prod'
+          environmentName: 'prod'
+          subscription: ${{ vars.ISY360_PROD_SUBSCRIPTION }}
+          resourceGroup: 'rg-copilot-api-prod-swedencentral'
+          bicepParameterFile: './openai/copilot-openai.parameters.prod.json'
+          azureServicePrincipalId: ${{ vars.AZURE_YOSHI_PROD_SERVICE_PRINCIPAL_ID }}
+    uses: norconsult-digital/platform/.github/workflows/deploy-bicep-files.yml@main
+    with:
+      environment: ${{ matrix.environment }}
+      environmentName: ${{ matrix.environmentName }}
+      runWhatIf: true
+      subscription: ${{ matrix.subscription }}
+      resourceGroupName: ${{ matrix.resourceGroup }}
+      bicepFile: './openai/copilot-openai.bicep'
+      bicepParameterFile: ${{ matrix.bicepParameterFile }}
+      azureServicePrincipalId: ${{ matrix.azureServicePrincipalId }}
