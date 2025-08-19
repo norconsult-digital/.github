@@ -1,0 +1,61 @@
+name: Deploy Bicep File What If Workflow
+
+on:
+  workflow_call:
+    inputs:      
+      vmImage:
+        type: string
+        required: false
+        default: 'ubuntu-latest'
+      environment: 
+        required: true
+        type: string
+      subscription:
+        required: true
+        type: string
+      resourceGroupName:
+        required: true
+        type: string
+      bicepFile:
+        required: true
+        type: string
+      bicepParameterFile:
+        required: true
+        type: string
+      azureServicePrincipalId:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-bicep:
+    runs-on: ${{ inputs.vmImage }}
+    environment: ${{ inputs.environment }}
+    name: Validate Bicep File
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: 'bicep'
+      
+      - name: Log in with Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azureServicePrincipalId }}
+          tenant-id: '5546488e-16ae-4971-ba91-b12a928efaf8'
+          subscription-id: ${{ inputs.subscription }}
+
+      - name: Deploy Bicep file
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ inputs.subscription }}
+          resourceGroupName: ${{ inputs.resourceGroupName }}
+          template: ${{ inputs.bicepFile }}
+          parameters: ${{ inputs.bicepParameterFile }}
+          additionalArguments: "--what-if --rollback-on-error"

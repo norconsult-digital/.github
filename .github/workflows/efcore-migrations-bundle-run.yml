@@ -1,0 +1,58 @@
+name: Migrations Bundle Run
+
+on:
+  workflow_call:
+    inputs:
+      environment: 
+        required: true
+        type: string
+      environmentName:
+        required: true
+        type: string
+      azureServicePrincipalId:
+        required: true
+        type: string
+      dbConnection: 
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  migrations-bundle-run:
+    runs-on: private-ubuntu-runner
+    environment: ${{ inputs.environment }}
+    name: Run Migration Bundle
+    steps:
+    - name: Download migrations-bundle artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: migrations-bundle
+        path: migrations-bundle
+
+    - name: List contents of the migrations-bundle
+      run: ls -la migrations-bundle
+
+    - name: Determine subscription based on environment
+      id: set_env
+      run: |
+        if [ "${{ inputs.environmentName }}" = "prod" ] || [ "${{ inputs.environmentName }}" = "stage" ]; then
+          echo "AZURE_SUBSCRIPTION=a60c4c2a-c6d9-4940-85e5-bd1fa4a1dfea" >> $GITHUB_ENV
+        else
+          echo "AZURE_SUBSCRIPTION=21eca75c-ed74-4f47-9f51-c0c345a00859" >> $GITHUB_ENV
+        fi
+
+    - name: Log in with Azure
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.azureServicePrincipalId }}
+        tenant-id: '5546488e-16ae-4971-ba91-b12a928efaf8'
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION }}
+
+    - name: Set executable permission for migrations-bundle and run
+      run: |
+        chmod +x ./migrations-bundle.exe
+        ./migrations-bundle.exe --connection '${{ inputs.dbConnection }}' --verbose
+      working-directory: ./migrations-bundle

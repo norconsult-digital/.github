@@ -1,0 +1,28 @@
+name: Publish Bicep Artifact
+
+on:
+  workflow_call:
+    inputs:
+      bicepFolder:
+        required: true
+        type: string
+      vmImage:
+        type: string
+        default: 'ubuntu-latest'
+        required: false
+
+jobs:
+  publish-artifact:
+    runs-on: ${{ inputs.vmImage }}
+    name: Publish Bicep Artifact
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Publish bicep
+        uses: actions/upload-artifact@v4
+        with:
+          name: bicep
+          path: ${{ inputs.bicepFolder }}

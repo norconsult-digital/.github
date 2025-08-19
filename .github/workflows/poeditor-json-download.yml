@@ -1,0 +1,77 @@
+name: 'POEditor i18next Download Workflow'
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        required: true
+        type: string
+        description: 'Space-separated list of languages to download translations for (e.g. "nb en de")'
+      outputPath:
+        required: true
+        type: string
+        description: 'Path where the downloaded JSON files should be saved'
+      projectId:
+        required: true
+        type: string
+    secrets:
+      API_KEY:
+        required: true
+
+jobs:
+  download-and-commit:
+    runs-on: ubuntu-latest
+    name: Download i18next Translations
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup jq
+        run: sudo apt-get install -y jq
+
+      - name: Download translations from POEditor (i18next format)
+        run: |
+          mkdir -p "${{ inputs.outputPath }}"
+          IFS=' ' read -ra LOCALES <<< "${{ inputs.languages }}"
+          for locale in "${LOCALES[@]}"; do
+            echo "Downloading translations for locale $locale"
+            result=$(curl -s -X POST https://api.poeditor.com/v2/projects/export \
+              -F api_token="${{ secrets.API_KEY }}" \
+              -F id="${{ inputs.projectId }}" \
+              -F language="$locale" \
+              -F type="i18next" | jq -r .result.url)
+
+            if [[ "$result" == "null" || -z "$result" ]]; then
+              echo "❌ Failed to get download URL for $locale"
+              exit 1
+            fi
+
+            curl -s -o "${{ inputs.outputPath }}/$locale.json" "$result"
+            echo "✅ Saved: $locale.json"
+          done
+
+      - name: Commit and push changes if any
+        run: |
+          set -e
+          git config --global user.email "$GITHUB_ACTOR_EMAIL"
+          git config --global user.name "$GITHUB_ACTOR - automatic"
+
+          CHANGES_FOUND=false
+          for file in ${{ inputs.outputPath }}/*.json; do
+            if [ -f "$file" ] && ! git diff --quiet -- "$file"; then
+              echo "Changes found in $file"
+              git add "$file"
+              CHANGES_FOUND=true
+            else
+              echo "No changes in $file"
+            fi
+          done
+
+          if $CHANGES_FOUND; then
+            git pull --no-rebase origin "${GITHUB_REF#refs/heads/}"
+            git commit -m "🔄 Automatic workflow update: i18next JSON in ${{ inputs.outputPath }}"
+            git push origin HEAD:"${GITHUB_REF#refs/heads/}"
+          else
+            echo "No changes to commit."
+          fi

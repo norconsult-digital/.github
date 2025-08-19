@@ -1,0 +1,64 @@
+name: POEditor Upload i18next JSON
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: "App directory (with package.json)"
+        required: true
+        type: string
+      file:
+        description: "Path to the JSON file to upload"
+        required: true
+        type: string
+      projectId:
+        required: true
+        type: string
+      language:
+        required: true
+        type: string
+      extractCommand:
+        description: "Command to run for extracting translations"
+        required: false
+        type: string
+      overwrite:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      API_KEY:
+        required: true
+
+jobs:
+  upload-i18next:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: ${{ inputs.path }}
+
+      - name: Run extract command
+        if: inputs.extractCommand != ''
+        run: ${{ inputs.extractCommand }}
+        working-directory: ${{ inputs.path }}
+
+      - name: Upload i18next JSON to POEditor
+        run: |
+          overwriteValue=$(echo "${{ inputs.overwrite }}" | grep -iq "true" && echo "1" || echo "0")
+          echo "Uploading ${{ inputs.file }} to POEditor"
+          curl -X POST https://api.poeditor.com/v2/projects/upload \
+            -F "api_token=${{ secrets.API_KEY }}" \
+            -F "id=${{ inputs.projectId }}" \
+            -F "updating=terms_translations" \
+            -F "language=${{ inputs.language }}" \
+            -F "overwrite=${overwriteValue}" \
+            -F "file=@${{ inputs.file }}"

@@ -1,0 +1,72 @@
+name: Docker Image Processing and Push
+
+on:
+  workflow_call:
+    inputs:
+      environment: 
+        required: true
+        type: string
+      environmentName:
+        required: true
+        type: string
+      artifactName:
+        required: false
+        default: 'container-image'
+        type: string
+      repositoryName:
+        required: true
+        type: string
+      azureServicePrincipalId:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  process-and-push-image:
+    runs-on: private-ubuntu-runner
+    environment: ${{ inputs.environment }}
+    name: Process and Push Docker Image
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifactName }}
+
+      - name: Load Docker image
+        run: docker load --input image.tar
+
+      - name: Determine ACR name and ACR subscription based on environment
+        id: set_env
+        run: |
+          if [ "${{ inputs.environmentName }}" = "prod" ] || [ "${{ inputs.environmentName }}" = "stage" ]; then
+            echo "ACR_NAME=crndsharedprod.azurecr.io" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=a60c4c2a-c6d9-4940-85e5-bd1fa4a1dfea" >> $GITHUB_ENV
+          else
+            echo "ACR_NAME=crndsharednonprod.azurecr.io" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=21eca75c-ed74-4f47-9f51-c0c345a00859" >> $GITHUB_ENV
+          fi
+
+      - name: Set image tag
+        run: echo "imageTag=${{ inputs.environmentName }}-$(date +%s)" >> $GITHUB_ENV
+
+      - name: Log in with Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azureServicePrincipalId }}
+          tenant-id: '5546488e-16ae-4971-ba91-b12a928efaf8'
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION }}
+
+      - name: Log in to the Azure Container Registry
+        run: |
+          az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Retag Docker image
+        run: |
+          docker tag ${{ inputs.repositoryName }}:tmp ${{ env.ACR_NAME }}/${{ inputs.repositoryName }}:${{ env.imageTag }}
+
+      - name: Push Docker image to ACR
+        run: |
+          docker push ${{ env.ACR_NAME }}/${{ inputs.repositoryName }}:${{ env.imageTag }}
