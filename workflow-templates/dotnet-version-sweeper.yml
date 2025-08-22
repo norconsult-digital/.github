@@ -1,17 +1,18 @@
-name: "Check dotnet version .LTS version"
+name: "target supported version"
 
 on:
   schedule:
-    - cron: "0 9 * * 3"
+    - cron: "0 0 1 * *"
   workflow_dispatch:
     inputs:
       support:
         description: "The support level to target (STS, LTS, or Preview)."
         required: true
-        default: "LTS"
+        default: "STS"
+
 
 jobs:
-  dotnet-version-sweeper:
+  donet-version-sweeper:
     uses: norconsult-digital/.github/.github/workflows/dotnet-version-sweeper.yml@main
     with:
-      support: ${{ inputs.support || 'LTS'}}
+      support: ${{ inputs.support }}
