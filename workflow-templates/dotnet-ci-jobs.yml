@@ -72,7 +72,7 @@ jobs:
   build_docker_image:
     needs: [test, create_migration_bundle]
     if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
-    uses: ./.github/workflows/docker-build-and-save.yml
+    uses: norconsult-digital/.github/.github/workflows/docker-build-and-save.yml
     with:
       vmImage: ${{ inputs.vmImage }}
       gitRepo: ${{ inputs.gitRepo }}
