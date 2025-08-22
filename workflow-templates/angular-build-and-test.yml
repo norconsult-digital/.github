@@ -1,116 +1,21 @@
-name: Angular Test And Build
+name: "[Platform] Check Dotnet version "
+permissions:
+  contents: read
+  pull-requests: write
 
 on:
-  workflow_call:
+  schedule:
+    - cron: "0 9 * * 3"  # Changed from monthly to Wednesday 9 AM UTC
+  workflow_dispatch:
     inputs:
-      vmImage:
-        required: false
-        type: string
-        default: "ubuntu-latest"
-      workspaceDir:
+      support:
+        description: "The support level to target (STS, LTS, or Preview)."
         required: true
-        type: string
-      disableNxCloud:
-        required: false
-        type: boolean
-        default: false
-    secrets:
-      NX_CLOUD_CICD:
-        required: true
+        default: "LTS"
+
 
 jobs:
-  build-and-test:
-    runs-on: ${{ inputs.vmImage }}
-    env:
-      WORKING_DIRECTORY: ${{ github.workspace }}/s/${{ inputs.workspaceDir }}
-      NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_CICD }}
-      NX_NO_CLOUD: ${{ inputs.disableNxCloud }}
-      NODE_OPTIONS: "--max_old_space_size=8192"
-      npm_config_cache: ${{ github.workspace }}/s/${{ inputs.workspaceDir }}/node_modules
-      npm_cache_key: ${{ github.workspace }}/s/${{ inputs.workspaceDir }}/package-lock.json
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: s
-          fetch-depth: 0
-
-      - name: Setup .NET 9
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Cache npm
-        id: cache-npm
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.npm_config_cache }}
-          key: ${{ runner.os }}-npm-${{ hashFiles( env.npm_cache_key )}}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
-      - name: Install npm dependencies
-        if: steps.cache-npm.outputs.cache-hit != 'true'
-        run: npm ci
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Calculate BASE_SHA for PRs
-        if: github.event_name == 'pull_request'
-        run: |
-          pr="${{ github.event.pull_request.base.ref }}"
-          baseSha=$(git merge-base origin/$pr HEAD)
-          echo "Calculated BASE_SHA: $baseSha"
-          echo "BASE_SHA=$baseSha" >> $GITHUB_ENV
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Calculate BASE_SHA for feature branches
-        if: contains(github.ref, 'feature')
-        run: |
-          baseSha=$(git merge-base origin/main HEAD)
-          echo "Calculated BASE_SHA: $baseSha"
-          echo "BASE_SHA=$baseSha" >> $GITHUB_ENV
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Calculate BASE_SHA for other branches
-        if: github.event_name != 'pull_request' && !contains(github.ref, 'feature')
-        run: |
-          baseSha=$(git rev-parse HEAD~1)
-          echo "Calculated BASE_SHA: $baseSha"
-          echo "BASE_SHA=$baseSha" >> $GITHUB_ENV
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Replace GitHub Packages feed token in NuGet.Config files
-        shell: pwsh
-        run: |
-          $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
-          foreach ($file in $nugetFiles) {
-              $content = Get-Content $file.FullName -Raw
-              if ($content -match '<NorconsultDigital>') {
-                  if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
-                      $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add key=`"ClearTextPassword`" value=`"${{ secrets.GITHUB_TOKEN }}`" />"
-                  }
-                  Set-Content -Path $file.FullName -Value $content
-              }
-          }
-
-      - name: Run Lint
-        run: npx nx affected --base=$BASE_SHA --target=lint --parallel
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Run Stylelint
-        run: npx nx affected --base=$BASE_SHA --target=stylelint --parallel
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Run Tests
-        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Publish Test Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: ${{ env.WORKING_DIRECTORY }}/**/TestResult.xml
-
-      - name: Build Apps
-        run: npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
-        working-directory: ${{ env.WORKING_DIRECTORY }}
+  dotnet-version-sweeper:    # Fixed typo: was "donet"
+    uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
+    with:
+      support: ${{ inputs.support || 'LTS' }}
