@@ -50,7 +50,7 @@ on:
 jobs:
   test:
     if: ${{ inputs.testProjects != '' }}
-    uses: ./.github/workflows/dotnet-test.yml
+    uses: norconsult-digital/.github/.github/workflows/dotnet-test.yml
     with:
       vmImage: ${{ inputs.vmImage }}
       testProjects: ${{ inputs.testProjects }}
