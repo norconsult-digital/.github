@@ -1,0 +1,131 @@
+name: .NET Test
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: false
+        type: string
+        default: "integration-test"
+      vmImage:
+        type: string
+        default: "ubuntu-latest"
+        required: false
+      buildConfiguration:
+        required: false
+        type: string
+        default: "Release"
+      gitRepo:
+        required: false
+        type: string
+        default: ""
+      testProjects:
+        required: true
+        type: string
+      dotnetVersion:
+        required: false
+        default: "7.*"
+        type: string
+      azureServicePrincipalClientId:
+        required: false
+        type: string
+        default: ""
+      azureTenantId:
+        required: false
+        type: string
+        default: ""
+jobs:
+  test:
+    runs-on: ${{ inputs.vmImage }}
+    environment: ${{ inputs.environment }}
+    name: .NET Test
+
+    steps:
+      - name: Checkout repository
+        if: ${{ inputs.gitRepo != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.gitRepo }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Default checkout
+        uses: actions/checkout@v4
+
+      - name: Setup dotnet ${{ inputs.dotnetVersion }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnetVersion }}
+
+      - name: Azure Login via OIDC
+        if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azureServicePrincipalClientId }}
+          tenant-id: ${{ inputs.azureTenantId }}
+          allow-no-subscriptions: true
+
+      - name: Pull Docker test image
+        run: docker image pull testcontainers/ryuk
+
+      - name: Replace GitHub Packages feed token in NuGet.Config files
+        shell: pwsh
+        run: |
+          $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
+          foreach ($file in $nugetFiles) {
+              $content = Get-Content $file.FullName -Raw
+              if ($content -match '<NorconsultDigital>') {
+                  if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
+                      $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add key=`"ClearTextPassword`" value=`"${{ secrets.GITHUB_TOKEN }}`" />"
+                  }
+                  Set-Content -Path $file.FullName -Value $content
+              }
+          }
+
+      - name: Run tests with build verification
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results
+          $projects = Get-ChildItem -Path ${{ inputs.testProjects }} -Recurse -Include '*[T|t]ests.csproj'
+          foreach ($project in $projects) {
+            $project_name = [System.IO.Path]::GetFileNameWithoutExtension($project.FullName)
+
+            # Build the project explicitly
+            dotnet build $project.FullName --configuration ${{ inputs.buildConfiguration }}
+            if ($LASTEXITCODE -ne 0) {
+              Write-Output "Build failed: $project_name"
+              exit 1  # Stops execution if build fails
+            }
+
+            # Proceed to test
+            dotnet test $project.FullName --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore --logger "trx;LogFileName=$(Get-Location)/test-results/$project_name.trx" --verbosity quiet
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Output "Tests failed: $project_name"
+            }
+          }
+
+      - name: Check for TRX files
+        id: present_test_summary_check
+        if: always()
+        run: |
+          # List all files in the test-results directory for debugging purposes
+          echo "Listing all files in the test-results directory:"
+          ls -1 test-results/
+
+          # Check specifically for TRX files and set environment variable accordingly
+          if ls test-results/*.trx 1> /dev/null 2>&1; then
+            echo "TRX files found."
+            echo "present_test_summary=true" >> $GITHUB_ENV
+          else
+            echo "No TRX files found."
+            echo "present_test_summary=false" >> $GITHUB_ENV
+          fi
+
+      - name: Report test results
+        if: always() && env.present_test_summary == 'true'
+        uses: phoenix-actions/test-reporting@v15
+        with:
+          name: .NET Tests
+          path: test-results/*.trx
+          reporter: dotnet-trx
+          output-to: "step-summary"
