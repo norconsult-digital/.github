@@ -1,0 +1,11 @@
+{
+  "name": "Norconsult Digital Workflow for codeql-template Automation and Maintenance",
+  "description": "⭐Norconsult Digital Workflow for codeql-template Automation and Maintenance",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "Maintenance",
+    "DevOps"
+  ],
+  "filePatterns": []
+}
