@@ -28,6 +28,6 @@ jobs:
     uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
     with:
       vmImage: ${{ inputs.vmImage || 'ubuntu-latest' }}
-      workspaceDir: ${{ inputs.workspaceDir || 'Add workspaceDir' }}
+      workspaceDir: ${{ inputs.workspaceDir || 'Add workspaceDir' }}  # Check the work space directory and add it
       disableNxCloud: ${{ inputs.disableNxCloud || false }}
       NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}
