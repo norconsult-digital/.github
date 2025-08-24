@@ -1,0 +1,83 @@
+name: Deploy Bicep files Workflow
+
+on:
+  workflow_call:
+    inputs:
+      vmImage:
+        type: string
+        required: false
+        default: 'ubuntu-latest'
+      environment: 
+        required: true
+        type: string
+      environmentName:
+        required: true
+        type: string
+      allowedBranches:
+        required: false
+        default: '["main"]'
+        type: string
+      runWhatIf:
+        type: boolean
+        default: false
+      subscription:
+        required: true
+        type: string
+      resourceGroupName:
+        required: true
+        type: string
+      bicepFile:
+        required: true
+        type: string
+      bicepParameterFile:
+        required: true
+        type: string
+      azureServicePrincipalId:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:      
+  deploy_bicep:
+    runs-on: ${{ inputs.vmImage }}
+    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    environment:
+      name: ${{ inputs.environment }}
+    name: Deploy Bicep File
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: 'bicep'
+
+      - name: Log in with Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azureServicePrincipalId }}
+          tenant-id: '5546488e-16ae-4971-ba91-b12a928efaf8'
+          subscription-id: ${{ inputs.subscription }}
+
+      - name: What If Deploy Bicep file
+        if: ${{ inputs.runWhatIf }}
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ inputs.subscription }}
+          resourceGroupName: ${{ inputs.resourceGroupName }}
+          template: ${{ inputs.bicepFile }}
+          parameters: ${{ inputs.bicepParameterFile }}
+          additionalArguments: "--what-if --rollback-on-error"
+
+      - name: Deploy Bicep file
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ inputs.subscription }}
+          resourceGroupName: ${{ inputs.resourceGroupName }}
+          template: ${{ inputs.bicepFile }}
+          parameters: ${{ inputs.bicepParameterFile }}
+          failOnStdErr: true
