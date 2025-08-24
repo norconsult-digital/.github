@@ -1,21 +1,33 @@
-name: "[Platform] Check Dotnet version "
+name: "[Platform] Check Angular build and test"
 permissions:
   contents: read
   pull-requests: write
 
 on:
   schedule:
-    - cron: "0 9 * * 3"  # Changed from monthly to Wednesday 9 AM UTC
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
-      support:
-        description: "The support level to target (STS, LTS, or Preview)."
+      vmImage:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      workspaceDir:
         required: true
-        default: "LTS"
-
+        type: string
+      disableNxCloud:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      NX_CLOUD_CICD:
+        required: true
 
 jobs:
-  dotnet-version-sweeper:    # Fixed typo: was "donet"
+  angular-build-and-test:
     uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
     with:
-      support: ${{ inputs.support || 'LTS' }}
+      vmImage: ${{ inputs.vmImage || 'Add vmImage' }}
+      workspaceDir: ${{ inputs.workspaceDir || 'Add workspaceDir' }}
+      disableNxCloud: ${{ inputs.disableNxCloud || false }}
+      NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}
