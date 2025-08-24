@@ -1,0 +1,21 @@
+name: "[Platform] Check Dotnet version "
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: "0 9 * * 3"  # Changed from monthly to Wednesday 9 AM UTC
+  workflow_dispatch:
+    inputs:
+      support:
+        description: "The support level to target (STS, LTS, or Preview)."
+        required: true
+        default: "LTS"
+
+
+jobs:
+  dotnet-version-sweeper:    # Fixed typo: was "donet"
+    uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.properties.yml@main
+    with:
+      support: ${{ inputs.support || 'LTS' }}
