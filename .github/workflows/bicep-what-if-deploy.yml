@@ -37,7 +37,7 @@ permissions:
   contents: read
 
 jobs:
-  deploy-bicep:
+   bicep-what-if-deploy:
     runs-on: ${{ inputs.vmImage }}
     environment: ${{ inputs.environment }}
     name: Validate Bicep File
