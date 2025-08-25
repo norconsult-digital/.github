@@ -5,44 +5,44 @@ permissions:
 
 on:
   schedule:
-    - cron: "0 9 * * 3"  # Changed from monthly to Wednesday 9 AM UTC
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
-       vmImage:
+      vmImage:
         type: string
         required: false
-        default: 'ubuntu-latest'
-       environment: 
+        default: "ubuntu-latest"
+      environment:
         required: true
         type: string
-       environmentName:
+      environmentName:
         required: false
         type: string
-       subscription:
+      allowedBranches:
+        required: false
+        type: string
+      subscription:
         required: true
         type: string
-       resourceGroupName:
+      resourceGroupName:
         required: true
         type: string
-       bicepFile:
+      bicepFile:
         required: true
         type: string
-       bicepParameterFile:
+      bicepParameterFile:
         required: true
         type: string
-       azureServicePrincipalId:
+      azureServicePrincipalId:
         required: true
         type: string
-
-
 
 jobs:
-  bicep-what-if-deploy: 
+  bicep-what-if-deploy:
     uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.yml@main
     with:
       vmImage: "ubuntu-latest"
       environment: "test"
-      environmentName: "test"
       subscription: ${{ vars.ND_PLAYGROUND_SUBSCRIPTION }}
       resourceGroupName: "rg-b2c-poc"
       bicepFile: "b2c-poc/resources/b2c-poc.bicep"
