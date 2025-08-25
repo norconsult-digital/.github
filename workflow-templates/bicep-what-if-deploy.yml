@@ -41,7 +41,7 @@ jobs:
   bicep-what-if-deploy:
     uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.yml@main
     with:
-      vmImage: ${{ inputs.vmImage || 'ubuntu-latest' }}
+      vmImage: ${{ inputs.vmImage }}
       environment: ${{ inputs.environment }}
       environmentName: ${{ inputs.environmentName }}
       allowedBranches: ${{ inputs.allowedBranches }}
