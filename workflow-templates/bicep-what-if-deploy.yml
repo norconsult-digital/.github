@@ -42,11 +42,11 @@ jobs:
     uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.yml@main
     with:
       vmImage: ${{ inputs.vmImage || 'ubuntu-latest' }}
-      environment: ${{ inputs.environment || 'test' }}
-      environmentName: ${{ inputs.environmentName || 'test' }}
-      allowedBranches: ${{ inputs.allowedBranches || 'main' }}
+      environment: ${{ inputs.environment }}
+      environmentName: ${{ inputs.environmentName }}
+      allowedBranches: ${{ inputs.allowedBranches }}
       subscription: ${{ vars.ND_PLAYGROUND_SUBSCRIPTION }}
-      resourceGroupName: ${{ inputs.resourceGroupName || 'rg-b2c-poc' }}
-      bicepFile: ${{ inputs.resourceGroupName || 'b2c-poc/resources/b2c-poc.bicep' }}
-      bicepParameterFile: ${{ inputs.resourceGroupName || 'b2c-poc/resources/b2cpoc.parameters.test.json' }}
+      resourceGroupName: ${{ inputs.resourceGroupName }}
+      bicepFile: ${{ inputs.resourceGroupName }}
+      bicepParameterFile: ${{ inputs.resourceGroupName }}
       azureServicePrincipalId: ${{ vars.PLATFORM_SERVICE_PRINCIPAL_ID }}
