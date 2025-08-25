@@ -42,6 +42,7 @@ jobs:
     with:
       vmImage: "ubuntu-latest"
       environment: "test"
+      environmentName: "test"
       subscription: ${{ vars.ND_PLAYGROUND_SUBSCRIPTION }}
       resourceGroupName: "rg-b2c-poc"
       bicepFile: "b2c-poc/resources/b2c-poc.bicep"
