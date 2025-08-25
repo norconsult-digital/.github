@@ -1,4 +1,4 @@
- wname: "[Platform] Bicep File What If Workflow "
+name: "[Platform] Bicep File What If Workflow "
 permissions:
   contents: read
   pull-requests: write
