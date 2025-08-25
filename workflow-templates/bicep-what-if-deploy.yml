@@ -34,10 +34,10 @@ on:
 
 
 jobs:
-  Bicep File What If Workflow: 
-    uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.properties.yml@main
+  Bicep File What If deploy: 
+    uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.yml@main
     with:
-      vmImage: ${{ inputs.vmImage || 'ubuntu-latest' }}
+      vmImage: ${{ inputs.vmImage }}
       environment: ${{ inputs.environment }}
       subscription: ${{ inputs.subscription }}
       resourceGroupName: ${{ inputs.resourceGroupName }}
