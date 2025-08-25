@@ -15,6 +15,9 @@ on:
        environment: 
         required: true
         type: string
+       environmentName:
+        required: false
+        type: string
        subscription:
         required: true
         type: string
@@ -34,7 +37,7 @@ on:
 
 
 jobs:
-  Bicep File What If deploy: 
+  bicep-what-if-deploy: 
     uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.yml@main
     with:
       vmImage: ${{ inputs.vmImage }}
@@ -43,4 +46,4 @@ jobs:
       resourceGroupName: ${{ inputs.resourceGroupName }}
       bicepFile: ${{ inputs.bicepFile }}
       bicepParameterFile: ${{ inputs.bicepParameterFile }}
-      azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }} 
+      azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }}
