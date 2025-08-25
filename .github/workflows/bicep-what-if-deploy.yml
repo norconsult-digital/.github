@@ -10,6 +10,12 @@ on:
       environment: 
         required: true
         type: string
+      environmentName: 
+        required: true
+        type: string
+      allowedBranches:
+        required: false
+        type: string 
       subscription:
         required: true
         type: string
