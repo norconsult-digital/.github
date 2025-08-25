@@ -1,4 +1,4 @@
-name: "[Platform] Check Dotnet version "
+name: "[Platform] Bicep File What If Workflow "
 permissions:
   contents: read
   pull-requests: write
@@ -8,14 +8,39 @@ on:
     - cron: "0 9 * * 3"  # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
-      support:
-        description: "The support level to target (STS, LTS, or Preview)."
+       vmImage:
+        type: string
+        required: false
+        default: 'ubuntu-latest'
+      environment: 
         required: true
-        default: "LTS"
+        type: string
+      subscription:
+        required: true
+        type: string
+      resourceGroupName:
+        required: true
+        type: string
+      bicepFile:
+        required: true
+        type: string
+      bicepParameterFile:
+        required: true
+        type: string
+      azureServicePrincipalId:
+        required: true
+        type: string
+
 
 
 jobs:
-  dotnet-version-sweeper:    # Fixed typo: was "donet"
+  Bicep File What If Workflow: 
     uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.properties.yml@main
     with:
-      support: ${{ inputs.support || 'LTS' }}
+      vmImage: ${{ inputs.vmImage || 'ubuntu-latest' }}
+      environment: ${{ inputs.environment }}
+      subscription: ${{ inputs.subscription }}
+      resourceGroupName: ${{ inputs.resourceGroupName }}
+      bicepFile: ${{ inputs.bicepFile }}
+      bicepParameterFile: ${{ inputs.bicepParameterFile }}
+      azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }} 
