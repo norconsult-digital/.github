@@ -1,0 +1,64 @@
+name: "[Platform] Check dotnet cd jobs"
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: string
+      environmentName:
+        required: true
+        type: string
+      allowedBranches:
+        required: false
+        default: '["main"]'
+        type: string
+      migrationBundleArguments:
+        required: false
+        default: ''
+        type: string
+      deploymentDelayInMinutes:
+        required: false
+        default: 0
+        type: number
+      artifactName:
+        required: false
+        default: 'container-image'
+        type: string
+      repositoryName:
+        required: true
+        type: string
+      azureServicePrincipalId:
+        required: true
+        type: string
+      dbConnection: 
+        required: false
+        type: string
+      optionalDbConnection1: 
+        required: false
+        type: string
+        description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
+      optionalDbConnection2:
+        required: false
+        type: string
+        description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
+jobs:
+  dotnet-cd-jobs:
+    uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
+    with:
+      environment: ${{ inputs.environment }}
+      environmentName: ${{ inputs.environmentName }}
+      allowedBranches: ${{ inputs.allowedBranches }}
+      migrationBundleArguments: ${{ inputs.migrationBundleArguments }}
+      deploymentDelayInMinutes: ${{ inputs.deploymentDelayInMinutes }}
+      artifactName: ${{ inputs.artifactName }}
+      repositoryName: ${{ inputs.repositoryName }}
+      azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }}
+      dbConnection: ${{ inputs.dbConnection }}
+      optionalDbConnection1: ${{ inputs.optionalDbConnection1 }}
+      optionalDbConnection2: ${{ inputs.optionalDbConnection2 }}
