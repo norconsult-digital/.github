@@ -48,7 +48,7 @@ on:
         type: string
         description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
 jobs:
-  angular-build-and-test:
+  dotnet-cd-jobs:
     uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
     with:
       environment: ${{ inputs.environment }}
