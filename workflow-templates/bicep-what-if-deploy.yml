@@ -16,8 +16,8 @@ on:
         required: true
         type: string
       environmentName:
-        required: false
-        type: string
+        required: true
+        type: string  
       allowedBranches:
         required: false
         type: string
@@ -41,10 +41,12 @@ jobs:
   bicep-what-if-deploy:
     uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.yml@main
     with:
-      vmImage: "ubuntu-latest"
-      environment: "test"
+      vmImage: ${{ inputs.vmImage || 'ubuntu-latest' }}
+      environment: ${{ inputs.environment || 'test' }}
+      environmentName: ${{ inputs.environmentName || 'test' }}
+      allowedBranches: ${{ inputs.allowedBranches || 'main' }}
       subscription: ${{ vars.ND_PLAYGROUND_SUBSCRIPTION }}
-      resourceGroupName: "rg-b2c-poc"
-      bicepFile: "b2c-poc/resources/b2c-poc.bicep"
-      bicepParameterFile: "b2c-poc/resources/b2cpoc.parameters.test.json"
+      resourceGroupName: ${{ inputs.resourceGroupName || 'rg-b2c-poc' }}
+      bicepFile: ${{ inputs.resourceGroupName || 'b2c-poc/resources/b2c-poc.bicep' }}
+      bicepParameterFile: ${{ inputs.resourceGroupName || 'b2c-poc/resources/b2cpoc.parameters.test.json' }}
       azureServicePrincipalId: ${{ vars.PLATFORM_SERVICE_PRINCIPAL_ID }}
