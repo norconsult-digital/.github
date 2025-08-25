@@ -1,4 +1,4 @@
-name: "[Platform] Bicep File What If Workflow "
+ wname: "[Platform] Bicep File What If Workflow "
 permissions:
   contents: read
   pull-requests: write
@@ -40,10 +40,10 @@ jobs:
   bicep-what-if-deploy: 
     uses: norconsult-digital/.github/.github/workflows/bicep-what-if-deploy.yml@main
     with:
-      vmImage: ${{ inputs.vmImage || 'ubuntu-latest'}}
-      environment: ${{ inputs.environment || 'test' }}
-      subscription: ${{ inputs.subscription }}
-      resourceGroupName: ${{ inputs.resourceGroupName }}
-      bicepFile: ${{ inputs.bicepFile }}
-      bicepParameterFile: ${{ inputs.bicepParameterFile }}
-      azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }}
+      vmImage: "ubuntu-latest"
+      environment: "test"
+      subscription: ${{ vars.ND_PLAYGROUND_SUBSCRIPTION }}
+      resourceGroupName: "rg-b2c-poc"
+      bicepFile: "b2c-poc/resources/b2c-poc.bicep"
+      bicepParameterFile: "b2c-poc/resources/b2cpoc.parameters.test.json"
+      azureServicePrincipalId: ${{ vars.PLATFORM_SERVICE_PRINCIPAL_ID }}
