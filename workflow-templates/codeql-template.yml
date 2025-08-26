@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: "0 9 * * 3"
+    - cron: '30 18 * * 3'
 
 jobs:
   analyze-csharp:
