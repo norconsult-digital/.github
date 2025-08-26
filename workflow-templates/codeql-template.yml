@@ -10,13 +10,13 @@ on:
 
 jobs:
   analyze-csharp:
-    uses: ./.github/workflows/codeql-template.yml
+    uses: norconsult-digital/.github/.github/workflows/codeql.yml
     with:
       language: csharp
       build-mode: none
 
   analyze-js:
-    uses: ./.github/workflows/codeql-template.yml
+    uses: norconsult-digital/.github/.github/workflows/codeql.yml
     with:
       language: javascript-typescript
       build-mode: none
