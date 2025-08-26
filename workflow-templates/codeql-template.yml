@@ -1,32 +1,22 @@
-name: "[Platform] Check codeql template"
-permissions:
-  contents: read
-  pull-requests: write
+name: "[general] CodeQL"
 
 on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   schedule:
-    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
-  workflow_dispatch:
-    inputs:
-      path:
-        type: string
-        required: true
-      runner:
-        type: string
-        default: 'ubuntu-latest'
-      language:
-        type: string
-        required: true
-      build-mode:
-        type: string
-        required: true
+    - cron: '30 18 * * 3'
 
 jobs:
-  jobs:
-  codeql-template:
-    uses: norconsult-digital/.github/.github/workflows/codeql-template.yml@main
+  analyze-csharp:
+    uses: ./.github/workflows/codeql-template.yml
     with:
-      path: ${{ inputs.path }}
-      runner: ${{ inputs.runner }}
-      language: ${{ inputs.language }}
-      build-mode: ${{ inputs['build-mode'] }}
+      language: csharp
+      build-mode: none
+
+  analyze-js:
+    uses: ./.github/workflows/codeql-template.yml
+    with:
+      language: javascript-typescript
+      build-mode: none
