@@ -1,22 +1,26 @@
 name: "[general] CodeQL"
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   schedule:
     - cron: '30 18 * * 3'
+  
 
 jobs:
-  analyze-csharp:
-    uses: ./.github/workflows/codeql-template.yml
+  analyze:
+    uses: norconsult-digital/.github/.github/workflows/codeql.yml@main
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+        - language: csharp
+          build-mode: none
+        - language: javascript-typescript
+          build-mode: none
     with:
-      language: csharp
-      build-mode: none
-
-  analyze-js:
-    uses: ./.github/workflows/codeql-template.yml
-    with:
-      language: javascript-typescript
-      build-mode: none
+      language: ${{ matrix.language }}
+      build-mode: ${{ matrix.build-mode }}
