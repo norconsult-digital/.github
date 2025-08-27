@@ -19,8 +19,7 @@ on:
 jobs:
   analyze:
     name: Analyze (${{ inputs.language }})
-    runs-on:
-      labels: ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ (inputs.language == 'swift' && 120) || 360 }}
     permissions:
       security-events: write
@@ -32,7 +31,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          sparse-checkout: ${{ inputs.path }}
+          sparse-checkout: |
+            ${{ inputs.path }}
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -43,14 +43,11 @@ jobs:
       - if: inputs.build-mode == 'manual'
         shell: bash
         run: |
-          echo 'If you are using a "manual" build mode for one or more of the' \
-            'languages you are analyzing, replace this with the commands to build' \
-            'your code, for example:'
-          echo '  make bootstrap'
-          echo '  make release'
+          echo 'Replace this with manual build commands'
           exit 1
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
           category: "/path:${{ inputs.path }}"
+

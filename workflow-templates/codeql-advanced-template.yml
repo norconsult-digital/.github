@@ -20,7 +20,7 @@ jobs:
   analyze:
     uses: norconsult-digital/.github/.github/workflows/codeql-advanced.yml@main
     with:
-      path: ${{ inputs.path }}
-      runner: ${{ inputs.runner }}
-      language: ${{ inputs.language }}
-      build-mode: ${{ inputs.build-mode }}
+     path: ${{ inputs.path }}
+     runner: ${{ inputs.runner }}
+     language: ${{ inputs.language }}
+     build-mode: ${{ inputs['build-mode'] }}
