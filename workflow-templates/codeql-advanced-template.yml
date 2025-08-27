@@ -25,6 +25,6 @@ jobs:
     uses: norconsult-digital/.github/.github/workflows/codeql-advanced-template.yml@main
     with:
       path: ${{ github.event.inputs.path }}
-      languages: ${{ github.event.inputs.language }}
+      language: ${{ github.event.inputs.language }}
       build-mode: ${{ github.event.inputs['build-mode'] }}
       runner: ${{ github.event.inputs.runner }}
