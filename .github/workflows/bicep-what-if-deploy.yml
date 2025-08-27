@@ -2,20 +2,20 @@ name: Deploy Bicep File What If Workflow
 
 on:
   workflow_call:
-    inputs:      
+    inputs:
       vmImage:
         type: string
         required: false
-        default: 'ubuntu-latest'
-      environment: 
+        default: "ubuntu-latest"
+      environment:
         required: true
         type: string
-      environmentName: 
+      environmentName:
         required: true
         type: string
       allowedBranches:
         required: false
-        type: string 
+        type: string
       subscription:
         required: true
         type: string
@@ -48,13 +48,13 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: 'bicep'
-      
+          name: "bicep"
+
       - name: Log in with Azure
         uses: azure/login@v2
         with:
           client-id: ${{ inputs.azureServicePrincipalId }}
-          tenant-id: '5546488e-16ae-4971-ba91-b12a928efaf8'
+          tenant-id: "5546488e-16ae-4971-ba91-b12a928efaf8"
           subscription-id: ${{ inputs.subscription }}
 
       - name: Deploy Bicep file
