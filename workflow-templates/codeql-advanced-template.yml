@@ -1,0 +1,30 @@
+name: CodeQL Advanced
+
+on:
+  workflow_dispatch:
+    inputs:
+      path:
+        description: "Folder to scan with CodeQL"
+        required: false
+        default: ""
+      languages:
+        description: "Languages to analyze"
+        required: false
+        default: "javascript-typescript"
+      build-mode:
+        description: "Build mode"
+        required: false
+        default: "none"
+      runner:
+        description: "Runner type"
+        required: false
+        default: "ubuntu-latest"
+
+jobs:
+  codeql:
+    uses: norconsult-digital/.github/.github/workflows/codeql-advanced-template.yml@main
+    with:
+      path: ${{ github.event.inputs.path }}
+      languages: ${{ github.event.inputs.language }}
+      build-mode: ${{ github.event.inputs['build-mode'] }}
+      runner: ${{ github.event.inputs.runner }}
