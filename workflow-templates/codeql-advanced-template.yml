@@ -1,0 +1,26 @@
+name: Run CodeQL Advanced
+
+on:
+  workflow_dispatch:
+    inputs:
+      path:
+        type: string
+        required: true
+      runner:
+        type: string
+        default: 'ubuntu-latest'
+      language:
+        type: string
+        required: true
+      build-mode:
+        type: string
+        required: true
+
+jobs:
+  analyze:
+    uses: norconsult-digital/.github/.github/workflows/codeql-advanced.yml@main
+    with:
+      path: ${{ inputs.path }}
+      runner: ${{ inputs.runner }}
+      language: ${{ inputs.language }}
+      build-mode: ${{ inputs.build-mode }}
