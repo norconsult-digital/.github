@@ -1,0 +1,29 @@
+name: "[Platform] Check dotnet CD jobs"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: "0 9 * * 3"
+  workflow_dispatch:
+    inputs:
+      vmImage:
+        required: false
+        default: "ubuntu-latest"
+      workspaceDir:
+        required: true
+      disableNxCloud:
+        required: false
+        default: false
+
+jobs:
+  angular-build-and-test:
+    uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      workspaceDir: ${{ inputs.workspaceDir }}
+      disableNxCloud: ${{ inputs.disableNxCloud }}
+    secrets:
+      NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}
