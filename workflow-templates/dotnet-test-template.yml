@@ -10,10 +10,10 @@ on:
   call-dotnet-test:
     uses: ./.github/workflows/dotnet-test.yml
   with:
-     environment: "staging"
-      vmImage: "ubuntu-latest"
-      buildConfiguration: "Release"
-      testProjects: "src/**"
-      dotnetVersion: "7.*"
-      azureServicePrincipalClientId: ${{ secrets.AZURE_CLIENT_ID }}
-      azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+    environment: "staging"
+    vmImage: "ubuntu-latest"
+    buildConfiguration: "Release"
+    testProjects: "src/**"
+    dotnetVersion: "7.*"
+    azureServicePrincipalClientId: ${{ secrets.AZURE_CLIENT_ID }}
+    azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
