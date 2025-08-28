@@ -42,11 +42,10 @@ on:
       optionalDbConnection1: 
         required: false
         type: string
-        description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
       optionalDbConnection2:
         required: false
         type: string
-        description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
+      
 jobs:
   dotnet-cd-jobs:
     uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
