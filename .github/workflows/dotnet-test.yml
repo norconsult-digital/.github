@@ -55,7 +55,7 @@ jobs:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
       - name: Azure Login via OIDC
-        if: ${{ secrets.azureServicePrincipalClientId != '' && secrets.azureTenantId != '' }}
+        if: ${{ secrets.azureServicePrincipalClientId && secrets.azureTenantId }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.azureServicePrincipalClientId }}
