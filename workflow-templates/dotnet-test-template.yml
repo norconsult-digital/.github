@@ -15,5 +15,6 @@ jobs:
        buildConfiguration: "Release"
        testProjects: "src/**"
        dotnetVersion: "7.*"
+     secrets:  
        azureServicePrincipalClientId: ${{ secrets.AZURE_CLIENT_ID }}
        azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
