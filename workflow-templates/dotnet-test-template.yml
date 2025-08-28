@@ -8,7 +8,7 @@ on:
 
 jobs:
    call-dotnet-test:
-     uses: ./.github/workflows/dotnet-test.yml
+     uses: norconsult-digital/.github/.github/workflows/dotnet-test.yml
      with:
        environment: "staging"
        vmImage: "ubuntu-latest"
