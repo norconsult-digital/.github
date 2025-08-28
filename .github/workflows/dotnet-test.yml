@@ -26,14 +26,12 @@ on:
         required: false
         default: "7.*"
         type: string
+    secrets: 
       azureServicePrincipalClientId:
         required: false
-        type: string
-        default: ""
       azureTenantId:
         required: false
-        type: string
-        default: ""
+       
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}
@@ -57,11 +55,11 @@ jobs:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
       - name: Azure Login via OIDC
-        if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
+        if: ${{ secrets.azureServicePrincipalClientId != '' && secrets.azureTenantId != '' }}
         uses: azure/login@v2
         with:
-          client-id: ${{ inputs.azureServicePrincipalClientId }}
-          tenant-id: ${{ inputs.azureTenantId }}
+          client-id: ${{ secrets.azureServicePrincipalClientId }}
+          tenant-id: ${{ secrets.azureTenantId }}
           allow-no-subscriptions: true
 
       - name: Pull Docker test image
