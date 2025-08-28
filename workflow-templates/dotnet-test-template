@@ -4,13 +4,13 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+   workflow_dispatch:
 
-jobs:
+ jobs:
   call-dotnet-test:
     uses: ./.github/workflows/dotnet-test.yml
-    with:
-      environment: "staging"
+  with:
+     environment: "staging"
       vmImage: "ubuntu-latest"
       buildConfiguration: "Release"
       testProjects: "src/**"
