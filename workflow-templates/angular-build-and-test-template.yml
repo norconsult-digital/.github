@@ -1,8 +1,4 @@
 name: "[Platform] Check Angular build and test"
-permissions:
-  contents: read
-  pull-requests: write
-
 on:
   schedule:
     - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
