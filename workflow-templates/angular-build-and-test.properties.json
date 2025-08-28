@@ -4,7 +4,7 @@
   "iconName": "isy-logo-dark",
   "categories": [
     "Automation",
-    "Maintenance",
+    "CI/CD",
     "DevOps"
   ],
   "filePatterns": []
