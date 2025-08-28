@@ -39,12 +39,7 @@ on:
       dbConnection: 
         required: false
         type: string
-      optionalDbConnection1: 
-        required: false
-        type: string
-      optionalDbConnection2:
-        required: false
-        type: string
+     
       
 jobs:
   dotnet-cd-jobs:
@@ -59,5 +54,4 @@ jobs:
       repositoryName: ${{ inputs.repositoryName }}
       azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }}
       dbConnection: ${{ inputs.dbConnection }}
-      optionalDbConnection1: ${{ inputs.optionalDbConnection1 }}
-      optionalDbConnection2: ${{ inputs.optionalDbConnection2 }}
+      
