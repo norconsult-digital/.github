@@ -7,5 +7,5 @@
     "Maintenance",
     "DevOps"
   ],
-  "filePatterns": []
+  "filePatterns": ["*.yml"]
 }
