@@ -10,8 +10,9 @@ jobs:
   angular-build-and-test:
     uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
     with:
-      vmImage: ubuntu-latest
-      workspaceDir: frontend/src
-      disableNxCloud: false
-    secrets:
+      vmImage: ${{ inputs.vmImage }}
+      workspaceDir: ${{ inputs.workspaceDir }} 
+      disableNxCloud: ${{ inputs.disableNxCloud }}
       NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}
+
+
