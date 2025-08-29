@@ -43,7 +43,7 @@ on:
       
 jobs:
   dotnet-cd-jobs:
-    uses: norconsult-digital/.github/.github/workflows/angular-build-and-test.yml@main
+    uses: norconsult-digital/.github/.github/workflows/dotnet-cd-jobs.yml@main
     with:
       environment: ${{ inputs.environment }}
       environmentName: ${{ inputs.environmentName }}

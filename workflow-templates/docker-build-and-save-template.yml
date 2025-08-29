@@ -1,0 +1,43 @@
+name: "[Platform] Docker Build and Save"
+
+permissions:
+  contents: read
+  packages: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      dockerFile:
+        required: true
+        type: string
+      dockerBuildContext:
+        required: false
+        type: string
+        default: "."
+      dockerBuildArguments:
+        required: false
+        type: string
+        default: ""
+      repositoryName:
+        required: true
+        type: string
+      gitRepo:
+        required: false
+        type: string
+        default: ""
+      artifactName:
+        required: false
+        type: string
+        default: "container-image"
+       
+jobs:
+  docker-build:
+    uses: norconsult-digital/.github/.github/workflows/docker-build-and-save.yml@main
+    with:
+      vmImage: "ubuntu-latest"
+      dockerFile: ${{ github.event.inputs.dockerFile }}
+      dockerBuildContext: ${{ github.event.inputs.dockerBuildContext }}
+      dockerBuildArguments: ${{ github.event.inputs.dockerBuildArguments }}
+      repositoryName: ${{ github.event.inputs.repositoryName }}
+      gitRepo: ${{ github.event.inputs.gitRepo }}
+      artifactName: ${{ github.event.inputs.artifactName }}
