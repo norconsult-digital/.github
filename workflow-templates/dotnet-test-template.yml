@@ -1,20 +1,52 @@
-name: Run .NET Tests
+name: "[Platform] Run .NET Tests"
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
+    inputs:
+      environment:
+        required: false
+        type: string
+        default: "integration-test"
+      testProjects:
+        required: true
+        type: string
+      buildConfiguration:
+        required: false
+        type: string
+        default: "Release"
+      dotnetVersion:
+        required: false
+        type: string
+        default: "7.*"
+      gitRepo:
+        required: false
+        type: string
+        default: ""
+      azureServicePrincipalClientId:
+        required: false
+        type: string
+        default: ""
+      azureTenantId:
+        required: false
+        type: string
+        default: ""
 
 jobs:
-   call-dotnet-test:
-     uses: ./.github/workflows/dotnet-test.yml
-     with:
-       environment: "staging"
-       vmImage: "ubuntu-latest"
-       buildConfiguration: "Release"
-       testProjects: "src/**"
-       dotnetVersion: "7.*"
-     secrets:  
-       azureServicePrincipalClientId: ${{ secrets.AZURE_CLIENT_ID }}
-       azureTenantId: ${{ secrets.AZURE_TENANT_ID }}
+  run-tests:
+    uses: norconsult-digital/.github/.github/workflows/dotnet-test.yml@main
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      vmImage: "ubuntu-latest"
+      buildConfiguration: ${{ github.event.inputs.buildConfiguration }}
+      gitRepo: ${{ github.event.inputs.gitRepo }}
+      testProjects: ${{ github.event.inputs.testProjects }}
+      dotnetVersion: ${{ github.event.inputs.dotnetVersion }}
+      azureServicePrincipalClientId: ${{ github.event.inputs.azureServicePrincipalClientId }}
+      azureTenantId: ${{ github.event.inputs.azureTenantId }}

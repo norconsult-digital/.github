@@ -20,7 +20,7 @@ on:
         type: string
       migrationBundleArguments:
         required: false
-        default: ''
+        default: ""
         type: string
       deploymentDelayInMinutes:
         required: false
@@ -28,7 +28,7 @@ on:
         type: number
       artifactName:
         required: false
-        default: 'container-image'
+        default: "container-image"
         type: string
       repositoryName:
         required: true
@@ -36,11 +36,10 @@ on:
       azureServicePrincipalId:
         required: true
         type: string
-      dbConnection: 
+      dbConnection:
         required: false
         type: string
-     
-      
+
 jobs:
   dotnet-cd-jobs:
     uses: norconsult-digital/.github/.github/workflows/dotnet-cd-jobs.yml@main
@@ -54,4 +53,3 @@ jobs:
       repositoryName: ${{ inputs.repositoryName }}
       azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }}
       dbConnection: ${{ inputs.dbConnection }}
-      

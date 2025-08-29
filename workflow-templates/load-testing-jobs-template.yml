@@ -1,0 +1,48 @@
+name: "[Platform] Run Load Tests"
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
+  workflow_dispatch:
+    inputs:
+      subscription:
+        description: "Azure subscription ID"
+        required: true
+        type: string
+      loadTestConfig:
+        description: "Path to the load test configuration file"
+        required: true
+        type: string
+      loadTestName:
+        description: "Name of the load test"
+        required: true
+        type: string
+      loadTestResource:
+        description: "Azure Load Testing resource name"
+        required: false
+        type: string
+        default: "lt-isy360-common"
+      loadTestResourceGroup:
+        description: "Resource group containing the load test resource"
+        required: false
+        type: string
+        default: "rg-load-testing"
+      azureServicePrincipalId:
+        description: "Azure Service Principal ID for authentication"
+        required: true
+        type: string
+
+jobs:
+  run-load-test:
+    uses: norconsult-digital/.github/.github/workflows/load-testing-jobs.yml@main
+    with:
+      subscription: ${{ github.event.inputs.subscription }}
+      loadTestConfig: ${{ github.event.inputs.loadTestConfig }}
+      loadTestName: ${{ github.event.inputs.loadTestName }}
+      loadTestResource: ${{ github.event.inputs.loadTestResource }}
+      loadTestResourceGroup: ${{ github.event.inputs.loadTestResourceGroup }}
+      azureServicePrincipalId: ${{ github.event.inputs.azureServicePrincipalId }}

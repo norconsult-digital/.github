@@ -26,12 +26,14 @@ on:
         required: false
         default: "7.*"
         type: string
-    secrets: 
       azureServicePrincipalClientId:
         required: false
+        type: string
+        default: ""
       azureTenantId:
         required: false
-       
+        type: string
+        default: ""
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}
@@ -41,13 +43,13 @@ jobs:
     steps:
       - name: Checkout repository
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Default checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
         uses: actions/setup-dotnet@v4
@@ -55,11 +57,11 @@ jobs:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
       - name: Azure Login via OIDC
-        if: ${{ secrets.azureServicePrincipalClientId && secrets.azureTenantId }}
+        if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.azureServicePrincipalClientId }}
-          tenant-id: ${{ secrets.azureTenantId }}
+          client-id: ${{ inputs.azureServicePrincipalClientId }}
+          tenant-id: ${{ inputs.azureTenantId }}
           allow-no-subscriptions: true
 
       - name: Pull Docker test image

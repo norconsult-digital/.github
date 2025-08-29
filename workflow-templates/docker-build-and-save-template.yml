@@ -5,6 +5,8 @@ permissions:
   packages: read
 
 on:
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
       dockerFile:
@@ -29,7 +31,7 @@ on:
         required: false
         type: string
         default: "container-image"
-       
+
 jobs:
   docker-build:
     uses: norconsult-digital/.github/.github/workflows/docker-build-and-save.yml@main
