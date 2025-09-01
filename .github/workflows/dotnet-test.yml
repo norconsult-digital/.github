@@ -39,7 +39,7 @@ on:
         type: string
         default: ""
 jobs:
-  test:
+  dotnet-test:
     runs-on: ${{ inputs.vmImage }}
     environment: ${{ inputs.environment }}
     name: .NET Test

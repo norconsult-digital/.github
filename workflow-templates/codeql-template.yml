@@ -1,4 +1,4 @@
-name: "[general] CodeQL"
+name: "[Platfrom] CodeQL"
 
 on:
   workflow_dispatch:

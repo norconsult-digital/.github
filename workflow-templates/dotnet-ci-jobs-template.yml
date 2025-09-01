@@ -1,4 +1,4 @@
-name: "Call .NET CI Workflow"
+name: "[Platform] Call .NET CI Workflow"
 
 permissions:
   contents: read
@@ -73,4 +73,8 @@ jobs:
       migrationBundleAppSettingsPath: ${{ github.event.inputs.migrationBundleAppSettingsPath }}
       azureServicePrincipalClientId: ${{ github.event.inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ github.event.inputs.azureTenantId }}
-    secrets: inherit
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NUGET_AUTH_TOKEN: ${{ secrets.NUGET_AUTH_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}

@@ -5,6 +5,8 @@ permissions:
   contents: read
 
 on:
+  push:
+    branches: ["main"]
   schedule:
     - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
@@ -40,7 +42,7 @@ on:
         type: string
 
 jobs:
-  deploy:
+  deploy-bicep-files:
     uses: norconsult-digital/.github/.github/workflows/deploy-bicep-files.yml@main
     with:
       vmImage: "ubuntu-latest"

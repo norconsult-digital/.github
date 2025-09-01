@@ -1,0 +1,13 @@
+{
+  "name": "Norconsult Digital Workflow for .NET CI Workflow",
+  "description": "⭐ Norconsult Digital Workflow for .NET CI Automation and Maintenance",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps"
+  ],
+  "filePatterns": [
+    ".github/workflows/dotnet-ci-jobs.yml"
+  ]
+}

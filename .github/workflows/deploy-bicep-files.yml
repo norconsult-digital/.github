@@ -41,7 +41,7 @@ permissions:
   contents: read
 
 jobs:      
-  deploy_bicep:
+  deploy-bicep-files:
     runs-on: ${{ inputs.vmImage }}
     if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
     environment:

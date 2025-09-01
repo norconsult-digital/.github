@@ -35,7 +35,7 @@ on:
         default: "container-image"
 
 jobs:
-  docker-build:
+  docker-build-and-save:
     uses: norconsult-digital/.github/.github/workflows/docker-build-and-save.yml@main
     with:
       vmImage: "ubuntu-latest"

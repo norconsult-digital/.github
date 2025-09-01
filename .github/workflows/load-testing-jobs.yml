@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 jobs:
-  loadtest:
+  load-testing-jobs:
     name: Load Test
     runs-on: ubuntu-latest
     steps:

@@ -31,7 +31,7 @@ on:
         type: string
 
 jobs:
-  build-and-save-docker-image:
+  docker-build-and-save:
     runs-on: ${{ inputs.vmImage }}
     name: Docker Build and Save
     steps:

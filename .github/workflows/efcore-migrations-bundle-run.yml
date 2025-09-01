@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 jobs:
-  migrations-bundle-run:
+  efcore-migrations-bundle-run:
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environment }}
     name: Run Migration Bundle

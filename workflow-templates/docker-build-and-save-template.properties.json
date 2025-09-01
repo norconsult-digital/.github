@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Docker Build and Save",
+  "description": "⭐ Norconsult Digital Workflow for Docker Build and Save Automation and Maintenance",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Containerization"
+  ],
+  "filePatterns": [
+    ".github/workflows/call-docker-build-and-save.yml"
+  ]
+}
