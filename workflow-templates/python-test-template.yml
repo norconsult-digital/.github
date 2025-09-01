@@ -1,0 +1,39 @@
+name: "[Platform] Python Test"
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
+  workflow_dispatch:
+    inputs:
+      vmImage:
+        type: string
+        default: "ubuntu-latest"
+        required: false
+      gitRepo:
+        required: false
+        type: string
+      pythonVersion:
+        required: false
+        default: "3.12"
+        type: string
+      projectPath:
+        required: true
+        type: string
+        default: "."
+        description: "Path to the Python project directory"
+      testPaths:
+        required: true
+        type: string
+        description: "Paths to test directories or files relative to the project directory"
+
+jobs:
+  call-python-test:
+    uses: norconsult-digital/.github/.github/workflows/python-test.yml@main
+    with:
+      vmImage: ${{ github.event.inputs.vmImage }}
+      gitRepo: ${{ github.event.inputs.gitRepo }}
+      pythonVersion: ${{ github.event.inputs.pythonVersion }}
+      projectPath: ${{ github.event.inputs.projectPath }}
+      testPaths: ${{ github.event.inputs.testPaths }}

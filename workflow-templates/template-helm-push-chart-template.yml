@@ -1,0 +1,30 @@
+name: "[Platform] Helm Chart Push to ACR"
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC  
+  workflow_dispatch:
+    inputs:
+      subscription_id:
+        required: true
+        type: string
+      acr_name:
+        required: true
+        type: string
+      path:
+        required: true
+        type: string
+
+jobs:
+  call-helm-push:
+    uses: norconsult-digital/.github/.github/workflows/helm-push-reusable.yml@main
+    with:
+      subscription_id: ${{ github.event.inputs.subscription_id }}
+      acr_name: ${{ github.event.inputs.acr_name }}
+      path: ${{ github.event.inputs.path }}

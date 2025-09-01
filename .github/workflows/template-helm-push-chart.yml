@@ -1,0 +1,45 @@
+name: Helm Chart Push to ACR
+
+on:
+  workflow_call:
+    inputs:
+      subscription_id:
+        required: true
+        type: string
+      acr_name:
+        required: true
+        type: string
+      path:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  release-helm-version:
+    runs-on: private-ubuntu-runner
+    environment: validate-kustomization
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Log in with Azure
+        uses: azure/login@v2
+        with:
+          client-id: "7afd61a6-ea86-467a-8b46-7ebc2d07a52d"
+          tenant-id: "5546488e-16ae-4971-ba91-b12a928efaf8"
+          subscription-id: "${{ inputs.subscription_id }}"
+
+      - name: Log in to the Azure Container Registry
+        run: |
+          az acr login --name "${{ inputs.acr_name }}"
+
+      - name: Package Helm Chart
+        run: |
+          helm package "${{ inputs.path }}" -d chart-packages
+
+      - name: Push Helm Chart to ACR
+        run: |
+          helm push chart-packages/*.tgz oci://${{ inputs.acr_name }}.azurecr.io/norconsultcharts

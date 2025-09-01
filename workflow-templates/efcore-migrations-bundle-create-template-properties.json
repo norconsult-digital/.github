@@ -8,6 +8,6 @@
     "DevOps"
   ],
   "filePatterns": [
-    ".github/workflows/call-migrations-bundle-create.yml"
+    ".github/workflows/migrations-bundle-create.yml"
   ]
 }

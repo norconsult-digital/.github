@@ -1,0 +1,44 @@
+name: "[Platform] Python CD Workflow"
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC    
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: string
+      environmentName:
+        required: true
+        type: string
+      repositoryName:
+        required: true
+        type: string
+      azureServicePrincipalId:
+        required: true
+        type: string
+      artifactName:
+        required: false
+        default: "container-image"
+        type: string
+      deploymentDelayInMinutes:
+        required: false
+        default: 0
+        type: number
+      dbConnection:
+        required: false
+        type: string
+
+jobs:
+  python-cd-jobs:
+    uses: norconsult-digital/.github/.github/workflows/python-cd-jobs.yml@main
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      environmentName: ${{ github.event.inputs.environmentName }}
+      repositoryName: ${{ github.event.inputs.repositoryName }}
+      azureServicePrincipalId: ${{ github.event.inputs.azureServicePrincipalId }}
+      artifactName: ${{ github.event.inputs.artifactName }}
+      deploymentDelayInMinutes: ${{ github.event.inputs.deploymentDelayInMinutes }}
+      dbConnection: ${{ github.event.inputs.dbConnection }}

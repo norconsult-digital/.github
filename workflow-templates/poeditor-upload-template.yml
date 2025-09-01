@@ -1,0 +1,66 @@
+name: "[Platform] POEditor Upload Workflow"
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3"
+  workflow_dispatch:
+    inputs:
+      path:
+        required: true
+        type: string
+      outputPath:
+        required: true
+        default: "i18n-generated"
+        type: string
+      outputFileName:
+        required: false
+        default: "messages.xlf"
+        type: string
+      extractCommand:
+        required: true
+        type: string
+      nodeVersion:
+        required: false
+        default: "20.x"
+        type: string
+      packageManager:
+        required: false
+        default: "npm"
+        type: string
+      cacheDependencyPath:
+        required: true
+        type: string
+      pnpmVersion:
+        required: false
+        default: "latest"
+        type: string
+      overwrite:
+        required: false
+        default: true
+        type: boolean
+      projectId:
+        required: true
+        type: string
+
+jobs:
+  call-poeditor-upload:
+    uses: norconsult-digital/.github/.github/workflows/poeditor-upload.yml@main
+    with:
+      path: ${{ github.event.inputs.path }}
+      outputPath: ${{ github.event.inputs.outputPath }}
+      outputFileName: ${{ github.event.inputs.outputFileName }}
+      extractCommand: ${{ github.event.inputs.extractCommand }}
+      nodeVersion: ${{ github.event.inputs.nodeVersion }}
+      packageManager: ${{ github.event.inputs.packageManager }}
+      cacheDependencyPath: ${{ github.event.inputs.cacheDependencyPath }}
+      pnpmVersion: ${{ github.event.inputs.pnpmVersion }}
+      overwrite: ${{ github.event.inputs.overwrite }}
+      projectId: ${{ github.event.inputs.projectId }}
+    secrets:
+      API_KEY: ${{ secrets.API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

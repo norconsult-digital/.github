@@ -30,7 +30,7 @@ on:
 
 jobs:
   efcore_migrations_bundle_run:
-    uses: norconsult-digital/.github/.github/workflows/migrations-bundle-run.yml
+    uses: norconsult-digital/.github/.github/workflows/migrations-bundle-run.yml@main
     with:
       environment: ${{ github.event.inputs.environment }}
       environmentName: ${{ github.event.inputs.environmentName }}

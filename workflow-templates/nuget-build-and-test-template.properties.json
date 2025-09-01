@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Nuget build and tests Automation",
+  "description": "⭐ Norconsult Digital Workflow for reusable workflow template for building, testing, and publishing .NET projects using NuGet",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    ".NET"
+  ],
+  "filePatterns": [
+    ".github/workflows/nuget-build-and-test.yml"
+  ]
+}

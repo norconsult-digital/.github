@@ -1,0 +1,60 @@
+name: Python CI Workflow
+
+on:
+  workflow_call:
+    inputs:
+      vmImage:
+        type: string
+        default: "ubuntu-latest"
+        required: false
+      gitRepo:
+        required: false
+        type: string
+      dockerBuildContext:
+        required: false
+        type: string
+      dockerFile:
+        required: false
+        type: string
+      dockerBuildArguments:
+        required: false
+        type: string
+      repositoryName:
+        required: false
+        type: string
+      pythonVersion:
+        required: false
+        default: "3.12"
+        type: string
+      testPaths:
+        required: false
+        type: string
+        description: "Paths to test directories or files"
+      projectPath:
+        required: false
+        type: string
+        default: "."
+        description: "Path to the Python project directory"
+
+jobs:
+  test:
+    if: ${{ inputs.testPaths != '' }}
+    uses: ./.github/workflows/python-test.yml
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      testPaths: ${{ inputs.testPaths }}
+      gitRepo: ${{ inputs.gitRepo }}
+      pythonVersion: ${{ inputs.pythonVersion }}
+      projectPath: ${{ inputs.projectPath }}
+
+  build_docker_image:
+    needs: [test]
+    if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    uses: ./.github/workflows/docker-build-and-save.yml
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      gitRepo: ${{ inputs.gitRepo }}
+      dockerBuildContext: ${{ inputs.dockerBuildContext }}
+      dockerFile: ${{ inputs.dockerFile }}
+      repositoryName: ${{ inputs.repositoryName }}
+      dockerBuildArguments: ${{ inputs.dockerBuildArguments }}

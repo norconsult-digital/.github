@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow forPOEditor Upload Workflow",
+  "description": "Norconsult Digital Reusable workflow template for extracting i18n files and uploading translations to POEditor.",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "Localization",
+    "i18n"
+  ],
+  "filePatterns": [
+    ".github/workflows/poeditor-upload.yml"
+  ]
+}

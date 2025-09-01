@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Nuget publish Automation",
+  "description": "⭐ Norconsult Digital Reusable workflow for building, packing, and publishing .NET NuGet packages to GitHub Packages and Azure Artifacts",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    ".NET"
+  ],
+  "filePatterns": [
+    ".github/workflows/nuget-publish.yml"
+  ]
+}

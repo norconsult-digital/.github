@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Renovate Version Upgrades Workflow",
+  "description": "Norconsult Digital Workflow to automatically update Helm chart versions in kustomize.yaml files using Renovate",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Kubernetes"
+  ],
+  "filePatterns": [
+    ".github/workflows/template-renovate.yml"
+  ]
+}

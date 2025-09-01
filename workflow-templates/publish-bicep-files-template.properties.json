@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Publish Bicep Artifact",
+  "description": "Norconsult Digital Reusable workflow template for publishing Bicep files as artifacts.",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "Infrastructure as Code",
+    "Bicep"
+  ],
+  "filePatterns": [
+    ".github/workflows/publish-bicep-files.yml"
+  ]
+}

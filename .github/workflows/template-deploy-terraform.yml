@@ -1,0 +1,254 @@
+#ref https://github.com/Azure-Samples/terraform-github-actions/blob/main/.github/workflows/tf-plan-apply.yml
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        required: true
+        type: string
+      installKubelogin:
+        type: boolean
+        default: false
+      deployfrombranch:
+        type: string
+        default: "refs/heads/main"
+      armClientIdPlan:
+        type: string
+        default: "8af69662-81b6-4ce6-99f9-9d4d3d43c436" # Default value for terraform-plan
+      armClientIdApply:
+        type: string
+        default: "8af69662-81b6-4ce6-99f9-9d4d3d43c436" # Default value for terraform-apply
+      environmentPlan:
+        type: string
+        default: "azure-platform-tf-plan" # Default environment for terraform-plan
+      environmentApply:
+        type: string
+        default: "azure-platform-tf-apply" # Default environment for terraform-apply
+    secrets:
+      APP_PEM_FILE:
+        required: false
+      BETTERUPTIME_API_TOKEN:
+        required: false
+      ARGO_CD_GITHUB_APP_ID:
+        required: false
+      ARGO_CD_GITHUB_APP_INSTALLATION_ID:
+        required: false
+      ARGO_CD_GITHUB_APP_PRIVATE_KEY:
+        required: false
+      ACR_CACHE_DOCKER_USERNAME:
+        required: false
+      ACR_CACHE_DOCKER_PASSWORD:
+        required: false
+
+      # secret for copilot-usage-dashboard application
+      GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY:
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  # These environment variables are used by the terraform azure provider to setup OIDD authenticate.
+  ARM_SUBSCRIPTION_ID: "fda77453-b07b-4860-b1cc-dd8365592842"
+  ARM_TENANT_ID: "5546488e-16ae-4971-ba91-b12a928efaf8"
+
+  # USED FOR tf authentication to github app
+  GITHUB_APP_ID: ${{ vars.APP_ID }}
+  GITHUB_APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
+  GITHUB_APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
+
+  # USED for betterstack
+  BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+
+  # Argo-cd GitHub application credentials, used by argo-cd in nd-management, nd-shared-non-prod and nd-shared-prod to sync with the GitHub repository
+  TF_VAR_argo_cd_github_app_id: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
+  TF_VAR_argo_cd_github_app_installation_id: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
+  TF_VAR_argo_cd_github_app_private_key: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
+
+  # ACR cache docker credentials
+  TF_VAR_acr_cache_docker_username: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
+  TF_VAR_acr_cache_docker_password: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
+
+  # secret for copilot-usage-dashboard application
+  TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
+
+jobs:
+  terraform-plan:
+    runs-on: private-ubuntu-runner
+    environment: ${{ inputs.environmentPlan }}
+    outputs:
+      tfplanExitCode: ${{ steps.tf-plan.outputs.exitcode }}
+      terraform-version: ${{ steps.tf-required-version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Set ARM_CLIENT_ID for terraform-plan
+      - name: Set ARM_CLIENT_ID for Plan
+        run: echo "ARM_CLIENT_ID=${{ inputs.armClientIdPlan }}" >> $GITHUB_ENV
+
+      - name: Find required Terraform version
+        id: tf-required-version
+        run: |
+          version=$(grep -h 'required_version' ${{ inputs.path }}/*.tf | head -1 | sed -E "s/.*required_version *= *['\"]?([^'\"]*)['\"]?.*/\1/")
+          if [ -z "$version" ]; then
+            version="latest" # fallback to desired default
+          fi
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Install kubelogin
+        if: ${{ inputs.installKubelogin == true }}
+        uses: azure/use-kubelogin@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tf-required-version.outputs.version }}
+
+      # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ inputs.path }}
+
+      # Validate terraform files
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ inputs.path }}
+
+      # Generates an execution plan for Terraform
+      # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes.
+      - name: Terraform Plan
+        id: tf-plan
+        run: terraform plan -detailed-exitcode -no-color -out tfplan
+        working-directory: ${{ inputs.path }}
+
+      # Save plan to artifacts
+      - name: Publish Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ inputs.path }}/tfplan
+
+      # Publish Terraform Plan as task summary
+      - name: Publish Terraform Plan to Task Summary
+        run: |
+          TERRAFORM_PLAN=$(terraform show -no-color tfplan)
+
+          {
+            echo "## Terraform Plan Output"
+            echo "\`${{ inputs.path }}\`"
+            echo "<details><summary>Click to expand</summary>"
+            echo ""
+            echo '```terraform'
+            echo "${TERRAFORM_PLAN}"
+            echo '```'
+            echo "</details>"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          cat "${GITHUB_STEP_SUMMARY}" > ${{github.workspace}}/summary.md
+        working-directory: ${{ inputs.path }}
+
+      - name: Update PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request' && ( success() || failure() )
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const run_url = process.env.GITHUB_SERVER_URL + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID
+            const run_link = '<a href="' + run_url + '">Actions</a>.'
+            const commentIdentifier = "<!-- ACTION COMMENT TERRAFORM ${{ inputs.path }} -->"; // Unique identifier for the action comment
+            const summary_string = commentIdentifier + "\n" + fs.readFileSync('${{github.workspace}}/summary.md', { encoding: 'utf8' });
+            const summary = summary_string.length > 65000 ? summary_string.toString().substring(0, 65000) + " ... \n``` \n</details>Output is too long and was truncated. You can read full summary here: " + run_link + "<br /><br />" : summary_string
+
+            // Get all comments for the pull request
+            const comments =
+              await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              })
+
+            // Filter out the comments that were previously created by this action
+            const botComments = comments.data.filter(comment => comment.body.includes(commentIdentifier) && comment.user.type === "Bot");
+
+            // Loop through previous comments to mark them as outdated
+            for (const comment of botComments) {
+              const minimizeCommentMutation = `
+                mutation($subjectId: ID!, $classifier: ReportedContentClassifiers!) {
+                  minimizeComment(input: {subjectId: $subjectId, classifier: $classifier}) {
+                    minimizedComment {
+                      isMinimized
+                      minimizedReason
+                    }
+                  }
+                }
+              `;
+
+              const variables = {
+                subjectId: comment.node_id,  // Replace with the actual comment ID
+                classifier: "OUTDATED"  // You can choose from the available classifiers
+              };
+
+              // Query graphql to minimize comment
+              await github.graphql(minimizeCommentMutation, variables);
+            }
+
+            // Add a new comment to the PR
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            })
+
+
+  terraform-apply:
+    name: "Terraform Apply"
+    if: github.ref == inputs.deployfrombranch && needs.terraform-plan.outputs.tfplanExitCode == 2 #exitcode 2 indicates there are pending changes
+    runs-on: private-ubuntu-runner
+    environment: ${{ inputs.environmentApply }}
+    needs: [terraform-plan]
+
+    steps:
+      # Checkout the repository to the GitHub Actions runner
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Set ARM_CLIENT_ID for terraform-apply
+      - name: Set ARM_CLIENT_ID for Apply
+        run: echo "ARM_CLIENT_ID=${{ inputs.armClientIdApply }}" >> $GITHUB_ENV
+
+      - name: Install kubelogin
+        if: ${{ inputs.installKubelogin == true }}
+        uses: azure/use-kubelogin@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ needs.terraform-plan.outputs.terraform-version }}
+
+      # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ inputs.path }}
+
+      # Download saved plan from artifacts
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v5
+        with:
+          name: tfplan
+          path: ${{ inputs.path }}
+
+      # Terraform Apply
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+        working-directory: ${{ inputs.path }}

@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Python Test",
+  "description": "Norconsult Digital Reusable workflow for running Python tests with Poetry or uv, including caching and reporting.",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "Python",
+    "Testing"
+  ],
+  "filePatterns": [
+    ".github/workflows/python-test.yml"
+  ]
+}

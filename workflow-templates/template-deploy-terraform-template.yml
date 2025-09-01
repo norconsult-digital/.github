@@ -1,0 +1,59 @@
+name: "[Platform] Terraform Deploy"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3" # Wednesday 9 AM UTC  
+  workflow_dispatch:
+    inputs:
+      path:
+        required: true
+        type: string
+      installKubelogin:
+        required: false
+        type: boolean
+        default: false
+      deployfrombranch:
+        required: false
+        type: string
+        default: "refs/heads/main"
+      armClientIdPlan:
+        required: false
+        type: string
+      armClientIdApply:
+        required: false
+        type: string
+      environmentPlan:
+        required: false
+        type: string
+      environmentApply:
+        required: false
+        type: string
+
+jobs:
+  call-terraform:
+    uses: norconsult-digital/.github/.github/workflows/template-deploy-terraform.yml@main
+    with:
+      path: ${{ github.event.inputs.path }}
+      installKubelogin: ${{ github.event.inputs.installKubelogin }}
+      deployfrombranch: ${{ github.event.inputs.deployfrombranch }}
+      armClientIdPlan: ${{ github.event.inputs.armClientIdPlan }}
+      armClientIdApply: ${{ github.event.inputs.armClientIdApply }}
+      environmentPlan: ${{ github.event.inputs.environmentPlan }}
+      environmentApply: ${{ github.event.inputs.environmentApply }}
+    secrets:
+      APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
+      BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+      ARGO_CD_GITHUB_APP_ID: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
+      ARGO_CD_GITHUB_APP_INSTALLATION_ID: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
+      ARGO_CD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
+      ACR_CACHE_DOCKER_USERNAME: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
+      ACR_CACHE_DOCKER_PASSWORD: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
+      GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

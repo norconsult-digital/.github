@@ -30,7 +30,7 @@ on:
 
 jobs:
   docker-tag-and-push:
-    uses: ./.github/workflows/docker-image-processing.yml
+    uses: norconsult-digital/.github/.github/workflows/docker-tag-and-push.yml@main
     with:
       environment: ${{ github.event.inputs.environment }}
       environmentName: ${{ github.event.inputs.environmentName }}

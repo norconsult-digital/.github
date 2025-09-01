@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for POEditor Download Workflow",
+  "description": "⭐ Norconsult Digital Reusable workflow for downloading translation files from POEditor, committing, and pushing updates automatically",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Localization"
+  ],
+  "filePatterns": [
+    ".github/workflows/poeditor-download.yml"
+  ]
+}

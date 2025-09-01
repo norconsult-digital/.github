@@ -1,0 +1,15 @@
+{
+  "name": "Norconsult Digital Workflow for Python CI Workflow",
+  "description": "Norconsult Digital Reusable workflow template for Python projects with testing and Docker build automation.",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Python",
+    "Docker"
+  ],
+  "filePatterns": [
+    ".github/workflows/python-ci-jobs.yml"
+  ]
+}

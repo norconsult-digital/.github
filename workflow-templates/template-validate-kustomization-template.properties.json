@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Validate Kustomization Workflow",
+  "description": "Norconsult Digital Workflow to automatically validate kustomization files in applications directories",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Kubernetes"
+  ],
+  "filePatterns": [
+    ".github/workflows/template-validate-kustomization.yml"
+  ]
+}

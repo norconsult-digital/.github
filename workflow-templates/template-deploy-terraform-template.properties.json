@@ -1,0 +1,15 @@
+{
+  "name": "Norconsult Digital Workflow for Terraform Deployment Automation",
+  "description": "Norconsult Digital Reusable workflow for running Terraform deployment automatoion with support for Azure authentication, PR comments, and artifact publishing.",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Infrastructure as Code",
+    "Terraform",
+    "Azure",
+    "CI/CD",
+    "Automation"
+  ],
+  "filePatterns": [
+    ".github/workflows/template-deploy-terraform.yml"
+  ]
+}

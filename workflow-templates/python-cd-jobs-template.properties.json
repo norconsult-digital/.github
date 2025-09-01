@@ -1,0 +1,15 @@
+{
+  "name": "Norconsult Digital Workflow for Python CD Workflow",
+  "description": "Norconsult Digital Reusable workflow template for deploying Python applications with Docker image artifacts to Azure Container Registry (ACR).",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Python",
+    "Azure"
+  ],
+  "filePatterns": [
+    ".github/workflows/python-cd-jobs.yml"
+  ]
+}

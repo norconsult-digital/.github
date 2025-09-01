@@ -1,0 +1,134 @@
+name: Python Test
+
+on:
+  workflow_call:
+    inputs:
+      vmImage:
+        type: string
+        default: 'ubuntu-latest'
+        required: false
+      gitRepo:
+        required: false
+        type: string
+      pythonVersion:
+        required: false
+        default: '3.12'
+        type: string
+      projectPath:
+        required: true
+        type: string
+        default: '.'
+        description: 'Path to the Python project directory'
+      testPaths:
+        required: true
+        type: string
+        description: 'Paths to test directories or files relative to the project directory'
+jobs:
+  test:
+    runs-on: ${{ inputs.vmImage }}
+    name: Python Test
+    steps:
+      #----------------------------------------------
+      #             checkout repository
+      #----------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ inputs.gitRepo }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      #----------------------------------------------
+      #               set up Python
+      #----------------------------------------------
+      - name: Set up Python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.pythonVersion }}
+
+      #----------------------------------------------
+      #                 install uv
+      #----------------------------------------------
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.5.7"
+          enable-cache: true
+      
+      #----------------------------------------------
+      #     install poetry if poetry.lock exists
+      #----------------------------------------------
+      - name: Install Poetry
+        if: hashFiles(format('{0}/poetry.lock', inputs.projectPath)) != ''
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          virtualenvs-path: .venv
+          installer-parallel: true
+
+      #----------------------------------------------
+      #       load cached venv if cache exists
+      #----------------------------------------------
+      - name: Load cached venv
+        id: cached-dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.projectPath }}/.venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles(format('{0}/**/*.lock', inputs.projectPath)) }}
+
+      #----------------------------------------------
+      # install dependencies if cache does not exist
+      #----------------------------------------------
+      - name: Install dependencies
+        working-directory: ${{ inputs.projectPath }}
+        if: steps.cached-dependencies.outputs.cache-hit != 'true'
+        run: |
+          if [ -f "poetry.lock" ] && [ -f "pyproject.toml" ]; then
+            poetry install --no-interaction
+          elif [ -f "pyproject.toml" ]; then
+            uv sync --group test
+          else
+            echo "No pyproject.toml found. Exiting."
+            exit 1
+          fi
+
+      #----------------------------------------------
+      #               run test suite
+      #----------------------------------------------
+      - name: Run tests
+        working-directory: ${{ inputs.projectPath }}
+        run: |
+          mkdir -p test-results
+          uv run pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+
+      #----------------------------------------------
+      #           check for test results
+      #----------------------------------------------
+      - name: Check for test results
+        id: present_test_summary_check
+        if: always()
+        working-directory: ${{ inputs.projectPath }}
+        run: |
+          echo "Listing all files in the test-results directory:"
+          ls -1 test-results/
+
+          if ls test-results/*.xml 1> /dev/null 2>&1; then
+            echo "XML files found."
+            echo "present_test_summary=true" >> $GITHUB_ENV
+          else
+            echo "No XML files found."
+            echo "present_test_summary=false" >> $GITHUB_ENV
+          fi
+
+      #----------------------------------------------
+      #             report test results
+      #----------------------------------------------
+      - name: Report test results
+        if: always() && env.present_test_summary == 'true'
+        uses: phoenix-actions/test-reporting@v15
+        with:
+          name: Python Tests
+          path: ${{ inputs.projectPath }}/test-results/*.xml
+          reporter: java-junit
+          output-to: 'step-summary'

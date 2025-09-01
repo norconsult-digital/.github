@@ -1,0 +1,33 @@
+name: "[Platform] Validate Kustomization"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC    
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: string
+      subscription_id:
+        required: false
+        type: string
+      acr_name:
+        required: false
+        type: string
+
+jobs:
+  template-validate-kustomization:
+    uses: norconsult-digital/.github/.github/workflows/template-validate-kustomization.yml@main
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      subscription_id: ${{ github.event.inputs.subscription_id }}
+      acr_name: ${{ github.event.inputs.acr_name }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -32,7 +32,7 @@ on:
 
 jobs:
   efcore_migrations_bundle_create:
-    uses: norconsult-digital/.github/.github/workflows/efcore-migrations-bundle-create.yml
+    uses: norconsult-digital/.github/.github/workflows/efcore-migrations-bundle-create.yml@main
     with:
       gitRepo: ${{ github.event.inputs.gitRepo }}
       nugetConfigPath: ${{ github.event.inputs.nugetConfigPath }}

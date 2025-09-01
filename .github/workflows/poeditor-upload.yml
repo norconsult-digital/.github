@@ -1,0 +1,143 @@
+name: "POEditor Upload Workflow"
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: "The path to the project directory"
+        required: true
+        type: string
+      outputPath:
+        description: "The output path for the generated files"
+        required: true
+        default: "i18n-generated"
+        type: string
+      outputFileName:
+        description: "The output file name"
+        required: false
+        default: "messages.xlf"
+        type: string
+      extractCommand:
+        description: "The command to extract xlf files"
+        required: true
+        type: string
+      nodeVersion:
+        description: "The Node.js version to use"
+        required: false
+        default: "20.x"
+        type: string
+      packageManager:
+        description: "npm or pnpm"
+        required: false
+        default: "npm"
+        type: string
+      cacheDependencyPath:
+        description: "Path to package-lock.json or pnpm-lock.yaml"
+        required: true
+        type: string
+      pnpmVersion:
+        description: "The version of pnpm to use"
+        required: false
+        default: "latest"
+        type: string
+      overwrite:
+        description: "Overwrite existing files on upload"
+        required: false
+        default: true
+        type: boolean
+      projectId:
+        required: true
+        type: string
+    secrets:
+      API_KEY:
+        required: true
+
+jobs:
+  upload-to-poeditor:
+    runs-on: ubuntu-latest
+    name: POEDitor Upload
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Validate inputs
+        run: |
+          if [[ "${{ inputs.packageManager }}" != "npm" && "${{ inputs.packageManager }}" != "pnpm" ]]; then
+            echo "Error: packageManager must be 'npm' or 'pnpm', got '${{ inputs.packageManager }}'"
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        if: ${{ inputs.packageManager == 'pnpm' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpmVersion }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.nodeVersion }}
+          cache: ${{ inputs.packageManager }}
+          cache-dependency-path: ${{ inputs.cacheDependencyPath }}
+
+      - name: npm install and global packages
+        if: ${{ inputs.packageManager == 'npm' }}
+        run: |
+          cd ${{ inputs.path }}
+          npm install
+          npm install -g @angular/cli nx
+
+      - name: pnpm install and global packages
+        if: ${{ inputs.packageManager == 'pnpm' }}
+        run: |
+          cd ${{ inputs.path }}
+          pnpm install
+          pnpm add -g @angular/cli nx
+
+      - name: Extract i18n
+        run: |
+          cd ${{ inputs.path }}
+          ${{ inputs.extractCommand }}
+          # Additional command to check for errors if needed
+
+      - name: Upload to POEditor if file has changes
+        run: |
+          file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
+          overwriteValue=$(echo "${{ inputs.overwrite }}" | grep -iq "true" && echo "1" || echo "0")
+          if ! git diff --exit-code -- "${file}"; then
+            echo "Differences found, uploading ${file}..."
+            sleep 30 # To avoid throttling by POEditor
+            curl -X POST https://api.poeditor.com/v2/projects/upload \
+              -F api_token="${{ secrets.API_KEY }}" \
+              -F id="${{ inputs.projectId }}" \
+              -F updating="terms_translations" \
+              -F language="en" \
+              -F overwrite="${overwriteValue}" \
+              -F read_from_source="1" \
+              -F fuzzy_trigger="1" \
+              -F sync_terms="1" \
+              -F file=@"${file}" \
+              -F tags="{\"obsolete\":\"removed-strings\"}"
+          else
+            echo "No differences found for ${file}."
+          fi
+
+      - name: Add changed xlf file, and push
+        run: |
+          set -e  # Exit on any non-zero exit code from commands within this step
+
+          # Configure Git user information
+          git config --global user.email "$GITHUB_ACTOR_EMAIL"
+          git config --global user.name "$GITHUB_ACTOR - automatic"
+
+          file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
+          if [ -f "${file}" ] && ! git diff --quiet -- "${file}"; then
+            echo "Changes found in ${file}"
+            git add "${file}"
+            # Pull before pushing to ensure there's no conflict or missing data
+            git pull --no-rebase origin "${GITHUB_REF#refs/heads/}"
+            git commit -m "Automatic workflow update in ${file}"
+            # Push changes
+            git push origin HEAD:"${GITHUB_REF#refs/heads/}"
+          else
+            echo "No changes in ${file}"
+          fi

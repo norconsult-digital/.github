@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for Helm Chart Push to ACR Workflow",
+  "description": "Norconsult Digital Reusable workflow for packaging and pushing Helm charts to Azure Container Registry (ACR)",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Kubernetes"
+  ],
+  "filePatterns": [
+    ".github/workflows/template-helm-push-chart.yml"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for POEditor Upload i18next JSON",
+  "description": "⭐Norconsult Digital Template workflow for uploading i18next JSON translation files to POEditor, with support for push, schedule, and manual dispatch",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps",
+    "Localization"
+  ],
+  "filePatterns": [
+    ".github/workflows/poeditor-json-upload.yml"
+  ]
+}

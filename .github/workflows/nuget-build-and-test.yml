@@ -1,0 +1,62 @@
+name: Nuget Build And Test
+
+on:
+  workflow_call:
+    inputs:
+      vmImage:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      projectDir:
+        required: true
+        type: string
+      buildConfiguration:
+        required: true
+        type: string
+      dotnetVersion:
+        required: false
+        default: "8.*"
+        type: string
+    secrets:
+      ADO_NUGET_PAT:
+        required: true
+jobs:
+  nuget-build-and-test:
+    runs-on: ${{ inputs.vmImage }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup dotnet ${{ inputs.dotnetVersion }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnetVersion }}
+
+      - name: Replace ADO Nuget feed token in NuGet.Config
+        run: |
+          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}/nuget-config/NuGet.Config
+
+      - name: Restore dependencies
+        run: |
+          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
+            dotnet restore $csproj --configfile ${{ github.workspace }}/nuget-config/NuGet.Config
+          done
+
+      - name: Build
+        run: |
+          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
+            dotnet build $csproj --configuration ${{ inputs.buildConfiguration }} --no-restore
+          done
+
+      - name: Run tests
+        run: |
+          for project in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name '*[T|t]ests.csproj'); do
+            dotnet test $project --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore
+          done
+
+      - name: Publish nuget sources
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-sources
+          path: ${{ github.workspace }}/**
