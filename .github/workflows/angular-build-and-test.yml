@@ -101,31 +101,42 @@ jobs:
         run: npx nx affected --base=$BASE_SHA --target=stylelint --parallel
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
-      - name: Run Tests
-        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel --coverage
+      - name: Install Test Dependencies
+        run: npm install --save-dev jest-junit
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
-      - name: Debug Test Results Location
+      - name: Configure Jest
+        run: |
+          echo '{
+            "reporters": [
+              "default",
+              ["jest-junit", {
+                "outputDirectory": "./test-results",
+                "outputName": "junit.xml",
+                "reportTestSuiteErrors": true
+              }]
+            ],
+            "coverageReporters": ["json", "lcov", "text", "clover", "cobertura"]
+          }' > jest.config.json
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Run Tests
+        env:
+          JEST_JUNIT_OUTPUT_DIR: "test-results"
+          JEST_JUNIT_OUTPUT_NAME: "junit.xml"
+        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel --coverage --testResultsProcessor=jest-junit
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Debug Test Output Location
         if: always()
         shell: bash
         run: |
-          echo "Workspace directory structure:"
-          ls -la ${{ env.WORKING_DIRECTORY }}
-          echo "Looking for test results in all possible locations:"
-          find ${{ env.WORKING_DIRECTORY }} -type f -name "*.xml" || true
-          find ${{ env.WORKING_DIRECTORY }} -type f -name "junit.xml" || true
-          find ${{ env.WORKING_DIRECTORY }} -type f -name "test-results.xml" || true
-          echo "Content of test directories (if they exist):"
-          ls -R ${{ env.WORKING_DIRECTORY }}/coverage 2>/dev/null || true
-          ls -R ${{ env.WORKING_DIRECTORY }}/test-results 2>/dev/null || true
-          ls -R ${{ env.WORKING_DIRECTORY }}/junit 2>/dev/null || true
-
-      - name: Find test results
-        id: find-results
-        shell: bash
-        run: |
-          echo "Looking for test results in ${{ env.WORKING_DIRECTORY }}"
-          find ${{ env.WORKING_DIRECTORY }} -name "TestResult*.xml" -o -name "*.trx" -o -name "junit*.xml" || true
+          echo "Current directory structure:"
+          find ${{ env.WORKING_DIRECTORY }} -type d
+          echo -e "\nXML files found:"
+          find ${{ env.WORKING_DIRECTORY }} -type f -name "*.xml"
+          echo -e "\nTest Results:"
+          find ${{ env.WORKING_DIRECTORY }} -type f -name "junit.xml" -o -name "test-results.xml"
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Publish Test Results
@@ -134,13 +145,8 @@ jobs:
         with:
           name: test-results
           path: |
-            ${{ env.WORKING_DIRECTORY }}/**/junit.xml
-            ${{ env.WORKING_DIRECTORY }}/**/test-results.xml
-            ${{ env.WORKING_DIRECTORY }}/**/karma-results.xml
-            ${{ env.WORKING_DIRECTORY }}/**/TESTS-*.xml
-            ${{ env.WORKING_DIRECTORY }}/coverage/**/*.xml
             ${{ env.WORKING_DIRECTORY }}/test-results/**/*.xml
-            ${{ env.WORKING_DIRECTORY }}/junit/**/*.xml
+            ${{ env.WORKING_DIRECTORY }}/coverage/
           if-no-files-found: warn
           retention-days: 14
 
