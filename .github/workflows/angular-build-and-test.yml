@@ -105,6 +105,15 @@ jobs:
         run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
+      - name: Debug Test Results Location
+        if: always()
+        shell: bash
+        run: |
+          echo "Current directory structure:"
+          ls -R ${{ env.WORKING_DIRECTORY }}/coverage/
+          echo "Finding all XML files:"
+          find ${{ env.WORKING_DIRECTORY }} -type f -name "*.xml"
+
       - name: Find test results
         id: find-results
         shell: bash
@@ -119,9 +128,9 @@ jobs:
         with:
           name: test-results
           path: |
-            ${{ env.WORKING_DIRECTORY }}/**/TestResult*.xml
-            ${{ env.WORKING_DIRECTORY }}/**/*.trx
-            ${{ env.WORKING_DIRECTORY }}/**/junit*.xml
+            ${{ env.WORKING_DIRECTORY }}/coverage/*/test-results.xml
+            ${{ env.WORKING_DIRECTORY }}/coverage/junit/junit.xml
+            ${{ env.WORKING_DIRECTORY }}/coverage/**/test-*.xml
           if-no-files-found: warn
           retention-days: 14
 
