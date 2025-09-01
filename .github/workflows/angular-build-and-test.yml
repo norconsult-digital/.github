@@ -105,11 +105,25 @@ jobs:
         run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
+      - name: Find test results
+        id: find-results
+        shell: bash
+        run: |
+          echo "Looking for test results in ${{ env.WORKING_DIRECTORY }}"
+          find ${{ env.WORKING_DIRECTORY }} -name "TestResult*.xml" -o -name "*.trx" -o -name "junit*.xml" || true
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
       - name: Publish Test Results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: test-results
-          path: "${{ env.WORKING_DIRECTORY }}/**/TestResult.xml"
+          path: |
+            ${{ env.WORKING_DIRECTORY }}/**/TestResult*.xml
+            ${{ env.WORKING_DIRECTORY }}/**/*.trx
+            ${{ env.WORKING_DIRECTORY }}/**/junit*.xml
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Build Apps
         run: npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
