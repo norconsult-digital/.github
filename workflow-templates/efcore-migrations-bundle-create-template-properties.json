@@ -1,0 +1,13 @@
+{
+  "name": "Norconsult Digital Workflow for Migrations Bundle Create Workflow",
+  "description": "⭐ Norconsult Digital Workflow for Migrations Bundle Create Automation and Maintenance",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps"
+  ],
+  "filePatterns": [
+    ".github/workflows/call-migrations-bundle-create.yml"
+  ]
+}

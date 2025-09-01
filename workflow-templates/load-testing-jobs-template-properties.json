@@ -1,0 +1,13 @@
+{
+  "name": "Norconsult Digital Workflow for Load Testing Automation",
+  "description": "⭐ Norconsult Digital Workflow for Load Testing, including configuration and execution of load tests",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Automation",
+    "CI/CD",
+    "DevOps"
+  ],
+  "filePatterns": [
+    ".github/workflows/dotnet-ci.yml"
+  ]
+}

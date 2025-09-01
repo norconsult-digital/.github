@@ -1,0 +1,17 @@
+{
+  "name": "Norconsult Digital Workflow for Bicep Deployment Automation",
+  "description": "⭐Norconsult Digital Workflow for Azure Infrastructure Deployment using Bicep",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Deployment",
+    "Azure",
+    "Infrastructure as Code",
+    "DevOps"
+  ],
+  "filePatterns": [
+    "*.bicep$",
+    "*.bicepparam$",
+    "infra/.*\\.bicep$",
+    "infrastructure/.*\\.bicep$"
+  ]
+}

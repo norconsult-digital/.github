@@ -1,0 +1,76 @@
+name: "Call .NET CI Workflow"
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC  
+  workflow_dispatch:
+    inputs:
+      vmImage:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      gitRepo:
+        required: true
+        type: string
+      nugetConfigPath:
+        required: false
+        type: string
+      dotnetVersion:
+        required: false
+        type: string
+        default: "7.*"
+      testProjects:
+        required: false
+        type: string
+      dockerBuildContext:
+        required: false
+        type: string
+        default: "."
+      dockerFile:
+        required: false
+        type: string
+      dockerBuildArguments:
+        required: false
+        type: string
+      repositoryName:
+        required: false
+        type: string
+      migrationBundleArguments:
+        required: false
+        type: string
+      migrationBundleAppSettingsPath:
+        required: false
+        type: string
+      azureServicePrincipalClientId:
+        required: false
+        type: string
+        default: ""
+      azureTenantId:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  dotnet-ci-jobs:
+    uses: norconsult-digital/.github/.github/workflows/dotnet-ci-jobs.yml
+    with:
+      vmImage: ${{ github.event.inputs.vmImage }}
+      gitRepo: ${{ github.event.inputs.gitRepo }}
+      nugetConfigPath: ${{ github.event.inputs.nugetConfigPath }}
+      dotnetVersion: ${{ github.event.inputs.dotnetVersion }}
+      testProjects: ${{ github.event.inputs.testProjects }}
+      dockerBuildContext: ${{ github.event.inputs.dockerBuildContext }}
+      dockerFile: ${{ github.event.inputs.dockerFile }}
+      dockerBuildArguments: ${{ github.event.inputs.dockerBuildArguments }}
+      repositoryName: ${{ github.event.inputs.repositoryName }}
+      migrationBundleArguments: ${{ github.event.inputs.migrationBundleArguments }}
+      migrationBundleAppSettingsPath: ${{ github.event.inputs.migrationBundleAppSettingsPath }}
+      azureServicePrincipalClientId: ${{ github.event.inputs.azureServicePrincipalClientId }}
+      azureTenantId: ${{ github.event.inputs.azureTenantId }}
+    secrets: inherit

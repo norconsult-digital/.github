@@ -1,0 +1,39 @@
+name: "Call Migrations Bundle Run Workflow"
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 9 * * 3" # Runs every Wednesday at 9 AM UTC
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment (e.g., dev, stage, prod)"
+        required: true
+        type: string
+      environmentName:
+        description: "Friendly name for the environment"
+        required: true
+        type: string
+      azureServicePrincipalId:
+        description: "Azure Service Principal ID for authentication"
+        required: true
+        type: string
+      dbConnection:
+        description: "Database connection string"
+        required: true
+        type: string
+
+jobs:
+  efcore_migrations_bundle_run:
+    uses: norconsult-digital/.github/.github/workflows/migrations-bundle-run.yml
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      environmentName: ${{ github.event.inputs.environmentName }}
+      azureServicePrincipalId: ${{ github.event.inputs.azureServicePrincipalId }}
+      dbConnection: ${{ github.event.inputs.dbConnection }}
+    secrets: inherit

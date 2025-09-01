@@ -1,0 +1,14 @@
+{
+  "name": "Norconsult Digital Workflow for docker tag and push template Automation and Maintenance",
+  "description": "⭐Norconsult Digital Workflow for docker tag and push template Automation and Maintenance",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Deployment",
+    "Docker",
+    "DevOps"
+  ],
+  "filePatterns": ["Dockerfile$",
+        "^.docker",
+        "docker-compose.yml$"
+    ]
+}
