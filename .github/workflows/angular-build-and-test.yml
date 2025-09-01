@@ -102,17 +102,23 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run Tests
-        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel
+        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel --coverage
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Debug Test Results Location
         if: always()
         shell: bash
         run: |
-          echo "Current directory structure:"
-          ls -R ${{ env.WORKING_DIRECTORY }}/coverage/
-          echo "Finding all XML files:"
-          find ${{ env.WORKING_DIRECTORY }} -type f -name "*.xml"
+          echo "Workspace directory structure:"
+          ls -la ${{ env.WORKING_DIRECTORY }}
+          echo "Looking for test results in all possible locations:"
+          find ${{ env.WORKING_DIRECTORY }} -type f -name "*.xml" || true
+          find ${{ env.WORKING_DIRECTORY }} -type f -name "junit.xml" || true
+          find ${{ env.WORKING_DIRECTORY }} -type f -name "test-results.xml" || true
+          echo "Content of test directories (if they exist):"
+          ls -R ${{ env.WORKING_DIRECTORY }}/coverage 2>/dev/null || true
+          ls -R ${{ env.WORKING_DIRECTORY }}/test-results 2>/dev/null || true
+          ls -R ${{ env.WORKING_DIRECTORY }}/junit 2>/dev/null || true
 
       - name: Find test results
         id: find-results
@@ -128,9 +134,13 @@ jobs:
         with:
           name: test-results
           path: |
-            ${{ env.WORKING_DIRECTORY }}/coverage/*/test-results.xml
-            ${{ env.WORKING_DIRECTORY }}/coverage/junit/junit.xml
-            ${{ env.WORKING_DIRECTORY }}/coverage/**/test-*.xml
+            ${{ env.WORKING_DIRECTORY }}/**/junit.xml
+            ${{ env.WORKING_DIRECTORY }}/**/test-results.xml
+            ${{ env.WORKING_DIRECTORY }}/**/karma-results.xml
+            ${{ env.WORKING_DIRECTORY }}/**/TESTS-*.xml
+            ${{ env.WORKING_DIRECTORY }}/coverage/**/*.xml
+            ${{ env.WORKING_DIRECTORY }}/test-results/**/*.xml
+            ${{ env.WORKING_DIRECTORY }}/junit/**/*.xml
           if-no-files-found: warn
           retention-days: 14
 
