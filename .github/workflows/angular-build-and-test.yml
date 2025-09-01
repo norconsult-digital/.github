@@ -102,41 +102,75 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Install Test Dependencies
-        run: npm install --save-dev jest-junit
+        run: |
+          npm install --save-dev jest-junit karma-junit-reporter
+          npm install -g nx@latest
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
-      - name: Configure Jest
+      - name: Configure NX Project Test Output
         run: |
-          echo '{
-            "reporters": [
-              "default",
-              ["jest-junit", {
-                "outputDirectory": "./test-results",
-                "outputName": "junit.xml",
-                "reportTestSuiteErrors": true
-              }]
-            ],
-            "coverageReporters": ["json", "lcov", "text", "clover", "cobertura"]
-          }' > jest.config.json
+          # Create test results directory
+          mkdir -p ./test-results
+
+          # Update project.json files to configure test outputs
+          find . -name 'project.json' -type f -exec sh -c '
+            # Get the project directory
+            PROJECT_DIR=$(dirname "{}")
+            echo "Configuring test output for project: $PROJECT_DIR"
+            
+            # Create test results directory for this project
+            mkdir -p "$PROJECT_DIR/test-results"
+
+            # Update project.json to include test output configuration
+            sed -i -E "s/(\"test(-ci)?\": \{)/\1\n      \"outputs\": [\"test-results\", \"coverage\"],/" "{}"
+
+            # Configure Jest if it exists
+            if [ -f "$PROJECT_DIR/jest.config.js" ] || [ -f "$PROJECT_DIR/jest.config.ts" ]; then
+              echo "Configuring Jest for $PROJECT_DIR"
+              echo "{
+                \"reporters\": [\"default\", \"jest-junit\"],
+                \"coverageReporters\": [\"json\", \"lcov\", \"text\", \"clover\", \"cobertura\"],
+                \"testResultsProcessor\": \"jest-junit\"
+              }" > "$PROJECT_DIR/jest.config.json"
+            fi
+
+            # Configure Karma if it exists
+            if [ -f "$PROJECT_DIR/karma.conf.js" ]; then
+              echo "Configuring Karma for $PROJECT_DIR"
+              sed -i "s/reporters: \[.*\]/reporters: [\"progress\", \"junit\"]/" "$PROJECT_DIR/karma.conf.js"
+              echo "module.exports.junitReporter = { 
+                outputDir: \"test-results\",
+                outputFile: \"karma-results.xml\",
+                useBrowserName: false
+              };" >> "$PROJECT_DIR/karma.conf.js"
+            fi
+          ' sh {} \;
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run Tests
         env:
           JEST_JUNIT_OUTPUT_DIR: "test-results"
           JEST_JUNIT_OUTPUT_NAME: "junit.xml"
-        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel --coverage --testResultsProcessor=jest-junit
+          NX_SKIP_NX_CACHE: "true"
+        run: |
+          echo "Running tests with output configuration..."
+          npx nx affected --base=$BASE_SHA --target=test-ci --parallel --configuration=ci --coverage
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Debug Test Output Location
         if: always()
         shell: bash
         run: |
-          echo "Current directory structure:"
-          find ${{ env.WORKING_DIRECTORY }} -type d
-          echo -e "\nXML files found:"
-          find ${{ env.WORKING_DIRECTORY }} -type f -name "*.xml"
-          echo -e "\nTest Results:"
-          find ${{ env.WORKING_DIRECTORY }} -type f -name "junit.xml" -o -name "test-results.xml"
+          echo "Current workspace directory:"
+          pwd
+          echo -e "\nList of projects:"
+          npx nx list
+          echo -e "\nFinding all XML files recursively:"
+          find . -type f -name "*.xml"
+          echo -e "\nChecking test-results in all project directories:"
+          find . -type d -name "test-results" -exec sh -c 'echo "Content of {}: "; ls -la "{}"' \;
+          echo -e "\nChecking coverage in all project directories:"
+          find . -type d -name "coverage" -exec sh -c 'echo "Content of {}: "; ls -la "{}"' \;
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Publish Test Results
@@ -145,8 +179,10 @@ jobs:
         with:
           name: test-results
           path: |
-            ${{ env.WORKING_DIRECTORY }}/test-results/**/*.xml
-            ${{ env.WORKING_DIRECTORY }}/coverage/
+            ${{ env.WORKING_DIRECTORY }}/**/test-results/**
+            ${{ env.WORKING_DIRECTORY }}/**/coverage/**
+            ${{ env.WORKING_DIRECTORY }}/**/junit/**
+            !**/node_modules/**
           if-no-files-found: warn
           retention-days: 14
 
