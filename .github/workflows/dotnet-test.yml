@@ -1,5 +1,9 @@
 name: .NET Test
 
+permissions:
+  checks: write
+  contents: read
+
 on:
   workflow_call:
     inputs:
@@ -105,24 +109,25 @@ jobs:
           }
 
       - name: Check for TRX files
-        id: present_test_summary_check
+        id: trx_check
         if: always()
+        shell: bash
         run: |
           # List all files in the test-results directory for debugging purposes
           echo "Listing all files in the test-results directory:"
           ls -1 test-results/
 
-          # Check specifically for TRX files and set environment variable accordingly
+          # Check specifically for TRX files and set output
           if ls test-results/*.trx 1> /dev/null 2>&1; then
             echo "TRX files found."
-            echo "present_test_summary=true" >> $GITHUB_ENV
+            echo "has_results=true" >> $GITHUB_OUTPUT
           else
             echo "No TRX files found."
-            echo "present_test_summary=false" >> $GITHUB_ENV
+            echo "has_results=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Report test results
-        if: always() && env.present_test_summary == 'true'
+        if: always() && steps.trx_check.outputs.has_results == 'true'
         uses: phoenix-actions/test-reporting@v15
         with:
           name: .NET Tests
