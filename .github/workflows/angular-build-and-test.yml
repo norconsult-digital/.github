@@ -30,7 +30,7 @@ jobs:
       npm_cache_key: ${{ github.workspace }}/s/${{ inputs.workspaceDir }}/package-lock.json
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: s
           fetch-depth: 0
@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.npm_config_cache }}
-          key: ${{ runner.os }}-npm-${{ hashFiles( env.npm_cache_key ) }}
+          key: ${{ runner.os }}-npm-${{ hashFiles( env.npm_cache_key )}}
           restore-keys: |
             ${{ runner.os }}-npm-
 
@@ -101,90 +101,15 @@ jobs:
         run: npx nx affected --base=$BASE_SHA --target=stylelint --parallel
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
-      - name: Install Test Dependencies
-        run: |
-          npm install --save-dev jest-junit karma-junit-reporter
-          npm install -g nx@latest
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Configure NX Project Test Output
-        run: |
-          # Create test results directory
-          mkdir -p ./test-results
-
-          # Update project.json files to configure test outputs
-          find . -name 'project.json' -type f -exec sh -c '
-            # Get the project directory
-            PROJECT_DIR=$(dirname "{}")
-            echo "Configuring test output for project: $PROJECT_DIR"
-            
-            # Create test results directory for this project
-            mkdir -p "$PROJECT_DIR/test-results"
-
-            # Update project.json to include test output configuration
-            sed -i -E "s/(\"test(-ci)?\": \{)/\1\n      \"outputs\": [\"test-results\", \"coverage\"],/" "{}"
-
-            # Configure Jest if it exists
-            if [ -f "$PROJECT_DIR/jest.config.js" ] || [ -f "$PROJECT_DIR/jest.config.ts" ]; then
-              echo "Configuring Jest for $PROJECT_DIR"
-              echo "{
-                \"reporters\": [\"default\", \"jest-junit\"],
-                \"coverageReporters\": [\"json\", \"lcov\", \"text\", \"clover\", \"cobertura\"],
-                \"testResultsProcessor\": \"jest-junit\"
-              }" > "$PROJECT_DIR/jest.config.json"
-            fi
-
-            # Configure Karma if it exists
-            if [ -f "$PROJECT_DIR/karma.conf.js" ]; then
-              echo "Configuring Karma for $PROJECT_DIR"
-              sed -i "s/reporters: \[.*\]/reporters: [\"progress\", \"junit\"]/" "$PROJECT_DIR/karma.conf.js"
-              echo "module.exports.junitReporter = { 
-                outputDir: \"test-results\",
-                outputFile: \"karma-results.xml\",
-                useBrowserName: false
-              };" >> "$PROJECT_DIR/karma.conf.js"
-            fi
-          ' sh {} \;
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
       - name: Run Tests
-        env:
-          JEST_JUNIT_OUTPUT_DIR: "test-results"
-          JEST_JUNIT_OUTPUT_NAME: "junit.xml"
-          NX_SKIP_NX_CACHE: "true"
-        run: |
-          echo "Running tests with output configuration..."
-          npx nx affected --base=$BASE_SHA --target=test-ci --parallel --configuration=ci --coverage
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Debug Test Output Location
-        if: always()
-        shell: bash
-        run: |
-          echo "Current workspace directory:"
-          pwd
-          echo -e "\nList of projects:"
-          npx nx list
-          echo -e "\nFinding all XML files recursively:"
-          find . -type f -name "*.xml"
-          echo -e "\nChecking test-results in all project directories:"
-          find . -type d -name "test-results" -exec sh -c 'echo "Content of {}: "; ls -la "{}"' \;
-          echo -e "\nChecking coverage in all project directories:"
-          find . -type d -name "coverage" -exec sh -c 'echo "Content of {}: "; ls -la "{}"' \;
+        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Publish Test Results
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: test-results
-          path: |
-            ${{ env.WORKING_DIRECTORY }}/**/test-results/**
-            ${{ env.WORKING_DIRECTORY }}/**/coverage/**
-            ${{ env.WORKING_DIRECTORY }}/**/junit/**
-            !**/node_modules/**
-          if-no-files-found: warn
-          retention-days: 14
+          path: ${{ env.WORKING_DIRECTORY }}/**/TestResult.xml
 
       - name: Build Apps
         run: npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
