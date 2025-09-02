@@ -42,9 +42,9 @@ jobs:
   load-testing-jobs:
     uses: norconsult-digital/.github/.github/workflows/load-testing-jobs.yml@main
     with:
-      subscription: ${{ github.event.inputs.subscription }}
-      loadTestConfig: ${{ github.event.inputs.loadTestConfig }}
-      loadTestName: ${{ github.event.inputs.loadTestName }}
-      loadTestResource: ${{ github.event.inputs.loadTestResource }}
-      loadTestResourceGroup: ${{ github.event.inputs.loadTestResourceGroup }}
-      azureServicePrincipalId: ${{ github.event.inputs.azureServicePrincipalId }}
+      subscription: ${{ github.event.inputs.subscription || secrets.AZURE_SUBSCRIPTION_ID }}
+      loadTestConfig: ${{ github.event.inputs.loadTestConfig  || 'default-load-test.json' }}
+      loadTestName: ${{ github.event.inputs.loadTestName || 'default-load-test' }}
+      loadTestResource: ${{ github.event.inputs.loadTestResource || 'lt-isy360-common'  }}
+      loadTestResourceGroup: ${{ github.event.inputs.loadTestResourceGroup || 'rg-load-testing' }}
+      azureServicePrincipalId: ${{ github.event.inputs.azureServicePrincipalId || secrets.AZURE_CLIENT_ID  }}

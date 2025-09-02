@@ -21,7 +21,7 @@ on:
       ADO_NUGET_PAT:
         required: true
 jobs:
-  nuget-build-and-test:
+  build-and-test:
     runs-on: ${{ inputs.vmImage }}
     steps:
       - name: Checkout code
