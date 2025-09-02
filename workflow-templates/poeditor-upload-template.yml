@@ -60,7 +60,7 @@ jobs:
       cacheDependencyPath: 'frontend/package-lock.json'  
       pnpmVersion: 'latest' 
       overwrite: true  
-      projectId: 'defaultProjectId'  
+      projectId: ${{ vars.USER_APP_POEDITOR_PROJECT_ID }}
     secrets:
       API_KEY: ${{ secrets.API_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
