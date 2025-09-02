@@ -49,7 +49,7 @@ on:
 
 jobs:
   call-poeditor-upload:
-    uses: norconsult-digital/.github/.github/workflows/poeditor-upload.yml@main
+    uses: norconsult-digital/.github/workflows/poeditor-upload.yml@main
     with:
       path: 'frontend/src' 
       outputPath: 'i18n-generated' 
