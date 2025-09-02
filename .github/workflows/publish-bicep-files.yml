@@ -7,26 +7,60 @@ on:
         description: "Path to the folder containing Bicep files"
         required: true
         type: string
-      environmentName:
+      environment:
         description: "Target environment for the deployment"
         type: string
         default: 'dev'
         required: false
+      environmentName:
+        description: "Name of the environment for deployment"
+        type: string
+        default: 'dev'
+        required: false
       allowedBranches:
-        description: "Comma-separated list of branches allowed for deployment"
+        description: "Comma-separated list or JSON array of branches allowed for deployment"
         type: string
         default: 'main'
+        required: false
+      subscription:
+        description: "Azure subscription ID"
+        type: string
+        required: false
+      resourceGroupName:
+        description: "Name of the target resource group"
+        type: string
+        required: false
+      bicepParameterFile:
+        description: "Name of the Bicep parameter file"
+        type: string
+        required: false
+      bicepFile:
+        description: "Name of the main Bicep file"
+        type: string
+        required: false
+        default: 'main.bicep'
+      azureServicePrincipalId:
+        description: "Azure Service Principal ID"
+        type: string
         required: false
       vmImage:
         description: "VM image to use for the runner"
         type: string
         default: 'ubuntu-latest'
         required: false
+    secrets:
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_TENANT_ID:
+        required: false
+      AZURE_SUBSCRIPTION_ID:
+        required: false
 
 jobs:
   publish-artifact:
     runs-on: ${{ inputs.vmImage }}
     name: Publish Bicep Artifact
+    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -48,6 +82,8 @@ jobs:
               branches = json.loads(allowed_branches)
               if isinstance(branches, str):
                   branches = [branches]
+              elif isinstance(branches, list):
+                  branches = [str(b).strip() for b in branches]
           except json.JSONDecodeError:
               # If not JSON, treat as comma-separated list
               branches = [b.strip() for b in allowed_branches.split(',')]
@@ -60,11 +96,26 @@ jobs:
 
       - name: Set Environment Variables
         run: |
-          echo "ENVIRONMENT=${{ inputs.environmentName }}" >> $GITHUB_ENV
-          echo "Deploying to environment: ${{ inputs.environmentName }}"
+          echo "ENVIRONMENT=${{ inputs.environmentName || inputs.environment }}" >> $GITHUB_ENV
+          echo "SUBSCRIPTION=${{ inputs.subscription }}" >> $GITHUB_ENV
+          echo "RESOURCE_GROUP=${{ inputs.resourceGroupName }}" >> $GITHUB_ENV
+          echo "Deploying to environment: ${{ inputs.environmentName || inputs.environment }}"
+
+      - name: Prepare Bicep Files
+        run: |
+          if [ -n "${{ inputs.bicepParameterFile }}" ]; then
+            if [ -f "${{ inputs.bicepFolder }}/${{ inputs.bicepParameterFile }}" ]; then
+              echo "Parameter file found: ${{ inputs.bicepParameterFile }}"
+            else
+              echo "::warning::Parameter file not found: ${{ inputs.bicepParameterFile }}"
+            fi
+          fi
 
       - name: Publish bicep
         uses: actions/upload-artifact@v4
         with:
-          name: bicep-${{ inputs.environmentName }}
-          path: ${{ inputs.bicepFolder }}
+          name: bicep-${{ inputs.environmentName || inputs.environment }}
+          path: |
+            ${{ inputs.bicepFolder }}
+            ${{ inputs.bicepFolder }}/${{ inputs.bicepFile }}
+            ${{ inputs.bicepFolder }}/${{ inputs.bicepParameterFile }}

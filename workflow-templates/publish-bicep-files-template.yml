@@ -29,6 +29,19 @@ on:
         required: false
         default: ubuntu-latest
         type: string
+      bicepFile:
+        description: "Name of the main Bicep file"
+        required: false
+        type: string
+        default: "main.bicep"
+      bicepParameterFile:
+        description: "Name of the Bicep parameter file (default: parameters.[env].json)"
+        required: false
+        type: string
+      resourceGroupName:
+        description: "Name of the target resource group (default: rg-[repo]-[env])"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -50,6 +63,16 @@ jobs:
     uses: norconsult-digital/.github/.github/workflows/publish-bicep-files.yml@main
     with:
       bicepFolder: ${{ github.event.inputs.bicepFolder }}
+      environment: ${{ github.event.inputs.environmentName }}
       environmentName: ${{ github.event.inputs.environmentName }}
       allowedBranches: ${{ github.event.inputs.allowedBranches }}
+      subscription: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      resourceGroupName: "rg-${{ github.event.repository.name }}-${{ github.event.inputs.environmentName }}"
+      bicepParameterFile: "parameters.${{ github.event.inputs.environmentName }}.json"
+      bicepFile: "main.bicep"
+      azureServicePrincipalId: ${{ vars.AZURE_SERVICE_PRINCIPAL_ID }}
       vmImage: ${{ github.event.inputs.vmImage }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
