@@ -51,16 +51,16 @@ jobs:
   call-poeditor-upload:
     uses: norconsult-digital/.github/.github/workflows/poeditor-upload.yml@main
     with:
-      path: 'frontend/src' 
-      outputPath: 'i18n-generated' 
-      outputFileName: 'messages.xlf' 
-      extractCommand: 'npm run extract-i18n' 
-      nodeVersion: '20.x'  
-      packageManager: 'npm' 
-      cacheDependencyPath: 'frontend/package-lock.json'  
-      pnpmVersion: 'latest' 
-      overwrite: true  
-      projectId: ${{ vars.USER_APP_POEDITOR_PROJECT_ID }}
+      path: ${{ github.event.inputs.path }}
+      outputPath: ${{ github.event.inputs.outputPath }}
+      outputFileName: ${{ github.event.inputs.outputFileName }}
+      extractCommand: ${{ github.event.inputs.extractCommand }}
+      nodeVersion: ${{ github.event.inputs.nodeVersion }}
+      packageManager: ${{ github.event.inputs.packageManager }}
+      cacheDependencyPath: ${{ github.event.inputs.cacheDependencyPath }}
+      pnpmVersion: ${{ github.event.inputs.pnpmVersion }}
+      overwrite: ${{ github.event.inputs.overwrite }}
+      projectId: ${{ github.event.inputs.projectId }}
     secrets:
       API_KEY: ${{ secrets.API_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
