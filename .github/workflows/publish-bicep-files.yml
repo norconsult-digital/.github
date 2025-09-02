@@ -35,22 +35,28 @@ jobs:
 
       - name: Check Branch
         if: ${{ inputs.allowedBranches != '' }}
+        shell: python
         run: |
-          IFS=',' read -ra ALLOWED_BRANCHES <<< "${{ inputs.allowedBranches }}"
-          CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
-          BRANCH_ALLOWED=false
+          import json
+          import os
           
-          for branch in "${ALLOWED_BRANCHES[@]}"; do
-            if [ "${branch}" = "${CURRENT_BRANCH}" ]; then
-              BRANCH_ALLOWED=true
-              break
-            fi
-          done
+          allowed_branches = "${{ inputs.allowedBranches }}"
+          current_branch = os.environ["GITHUB_REF"].removeprefix("refs/heads/")
           
-          if [ "$BRANCH_ALLOWED" = false ]; then
-            echo "::error::Current branch ${CURRENT_BRANCH} is not in the allowed list: ${{ inputs.allowedBranches }}"
-            exit 1
-          fi
+          # Try parsing as JSON first
+          try:
+              branches = json.loads(allowed_branches)
+              if isinstance(branches, str):
+                  branches = [branches]
+          except json.JSONDecodeError:
+              # If not JSON, treat as comma-separated list
+              branches = [b.strip() for b in allowed_branches.split(',')]
+          
+          if current_branch not in branches:
+              print(f"::error::Current branch {current_branch} is not in the allowed list: {allowed_branches}")
+              exit(1)
+          
+          print(f"Branch {current_branch} is allowed for deployment")
 
       - name: Set Environment Variables
         run: |

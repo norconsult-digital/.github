@@ -3,8 +3,11 @@ name: "[Platform] Publish Bicep Artifact"
 on:
   push:
     branches: ["main"]
+    paths:
+      - "**/*.bicep"
+      - "**/*.json"  # For parameter files
   schedule:
-    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC  
+    - cron: "0 9 * * 3" # Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
       bicepFolder:
@@ -17,7 +20,7 @@ on:
         type: string
         default: "dev"
       allowedBranches:
-        description: "Comma-separated list of branches allowed for deployment (e.g., main,release)"
+        description: "Comma-separated list or JSON array of branches allowed for deployment (e.g., main,release or [\"main\",\"release\"])"
         required: false
         type: string
         default: "main"
@@ -27,8 +30,23 @@ on:
         default: ubuntu-latest
         type: string
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Environment Name
+        run: |
+          if [[ ! "${{ github.event.inputs.environmentName }}" =~ ^(dev|test|prod)$ ]]; then
+            echo "::error::Invalid environment name. Must be one of: dev, test, prod"
+            exit 1
+          fi
+
   call-publish-bicep:
+    needs: validate-inputs
     uses: norconsult-digital/.github/.github/workflows/publish-bicep-files.yml@main
     with:
       bicepFolder: ${{ github.event.inputs.bicepFolder }}
