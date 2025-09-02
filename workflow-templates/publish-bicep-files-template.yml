@@ -17,7 +17,7 @@ on:
 
 jobs:
   call-publish-bicep:
-    uses: norconsult-digital/.github/.github/workflows/publish-bicep.yml@main
+    uses: norconsult-digital/.github/.github/workflows/publish-bicep-files.yml@main
     with:
       bicepFolder: ${{ github.event.inputs.bicepFolder }}
       vmImage: ${{ github.event.inputs.vmImage }}
