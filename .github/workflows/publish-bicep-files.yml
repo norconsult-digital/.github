@@ -4,9 +4,21 @@ on:
   workflow_call:
     inputs:
       bicepFolder:
+        description: "Path to the folder containing Bicep files"
         required: true
         type: string
+      environmentName:
+        description: "Target environment for the deployment"
+        type: string
+        default: 'dev'
+        required: false
+      allowedBranches:
+        description: "Comma-separated list of branches allowed for deployment"
+        type: string
+        default: 'main'
+        required: false
       vmImage:
+        description: "VM image to use for the runner"
         type: string
         default: 'ubuntu-latest'
         required: false
@@ -21,8 +33,32 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check Branch
+        if: ${{ inputs.allowedBranches != '' }}
+        run: |
+          IFS=',' read -ra ALLOWED_BRANCHES <<< "${{ inputs.allowedBranches }}"
+          CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+          BRANCH_ALLOWED=false
+          
+          for branch in "${ALLOWED_BRANCHES[@]}"; do
+            if [ "${branch}" = "${CURRENT_BRANCH}" ]; then
+              BRANCH_ALLOWED=true
+              break
+            fi
+          done
+          
+          if [ "$BRANCH_ALLOWED" = false ]; then
+            echo "::error::Current branch ${CURRENT_BRANCH} is not in the allowed list: ${{ inputs.allowedBranches }}"
+            exit 1
+          fi
+
+      - name: Set Environment Variables
+        run: |
+          echo "ENVIRONMENT=${{ inputs.environmentName }}" >> $GITHUB_ENV
+          echo "Deploying to environment: ${{ inputs.environmentName }}"
+
       - name: Publish bicep
         uses: actions/upload-artifact@v4
         with:
-          name: bicep
+          name: bicep-${{ inputs.environmentName }}
           path: ${{ inputs.bicepFolder }}

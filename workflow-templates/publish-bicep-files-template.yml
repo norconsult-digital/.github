@@ -8,16 +8,30 @@ on:
   workflow_dispatch:
     inputs:
       bicepFolder:
+        description: "Path to the folder containing Bicep files"
         required: true
         type: string
+      environmentName:
+        description: "Target environment for the deployment (e.g., dev, test, prod)"
+        required: false
+        type: string
+        default: "dev"
+      allowedBranches:
+        description: "Comma-separated list of branches allowed for deployment (e.g., main,release)"
+        required: false
+        type: string
+        default: "main"
       vmImage:
+        description: "VM image to use for the runner"
         required: false
         default: ubuntu-latest
         type: string
 
 jobs:
   call-publish-bicep:
-    uses: norconsult-digital/.github/.github/workflows/publish-bicep.yml@main
+    uses: norconsult-digital/.github/.github/workflows/publish-bicep-files.yml@main
     with:
       bicepFolder: ${{ github.event.inputs.bicepFolder }}
+      environmentName: ${{ github.event.inputs.environmentName }}
+      allowedBranches: ${{ github.event.inputs.allowedBranches }}
       vmImage: ${{ github.event.inputs.vmImage }}
