@@ -57,7 +57,7 @@ jobs:
       extractCommand: ${{ github.event.inputs.extractCommand  || 'npm run extract-i18n' }}
       nodeVersion: ${{ github.event.inputs.nodeVersion || '20.x'  }}
       packageManager: ${{ github.event.inputs.packageManager  || 'npm' }}
-      cacheDependencyPath: ${{ github.event.inputs.cacheDependencyPath || 'package-lock.json'  }}
+      cacheDependencyPath: ${{ github.event.inputs.cacheDependencyPath || 'frontend/package-lock.json'  }}
       pnpmVersion: ${{ github.event.inputs.pnpmVersion || 'latest' }}
       overwrite: ${{ github.event.inputs.overwrite  || true  }}
       projectId: ${{ github.event.inputs.projectId  || 'defaultProjectId'  }}
