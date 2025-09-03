@@ -30,8 +30,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Publish bicep
-        uses: actions/upload-artifact@v4
-        with:
-          name: bicep
-          path: ${{ inputs.bicepFolder }}
+      - name: Only run on allowed branches
+        if: ${{ inputs.allowedBranches && contains(fromJson(inputs.allowedBranches), github.ref_name) }}
+        run: echo "Running on allowed branch ${{ github.ref_name }} for environment ${{ inputs.environmentName }}"
+
+      - name: Publish bicep files
+        run: |
+          echo "Publishing Bicep files from folder: ${{ inputs.bicepFolder }}"
+          ls -la ${{ inputs.bicepFolder }}
