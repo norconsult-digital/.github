@@ -19,7 +19,7 @@ on:
         type: string
 
 jobs:
-  call-publish-bicep:
+  publish-bicep-file:
     uses: norconsult-digital/.github/.github/workflows/publish-bicep-files.yml@main
     with:
       bicepFolder: ${{ github.event.inputs.bicepFolder }}
