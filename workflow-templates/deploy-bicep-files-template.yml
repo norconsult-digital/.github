@@ -1,57 +1,37 @@
 name: "[Platform] Deploy Bicep Files"
 
-permissions:
-  id-token: write
-  contents: read
-
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
+    paths:
+      - "b2c-poc/resources/**"
   schedule:
-    - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
+    - cron: "0 9 * * 3" # Every Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
-      environment:
-        required: true
-        type: string
-      environmentName:
-        required: true
-        type: string
-      allowedBranches:
-        required: false
-        type: string
-        default: '["main"]'
       runWhatIf:
+        description: "Run What-If deployment before actual deploy"
         required: false
-        type: boolean
         default: false
-      subscription:
-        required: true
-        type: string
-      resourceGroupName:
-        required: true
-        type: string
-      bicepFile:
-        required: true
-        type: string
-      bicepParameterFile:
-        required: true
-        type: string
-      azureServicePrincipalId:
-        required: true
+        type: boolean
+      vmImage:
+        description: "Runner image"
+        required: false
+        default: "ubuntu-latest"
         type: string
 
 jobs:
-  deploy-bicep-files:
+  deploy-bicep:
     uses: norconsult-digital/.github/.github/workflows/deploy-bicep-files.yml@main
     with:
-      vmImage: "ubuntu-latest"
-      environment: ${{ github.event.inputs.environment }}
-      environmentName: ${{ github.event.inputs.environmentName }}
-      allowedBranches: ${{ github.event.inputs.allowedBranches }}
-      runWhatIf: ${{ github.event.inputs.runWhatIf }}
-      subscription: ${{ github.event.inputs.subscription }}
-      resourceGroupName: ${{ github.event.inputs.resourceGroupName }}
-      bicepFile: ${{ github.event.inputs.bicepFile }}
-      bicepParameterFile: ${{ github.event.inputs.bicepParameterFile }}
-      azureServicePrincipalId: ${{ github.event.inputs.azureServicePrincipalId }}
+      vmImage: ${{ github.event.inputs.vmImage || 'ubuntu-latest' }}
+      environment: "test"
+      environmentName: "test"
+      allowedBranches: '["main"]'
+      runWhatIf: ${{ github.event.inputs.runWhatIf || false }}
+      subscription: ${{ vars.ND_PLAYGROUND_SUBSCRIPTION }}
+      resourceGroupName: "rg-b2c-poc"
+      bicepFile: "b2c-poc.bicep"
+      bicepParameterFile: "b2cpoc.parameters.test.json"
+      azureServicePrincipalId: ${{ vars.PLATFORM_SERVICE_PRINCIPAL_ID }}

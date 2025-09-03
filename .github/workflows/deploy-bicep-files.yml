@@ -1,38 +1,49 @@
-name: Deploy Bicep files Workflow
+name: Deploy Bicep Files Workflow
 
 on:
   workflow_call:
     inputs:
       vmImage:
+        description: "Runner image"
         type: string
         required: false
-        default: 'ubuntu-latest'
-      environment: 
+        default: "ubuntu-latest"
+      environment:
+        description: "Deployment environment"
         required: true
         type: string
       environmentName:
+        description: "Optional environment name for GitHub environment protection"
         required: true
         type: string
       allowedBranches:
+        description: "Branches allowed to run deployment"
         required: false
-        default: '["main"]'
         type: string
+        default: '["main"]'
       runWhatIf:
+        description: "Run a What-If deployment before actual deploy"
         type: boolean
+        required: false
         default: false
       subscription:
+        description: "Azure Subscription ID"
         required: true
         type: string
       resourceGroupName:
+        description: "Azure Resource Group Name"
         required: true
         type: string
       bicepFile:
+        description: "Bicep file to deploy"
         required: true
         type: string
       bicepParameterFile:
+        description: "Bicep parameter file"
         required: true
         type: string
       azureServicePrincipalId:
+        description: "Azure Service Principal ID"
         required: true
         type: string
 
@@ -40,12 +51,11 @@ permissions:
   id-token: write
   contents: read
 
-jobs:      
-  deploy-bicep-files:
+jobs:
+  deploy_bicep:
     runs-on: ${{ inputs.vmImage }}
     if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
-    environment:
-      name: ${{ inputs.environment }}
+    environment: ${{ inputs.environmentName }}
     name: Deploy Bicep File
     steps:
       - name: Checkout code
@@ -54,16 +64,16 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v5
         with:
-          name: 'bicep'
+          name: "bicep"
 
       - name: Log in with Azure
         uses: azure/login@v2
         with:
           client-id: ${{ inputs.azureServicePrincipalId }}
-          tenant-id: '5546488e-16ae-4971-ba91-b12a928efaf8'
+          tenant-id: "5546488e-16ae-4971-ba91-b12a928efaf8"
           subscription-id: ${{ inputs.subscription }}
 
-      - name: What If Deploy Bicep file
+      - name: What-If Deploy Bicep file
         if: ${{ inputs.runWhatIf }}
         uses: azure/arm-deploy@v2
         with:
@@ -74,6 +84,7 @@ jobs:
           additionalArguments: "--what-if --rollback-on-error"
 
       - name: Deploy Bicep file
+        if: ${{ !inputs.runWhatIf }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
