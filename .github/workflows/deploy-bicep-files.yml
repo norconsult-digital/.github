@@ -73,22 +73,12 @@ jobs:
           tenant-id: "5546488e-16ae-4971-ba91-b12a928efaf8"
           subscription-id: ${{ inputs.subscription }}
 
-      - name: What-If Deploy Bicep file
-        if: ${{ inputs.runWhatIf }}
+      - name: What-If / Deploy Bicep file
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
           resourceGroupName: ${{ inputs.resourceGroupName }}
           template: ${{ inputs.bicepFile }}
           parameters: ${{ inputs.bicepParameterFile }}
-          additionalArguments: "--what-if --rollback-on-error"
-
-      - name: Deploy Bicep file
-        if: ${{ !inputs.runWhatIf }}
-        uses: azure/arm-deploy@v2
-        with:
-          subscriptionId: ${{ inputs.subscription }}
-          resourceGroupName: ${{ inputs.resourceGroupName }}
-          template: ${{ inputs.bicepFile }}
-          parameters: ${{ inputs.bicepParameterFile }}
+          additionalArguments: ${{ inputs.runWhatIf && '--what-if --rollback-on-error' || '' }}
           failOnStdErr: true
