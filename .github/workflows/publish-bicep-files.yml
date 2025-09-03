@@ -4,12 +4,21 @@ on:
   workflow_call:
     inputs:
       bicepFolder:
+        description: "Folder containing Bicep files to publish"
         required: true
         type: string
       vmImage:
         type: string
         default: 'ubuntu-latest'
         required: false
+      environmentName:       
+        description: "Optional environment name"
+        required: false
+        type: string
+      allowedBranches:       
+        description: "Optional allowed branches"
+        required: false
+        type: string  
 
 jobs:
   publish-artifact:
