@@ -1,78 +1,26 @@
-name: "[Platform] Publish Bicep Artifact"
+name: "[Platform] Publish Bicep Artifact Caller"
 
 on:
   push:
     branches: ["main"]
-    paths:
-      - "**/*.bicep"
-      - "**/*.json"  # For parameter files
   schedule:
-    - cron: "0 9 * * 3" # Wednesday 9 AM UTC
+    - cron: "0 9 * * 3" # Every Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
       bicepFolder:
-        description: "Path to the folder containing Bicep files"
+        description: "Folder containing bicep files"
         required: true
+        default: "infra/bicep"
         type: string
-      environmentName:
-        description: "Target environment for the deployment (e.g., dev, test, prod)"
-        required: false
-        type: string
-        default: "dev"
-      allowedBranches:
-        description: "Comma-separated list or JSON array of branches allowed for deployment (e.g., main,release or [\"main\",\"release\"])"
-        required: false
-        type: string
-        default: "main"
       vmImage:
-        description: "VM image to use for the runner"
+        description: "Runner image"
         required: false
-        default: ubuntu-latest
+        default: "ubuntu-latest"
         type: string
-      bicepFile:
-        description: "Name of the main Bicep file"
-        required: false
-        type: string
-        default: "main.bicep"
-      bicepParameterFile:
-        description: "Name of the Bicep parameter file (default: parameters.[env].json)"
-        required: false
-        type: string
-      resourceGroupName:
-        description: "Name of the target resource group (default: rg-[repo]-[env])"
-        required: false
-        type: string
-
-permissions:
-  contents: read
-  id-token: write
 
 jobs:
-  validate-inputs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Validate Environment Name
-        run: |
-          if [[ ! "${{ github.event.inputs.environmentName }}" =~ ^(dev|test|prod)$ ]]; then
-            echo "::error::Invalid environment name. Must be one of: dev, test, prod"
-            exit 1
-          fi
-
   call-publish-bicep:
-    needs: validate-inputs
-    uses: norconsult-digital/.github/.github/workflows/publish-bicep-files.yml@main
+    uses: norconsult-digital/.github/.github/workflows/publish-bicep-artifact.yml@main
     with:
-      bicepFolder: ${{ github.event.inputs.bicepFolder }}
-      environment: ${{ github.event.inputs.environmentName }}
-      environmentName: ${{ github.event.inputs.environmentName }}
-      allowedBranches: ${{ github.event.inputs.allowedBranches }}
-      subscription: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      resourceGroupName: "rg-${{ github.event.repository.name }}-${{ github.event.inputs.environmentName }}"
-      bicepParameterFile: "parameters.${{ github.event.inputs.environmentName }}.json"
-      bicepFile: "main.bicep"
-      azureServicePrincipalId: ${{ vars.AZURE_SERVICE_PRINCIPAL_ID }}
-      vmImage: ${{ github.event.inputs.vmImage }}
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      bicepFolder: ${{ github.event.inputs.bicepFolder || 'infra/bicep' }}
+      vmImage: ${{ github.event.inputs.vmImage || 'ubuntu-latest' }}
