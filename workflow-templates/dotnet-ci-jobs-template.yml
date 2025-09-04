@@ -3,7 +3,6 @@ name: "[Platform] Call .NET CI Workflow"
 permissions:
   contents: read
   id-token: write
-  checks: write
 
 on:
   push:
