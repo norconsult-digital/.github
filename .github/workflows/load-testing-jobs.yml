@@ -43,7 +43,7 @@ jobs:
           client-id: ${{ inputs.azureServicePrincipalId }}
           tenant-id: "5546488e-16ae-4971-ba91-b12a928efaf8"
           subscription-id: ${{ inputs.subscription }}
-          auth-type: id-token
+          auth-type: SERVICE_PRINCIPAL
 
       - name: "Azure Load Testing: ${{ inputs.loadTestName }}"
         uses: azure/load-testing@v1.1.27
