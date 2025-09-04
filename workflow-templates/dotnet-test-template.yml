@@ -2,7 +2,6 @@ name: "[Platform] Run .NET Tests"
 
 permissions:
   contents: read
-  checks: write
   pull-requests: write
 
 on:
