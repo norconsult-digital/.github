@@ -58,7 +58,7 @@ on:
 
 jobs:
   dotnet-ci-jobs:
-    uses: norconsult-digital/.github/.github/workflows/dotnet-ci-jobs.yml
+    uses: norconsult-digital/.github/.github/workflows/dotnet-ci-jobs.yml@main
     with:
       vmImage: ${{ github.event.inputs.vmImage }}
       gitRepo: ${{ github.event.inputs.gitRepo }}
