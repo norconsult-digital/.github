@@ -1,4 +1,5 @@
 name: "POEditor Upload Workflow"
+
 on:
   workflow_call:
     inputs:
@@ -26,13 +27,12 @@ on:
         default: "20.x"
         type: string
       packageManager:
-        description: "npm or pnpm"
+        description: "npm or pnpm (optional, will auto-detect if not provided)"
         required: false
-        default: "npm"
         type: string
       cacheDependencyPath:
         description: "Path to package-lock.json or pnpm-lock.yaml"
-        required: true
+        required: false
         type: string
       pnpmVersion:
         description: "The version of pnpm to use"
@@ -54,90 +54,92 @@ on:
 jobs:
   upload-to-poeditor:
     runs-on: ubuntu-latest
-    name: POEDitor Upload
+    name: POEditor Upload
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Validate inputs
+      - name: Determine package manager
         run: |
-          if [[ "${{ inputs.packageManager }}" != "npm" && "${{ inputs.packageManager }}" != "pnpm" ]]; then
-            echo "Error: packageManager must be 'npm' or 'pnpm', got '${{ inputs.packageManager }}'"
-            exit 1
+          if [[ -z "${{ inputs.packageManager }}" ]]; then
+            if [[ -f "${{ inputs.path }}/pnpm-lock.yaml" ]]; then
+              echo "packageManager=pnpm" >> $GITHUB_ENV
+            else
+              echo "packageManager=npm" >> $GITHUB_ENV
+            fi
+          else
+            echo "packageManager=${{ inputs.packageManager }}" >> $GITHUB_ENV
           fi
-
-      - name: Setup pnpm
-        if: ${{ inputs.packageManager == 'pnpm' }}
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ inputs.pnpmVersion }}
+          echo "Using package manager: $packageManager"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.nodeVersion }}
-          cache: ${{ inputs.packageManager }}
-          cache-dependency-path: ${{ inputs.cacheDependencyPath }}
+          cache: ${{ env.packageManager }}
+          cache-dependency-path: ${{ inputs.cacheDependencyPath || '' }}
 
-      - name: npm install and global packages
-        if: ${{ inputs.packageManager == 'npm' }}
+      - name: Setup pnpm
+        if: ${{ env.packageManager == 'pnpm' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpmVersion }}
+
+      - name: Install dependencies
         run: |
           cd ${{ inputs.path }}
-          npm install
-          npm install -g @angular/cli nx
-
-      - name: pnpm install and global packages
-        if: ${{ inputs.packageManager == 'pnpm' }}
-        run: |
-          cd ${{ inputs.path }}
-          pnpm install
-          pnpm add -g @angular/cli nx
+          if [[ "$packageManager" == "npm" ]]; then
+            npm install
+            npm install -g @angular/cli nx
+          else
+            pnpm install
+            pnpm add -g @angular/cli nx
+          fi
 
       - name: Extract i18n
         run: |
           cd ${{ inputs.path }}
           ${{ inputs.extractCommand }}
-          # Additional command to check for errors if needed
 
       - name: Upload to POEditor if file has changes
         run: |
           file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
           overwriteValue=$(echo "${{ inputs.overwrite }}" | grep -iq "true" && echo "1" || echo "0")
-          if ! git diff --exit-code -- "${file}"; then
-            echo "Differences found, uploading ${file}..."
-            sleep 30 # To avoid throttling by POEditor
+          if [ -f "$file" ] && ! git diff --exit-code -- "$file"; then
+            echo "Differences found, uploading $file..."
+            sleep 30
             curl -X POST https://api.poeditor.com/v2/projects/upload \
               -F api_token="${{ secrets.API_KEY }}" \
               -F id="${{ inputs.projectId }}" \
               -F updating="terms_translations" \
               -F language="en" \
-              -F overwrite="${overwriteValue}" \
+              -F overwrite="$overwriteValue" \
               -F read_from_source="1" \
               -F fuzzy_trigger="1" \
               -F sync_terms="1" \
-              -F file=@"${file}" \
+              -F file=@"$file" \
               -F tags="{\"obsolete\":\"removed-strings\"}"
           else
-            echo "No differences found for ${file}."
+            echo "No differences found for $file."
           fi
 
-      - name: Add changed xlf file, and push
+      - name: Add changed xlf file and push
         run: |
-          set -e  # Exit on any non-zero exit code from commands within this step
-
-          # Configure Git user information
-          git config --global user.email "$GITHUB_ACTOR_EMAIL"
-          git config --global user.name "$GITHUB_ACTOR - automatic"
-
+          set -e
           file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
-          if [ -f "${file}" ] && ! git diff --quiet -- "${file}"; then
-            echo "Changes found in ${file}"
-            git add "${file}"
-            # Pull before pushing to ensure there's no conflict or missing data
-            git pull --no-rebase origin "${GITHUB_REF#refs/heads/}"
-            git commit -m "Automatic workflow update in ${file}"
-            # Push changes
-            git push origin HEAD:"${GITHUB_REF#refs/heads/}"
+          if [ -f "$file" ] && ! git diff --quiet -- "$file"; then
+            echo "Changes found in $file"
+            git config --global user.email "$GITHUB_ACTOR_EMAIL"
+            git config --global user.name "$GITHUB_ACTOR - automatic"
+            git add "$file"
+            # Skip push for protected main branch
+            if [ "${GITHUB_REF#refs/heads/}" != "main" ]; then
+              git pull --no-rebase origin "${GITHUB_REF#refs/heads/}"
+              git commit -m "Automatic workflow update in $file"
+              git push origin HEAD:"${GITHUB_REF#refs/heads/}"
+            else
+              echo "Skipping push to protected branch main."
+            fi
           else
-            echo "No changes in ${file}"
+            echo "No changes in $file"
           fi
