@@ -118,6 +118,14 @@ jobs:
       - name: Load Docker image
         run: docker load --input image.tar
 
+      - name: Build Docker image from source
+        run: |
+          docker buildx build \
+            --file b2c-poc/app/Dockerfile \
+            --tag ${{ inputs.repositoryName }}:tmp \
+            b2c-poc/app \
+            --load  
+
       - name: Generate image tag
         id: tag
         shell: bash
