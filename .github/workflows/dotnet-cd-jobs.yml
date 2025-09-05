@@ -3,6 +3,12 @@ name: .NET CD Workflow
 on:
   workflow_call:
     inputs:
+      dockerFile:
+        required: true
+        type: string
+      dockerBuildContext:
+        required: true
+        type: string
       environment:
         required: true
         type: string
@@ -57,10 +63,15 @@ jobs:
         run: sleep ${{ inputs.deploymentDelayInMinutes }}m
   
   deploy:
+    needs: delay_deployment
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environment }}
     if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
-    steps:      
+    steps: 
+      - name: Debug inputs
+        run: |
+          echo "dockerFile=${{ inputs.dockerFile }}"
+          echo "dockerBuildContext=${{ inputs.dockerBuildContext }}"
       - name: Determine ACR name and ACR subscription based on environment
         id: acr_config
         shell: bash
