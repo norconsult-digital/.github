@@ -114,9 +114,9 @@ jobs:
       - name: Build Docker image from source
         run: |
           docker buildx build \
-            --file b2c-poc/app/Dockerfile \
+            --file ${{ inputs.dockerFile }} \
             --tag ${{ inputs.repositoryName }}:tmp \
-            b2c-poc/app \
+              ${{ inputs.dockerBuildContext }} \
             --load  
 
       - name: Generate image tag
