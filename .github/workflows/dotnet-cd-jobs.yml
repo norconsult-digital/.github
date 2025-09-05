@@ -3,12 +3,6 @@ name: .NET CD Workflow
 on:
   workflow_call:
     inputs:
-      dockerFile:
-        required: false
-        type: string
-      dockerBuildContext:
-        required: false
-        type: string
       environment:
         required: true
         type: string
@@ -57,31 +51,24 @@ jobs:
   delay_deployment:
     runs-on: ubuntu-latest    
     name: Delay deployment to ${{ inputs.environmentName }} for ${{ inputs.deploymentDelayInMinutes }} minutes 
-    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
     steps:
       - name: Delay
         run: sleep ${{ inputs.deploymentDelayInMinutes }}m
   
   deploy:
-    needs: delay_deployment
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environment }}
     if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
-    steps: 
-      - name: Debug inputs
-        run: |
-          echo "dockerFile=${{ inputs.dockerFile }}"
-          echo "dockerBuildContext=${{ inputs.dockerBuildContext }}"
+    steps:      
       - name: Determine ACR name and ACR subscription based on environment
-        id: acr_config
-        shell: bash
         run: |
           if [ "${{ inputs.environmentName }}" = "prod" ] || [ "${{ inputs.environmentName }}" = "stage" ]; then
-            echo "registry_name=crndsharedprod.azurecr.io" >> $GITHUB_OUTPUT
-            echo "subscription=a60c4c2a-c6d9-4940-85e5-bd1fa4a1dfea" >> $GITHUB_OUTPUT
+            echo "ACR_NAME=crndsharedprod.azurecr.io" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=a60c4c2a-c6d9-4940-85e5-bd1fa4a1dfea" >> $GITHUB_ENV
           else
-            echo "registry_name=crndsharednonprod.azurecr.io" >> $GITHUB_OUTPUT
-            echo "subscription=21eca75c-ed74-4f47-9f51-c0c345a00859" >> $GITHUB_OUTPUT
+            echo "ACR_NAME=crndsharednonprod.azurecr.io" >> $GITHUB_ENV
+            echo "AZURE_SUBSCRIPTION=21eca75c-ed74-4f47-9f51-c0c345a00859" >> $GITHUB_ENV
           fi
 
       - name: Log in with Azure
@@ -89,11 +76,11 @@ jobs:
         with:
           client-id: ${{ inputs.azureServicePrincipalId }}
           tenant-id: '5546488e-16ae-4971-ba91-b12a928efaf8'
-          subscription-id: ${{ steps.acr_config.outputs.subscription }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION }}
 
       - name: Download migrations artifact
         if: ${{ inputs.migrationBundleArguments != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: migrations-bundle
           path: migrations-bundle
@@ -121,29 +108,25 @@ jobs:
           ./migrations-bundle.exe --connection '${{ inputs.optionalDbConnection2 }}' --verbose
         working-directory: ./migrations-bundle
       
-    
-      - name: Build Docker image from source
-        run: |
-          docker buildx build \
-            --file ${{ inputs.dockerFile }} \
-            --tag ${{ inputs.repositoryName }}:tmp \
-              ${{ inputs.dockerBuildContext }} \
-            --load  
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.artifactName }}
 
-      - name: Generate image tag
-        id: tag
-        shell: bash
-        run: |
-          echo "value=${{ inputs.environmentName }}-$(date +%s)" >> $GITHUB_OUTPUT
+      - name: Load Docker image
+        run: docker load --input image.tar
+
+      - name: Set Docker image tag
+        run: echo "imageTag=${{ inputs.environmentName }}-$(date +%s)" >> $GITHUB_ENV
 
       - name: Log in to the Azure Container Registry
         run: |
-          az acr login --name $(echo "${{ steps.acr_config.outputs.registry_name }}" | cut -d'.' -f1)
+          az acr login --name ${{ env.ACR_NAME }}
 
       - name: Retag Docker image
         run: |
-          docker tag ${{ inputs.repositoryName }}:tmp ${{ steps.acr_config.outputs.registry_name }}/${{ inputs.repositoryName }}:${{ steps.tag.outputs.value }}
+          docker tag ${{ inputs.repositoryName }}:tmp ${{ env.ACR_NAME }}/${{ inputs.repositoryName }}:${{ env.imageTag }}
 
       - name: Push Docker image to ACR
         run: |
-          docker push ${{ steps.acr_config.outputs.registry_name }}/${{ inputs.repositoryName }}:${{ steps.tag.outputs.value }}
+          docker push ${{ env.ACR_NAME }}/${{ inputs.repositoryName }}:${{ env.imageTag }}
