@@ -55,3 +55,6 @@ jobs:
       repositoryName: ${{ inputs.repositoryName }}
       azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }}
       dbConnection: ${{ inputs.dbConnection }}
+      dockerFile: 'frontend/src/apps/admin-app-host/Dockerfile'
+      dockerBuildContext: 'frontend/src/apps/admin-app-host'
+      
