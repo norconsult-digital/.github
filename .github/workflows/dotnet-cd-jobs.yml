@@ -110,14 +110,7 @@ jobs:
           ./migrations-bundle.exe --connection '${{ inputs.optionalDbConnection2 }}' --verbose
         working-directory: ./migrations-bundle
       
-      - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ inputs.artifactName }}
-
-      - name: Load Docker image
-        run: docker load --input image.tar
-
+    
       - name: Build Docker image from source
         run: |
           docker buildx build \
