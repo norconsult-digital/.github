@@ -10,12 +10,6 @@ on:
     - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
-      dockerFile:
-        required: true
-        type: string
-      dockerBuildContext:
-        required: true
-        type: string
       environment:
         required: true
         type: string
@@ -61,5 +55,3 @@ jobs:
       repositoryName: ${{ inputs.repositoryName }}
       azureServicePrincipalId: ${{ inputs.azureServicePrincipalId }}
       dbConnection: ${{ inputs.dbConnection }}
-      dockerFile: 'frontend/src/apps/admin-app-host/Dockerfile'
-      dockerBuildContext: 'frontend/src/apps/admin-app-host'
