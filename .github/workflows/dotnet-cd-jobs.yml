@@ -4,10 +4,10 @@ on:
   workflow_call:
     inputs:
       dockerFile:
-        required: true
+        required: false
         type: string
       dockerBuildContext:
-        required: true
+        required: false
         type: string
       environment:
         required: true
