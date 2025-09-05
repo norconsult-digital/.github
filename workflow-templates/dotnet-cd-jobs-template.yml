@@ -10,6 +10,12 @@ on:
     - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
     inputs:
+      dockerFile:
+        required: true
+        type: string
+      dockerBuildContext:
+        required: true
+        type: string
       environment:
         required: true
         type: string
