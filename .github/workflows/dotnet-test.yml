@@ -66,6 +66,7 @@ jobs:
         with:
           client-id: ${{ inputs.azureServicePrincipalClientId }}
           tenant-id: ${{ inputs.azureTenantId }}
+          auth-type: oidc
           allow-no-subscriptions: true
 
       - name: Pull Docker test image
