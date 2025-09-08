@@ -60,6 +60,14 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
+      - name: Configure NuGet for GitHub Packages
+        run: |
+          dotnet nuget add source \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GITHUB_TOKEN }} \
+            --store-password-in-clear-text \
+            --name github "https://nuget.pkg.github.com/norconsult-digital/index.json"    
+
       - name: Azure Login via OIDC
         if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
         uses: azure/login@v2
