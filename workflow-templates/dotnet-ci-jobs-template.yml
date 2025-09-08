@@ -1,4 +1,4 @@
-name: "[Platform] Call .NET CI Workflow"
+name: "[Platform] .NET CI Workflow"
 
 permissions:
   contents: read
