@@ -1,4 +1,4 @@
-name: "target supported version"
+name: "[Platform] Target supported version"
 
 on:
   schedule:
