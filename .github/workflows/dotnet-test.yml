@@ -63,10 +63,10 @@ jobs:
       - name: Configure NuGet for GitHub Packages
         run: |
           dotnet nuget add source \
+            --name github \
             --username ${{ github.actor }} \
             --password ${{ secrets.GITHUB_TOKEN }} \
             --store-password-in-clear-text \
-            --force \
             --name github "https://nuget.pkg.github.com/norconsult-digital/index.json"    
 
       - name: Azure Login via OIDC
