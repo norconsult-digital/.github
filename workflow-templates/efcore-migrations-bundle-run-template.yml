@@ -1,4 +1,4 @@
-name: "Call Migrations Bundle Run Workflow"
+name: "[Platform] Call Migrations Bundle Run Workflow"
 
 permissions:
   contents: read
