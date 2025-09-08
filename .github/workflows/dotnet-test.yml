@@ -97,6 +97,7 @@ jobs:
       - name: Run tests with build verification
         shell: pwsh
         run: |
+          mkdir -p test-results
           New-Item -ItemType Directory -Force -Path test-results
           $projects = Get-ChildItem -Path ${{ inputs.testProjects }} -Recurse -Include '*[T|t]ests.csproj'
           foreach ($project in $projects) {
