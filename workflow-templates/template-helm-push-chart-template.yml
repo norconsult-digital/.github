@@ -23,7 +23,7 @@ on:
 
 jobs:
   call-helm-push:
-    uses: norconsult-digital/.github/.github/workflows/helm-push-reusable.yml@main
+    uses: norconsult-digital/.github/.github/workflows/template-helm-push-chart.yml@main
     with:
       subscription_id: ${{ github.event.inputs.subscription_id }}
       acr_name: ${{ github.event.inputs.acr_name }}
