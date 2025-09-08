@@ -34,7 +34,7 @@ on:
 
 jobs:
   call-renovate:
-    uses: ./.github/workflows/renovate-reusable.yml
+    uses: norconsult-digital/.github/.github/workflows/template-renovate.yml
     with:
       include_paths: ${{ github.event.inputs.include_paths }}
       regex_pattern: ${{ github.event.inputs.regex_pattern }}
