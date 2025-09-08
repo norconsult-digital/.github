@@ -42,7 +42,7 @@ on:
 
 jobs:
   call-python-ci:
-    uses: norconsult-digital/.github/.github/workflows/python-ci.yml@main
+    uses: norconsult-digital/.github/.github/workflows/python-ci-jobs.yml@main
     with:
       vmImage: ${{ github.event.inputs.vmImage }}
       gitRepo: ${{ github.event.inputs.gitRepo }}
