@@ -52,36 +52,21 @@ permissions:
   contents: read
 
 jobs:
-  upload_bicep:
-    runs-on: ${{ inputs.vmImage }}
-    name: Upload Bicep Files
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Upload Bicep Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bicep
-          path: |
-            ${{ inputs.bicepFile }}
-            ${{ inputs.bicepParameterFile }}
     
-  deploy_bicep:
-    needs: upload_bicep
+  deploy-bicep:
     runs-on: ${{ inputs.vmImage }}
     if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
-    environment: ${{ inputs.environmentName }}
+    environment: ${{ inputs.environment }}
     name: Deploy Bicep File
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
-          name: "bicep"
-          path: ./bicep-artifact
+          name: 'bicep'
+    
 
       - name: Log in with Azure
         uses: azure/login@v2
@@ -95,7 +80,7 @@ jobs:
         with:
           subscriptionId: ${{ inputs.subscription }}
           resourceGroupName: ${{ inputs.resourceGroupName }}
-          template: ./bicep-artifact/${{ inputs.bicepFile }}
-          parameters: ./bicep-artifact/${{ inputs.bicepParameterFile }}
+          template: ${{ inputs.bicepFile }}
+          parameters: ${{ inputs.bicepParameterFile }}
           additionalArguments: ${{ inputs.runWhatIf && '--what-if --rollback-on-error' || '' }}
           failOnStdErr: true
