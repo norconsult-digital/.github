@@ -25,7 +25,6 @@ on:
         description: "Run a What-If deployment before actual deploy"
         type: boolean
         required: false
-        default: false
       subscription:
         description: "Azure Subscription ID"
         required: true
