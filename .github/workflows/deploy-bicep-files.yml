@@ -55,7 +55,7 @@ jobs:
     
   deploy-bicep:
     runs-on: ${{ inputs.vmImage }}
-    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    if: ${{ inputs.allowedBranches == '' || contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
     environment: ${{ inputs.environment }}
     name: Deploy Bicep File
     steps:
