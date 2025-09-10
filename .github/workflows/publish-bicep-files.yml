@@ -34,13 +34,7 @@ jobs:
         if: ${{ inputs.allowedBranches && contains(fromJson(inputs.allowedBranches), github.ref_name) }}
         run: echo "Running on allowed branch ${{ github.ref_name }} for environment ${{ inputs.environmentName }}"
 
-      - name: Publish bicep files
+      - name: Verify Bicep folder
         run: |
-          echo "Publishing Bicep files from folder: ${{ inputs.bicepFolder }}"
+          echo "Using Bicep files from folder: ${{ inputs.bicepFolder }}"
           ls -la ${{ inputs.bicepFolder }}
-
-      - name: Upload bicep artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bicep
-          path: ${{ inputs.bicepFolder }}
