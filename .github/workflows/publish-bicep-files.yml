@@ -35,7 +35,7 @@ jobs:
           echo "Using Bicep files from folder: ${{ inputs.bicepFolder }}"
           ls -la ${{ inputs.bicepFolder }}
       - name: Upload Bicep files as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bicep
           path: ${{ inputs.bicepFolder }}
