@@ -22,7 +22,7 @@ on:
 
 jobs:
   publish-artifact:
-    if: ${{ inputs.allowedBranches || contains(fromJson(inputs.allowedBranches), github.ref_name) }}
+    if: ${{ inputs.allowedBranches || contains(fromJson(inputs.allowedBranches || '[]'), github.ref_name) }}
     runs-on: ${{ inputs.vmImage }}
     name: Publish Bicep Artifact
     steps:
