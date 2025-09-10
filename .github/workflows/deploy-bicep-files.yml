@@ -75,5 +75,5 @@ jobs:
           resourceGroupName: ${{ inputs.resourceGroupName }}
           template: ${{ inputs.bicepFile }}
           parameters: ${{ inputs.bicepParameterFile }}
-          additionalArguments: ${{ inputs.runWhatIf && '--what-if --rollback-on-error' || '' }}
+          additionalArguments: ${{ inputs.runWhatIf == 'true' && '--what-if --rollback-on-error' || '' }}
           failOnStdErr: true
