@@ -66,7 +66,10 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: bicep
-          path: ./b2c-poc/resources  
+          path: ./b2c-poc/resources 
+
+      - name: Set artifact path
+        run: echo "ARTIFACT_PATH=./b2c-poc/resources" >> $GITHUB_ENV   
 
       - name: Log in with Azure
         uses: azure/login@v2
@@ -80,7 +83,7 @@ jobs:
         with:
           subscriptionId: ${{ inputs.subscription }}
           resourceGroupName: ${{ inputs.resourceGroupName }}
-          template: ${{ inputs.bicepFile }}
-          parameters: ${{ inputs.bicepParameterFile }}
+          template: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepFile }}
+          parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           additionalArguments: ${{ inputs.runWhatIf && '--what-if --rollback-on-error' || '' }}
           failOnStdErr: true
