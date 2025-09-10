@@ -25,6 +25,7 @@ on:
         description: "Run a What-If deployment before actual deploy"
         type: boolean
         required: false
+        default: false
       subscription:
         description: "Azure Subscription ID"
         required: true
@@ -75,5 +76,5 @@ jobs:
           resourceGroupName: ${{ inputs.resourceGroupName }}
           template: ${{ inputs.bicepFile }}
           parameters: ${{ inputs.bicepParameterFile }}
-          additionalArguments: ${{ inputs.runWhatIf == 'true' && '--what-if --rollback-on-error' || '' }}
+          additionalArguments: ${{ inputs.runWhatIf && '--what-if --rollback-on-error' || '' }}
           failOnStdErr: true
