@@ -32,8 +32,13 @@ jobs:
           fetch-depth: 1
       - name: Verify Bicep folder
         run: |
+         if [ ! -d "${{ inputs.bicepFolder }}" ]; then
+            echo "Folder ${{ inputs.bicepFolder }} does not exist."
+            exit 1
+          fi
           echo "Using Bicep files from folder: ${{ inputs.bicepFolder }}"
           ls -la ${{ inputs.bicepFolder }}
+
       - name: Upload Bicep files as artifact
         uses: actions/upload-artifact@v4
         with:
