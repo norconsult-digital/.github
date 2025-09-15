@@ -58,7 +58,10 @@ jobs:
           pwd
           echo "Listing all files and directories:"
           ls -la
-
+     
+      - name: Ensure results directory exists
+        run: mkdir -p loadTest
+     
       - name: "Publish Load Test Results: ${{ inputs.loadTestName }}"
         uses: actions/upload-artifact@v4
         with:
