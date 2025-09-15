@@ -1,11 +1,11 @@
 {
-  "name": "Norconsult Digital Workflow for angular build and test Automation and Maintenance",
-  "description": "⭐Norconsult Digital Workflow for angular build and test Automation and Maintenance",
+  "name": "Angular CI with NX - build and verify",
+  "description": "Runs linting, style checks, tests, and production builds for Angular projects using Nx. Publishes test results and supports feature branches, PRs, and mainline development.",
   "iconName": "isy-logo-dark",
   "categories": [
-    "Automation",
-    "CI/CD",
-    "DevOps"
+    "Nx",
+    "Angular",
+    "CI"
   ],
   "filePatterns": []
 }
