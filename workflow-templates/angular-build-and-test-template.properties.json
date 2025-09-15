@@ -5,7 +5,9 @@
   "categories": [
     "Angular",
     "continuous-integration",
-    "TypeScript"
+    "TypeScript",
+    "testing",
+    "code-quality"
   ],
   "filePatterns": []
 }
