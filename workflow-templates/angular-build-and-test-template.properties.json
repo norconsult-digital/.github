@@ -3,9 +3,9 @@
   "description": "Runs linting, style checks, tests, and production builds for Angular projects using Nx. Publishes test results and supports feature branches, PRs, and mainline development.",
   "iconName": "isy-logo-dark",
   "categories": [
-    "Nx",
     "Angular",
-    "CI"
+    "continuous-integration",
+    "TypeScript"
   ],
   "filePatterns": []
 }
