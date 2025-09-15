@@ -52,17 +52,24 @@ jobs:
           loadTestResource: ${{ inputs.loadTestResource }}
           resourceGroup: ${{ inputs.loadTestResourceGroup }}
 
-      - name: List files and directories
-        run: |
-          echo "Current working directory:"
-          pwd
-          echo "Listing all files and directories:"
-          ls -la
-     
       - name: Ensure results directory exists
         run: mkdir -p loadTest
+
+      - name: Copy Azure Load Test Results
+        run: |
+          mkdir -p loadTest
+          # Replace the path below with where Azure Load Testing writes the results
+          if [ -d "${{ github.workspace }}/azure-load-testing-results" ]; then
+            cp -r ${{ github.workspace }}/azure-load-testing-results/* loadTest/
+          else
+            echo "No Azure Load Testing results found, proceeding with empty loadTest folder."
+          fi
+
+      - name: List loadTest folder
+        run: ls -la loadTest/
      
       - name: "Publish Load Test Results: ${{ inputs.loadTestName }}"
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: loadTestResults_${{ inputs.loadTestName }}
