@@ -72,18 +72,18 @@ jobs:
           fi
           echo "Using package manager: $packageManager"
 
+      - name: Setup pnpm
+        if: ${{ env.packageManager == 'pnpm' }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpmVersion }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.nodeVersion }}
           cache: ${{ env.packageManager }}
           cache-dependency-path: ${{ inputs.cacheDependencyPath }}
-
-      - name: Setup pnpm
-        if: ${{ env.packageManager == 'pnpm' }}
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ inputs.pnpmVersion }}
 
       - name: Install dependencies
         run: |
@@ -95,7 +95,9 @@ jobs:
             pnpm install
             pnpm add -g @angular/cli nx
           fi
-
+        env:
+          INPUT_PATH: ${{ inputs.path }}
+      
       - name: Extract i18n
         run: |
           cd "$INPUT_PATH"
