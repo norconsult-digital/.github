@@ -43,6 +43,7 @@ jobs:
           client-id: ${{ inputs.azureServicePrincipalId }}
           tenant-id: "5546488e-16ae-4971-ba91-b12a928efaf8"
           subscription-id: ${{ inputs.subscription }}
+          client-secret: ${{ inputs.azureServicePrincipalSecret }}
           auth-type: SERVICE_PRINCIPAL
 
       - name: "Azure Load Testing: ${{ inputs.loadTestName }}"
@@ -53,14 +54,14 @@ jobs:
           resourceGroup: ${{ inputs.loadTestResourceGroup }}
 
       - name: Ensure results directory exists
-        run: mkdir -p loadTest
+        run: mkdir -p loadTest/azure-load-testing-results
 
       - name: Copy Azure Load Test Results
         run: |
-          mkdir -p loadTest
-          # Replace the path below with where Azure Load Testing writes the results
-          if [ -d "${{ github.workspace }}/azure-load-testing-results" ]; then
-            cp -r ${{ github.workspace }}/azure-load-testing-results/* loadTest/
+          SRC_DIR="loadTest/azure-load-testing-results"
+          DST_DIR="loadTest"
+          if [ -d "$SRC_DIR" ] && [ "$(ls -A $SRC_DIR)" ]; then
+            cp -r "$SRC_DIR"/* "$DST_DIR"/
           else
             echo "No Azure Load Testing results found, proceeding with empty loadTest folder."
           fi
