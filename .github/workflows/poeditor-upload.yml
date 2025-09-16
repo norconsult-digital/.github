@@ -98,8 +98,12 @@ jobs:
 
       - name: Extract i18n
         run: |
-          cd ${{ inputs.path }}
-          ${{ inputs.extractCommand }}
+          cd "$INPUT_PATH"
+          $INPUT_EXTRACTCOMMAND
+        env:
+          INPUT_PATH: ${{ inputs.path }}
+          INPUT_EXTRACTCOMMAND: ${{ inputs.extractCommand }}
+
 
       - name: Upload to POEditor if file has changes
         run: |
