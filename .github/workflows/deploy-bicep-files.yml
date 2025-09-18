@@ -46,6 +46,11 @@ on:
         description: "Azure Service Principal ID"
         required: true
         type: string
+      deploymentBaseName:
+        description: "Base name for deployment (used to create unique names)"
+        required: false
+        type: string
+        default: "bicep-deploy"  
 
 permissions:
   id-token: write
@@ -69,7 +74,10 @@ jobs:
           path: ./b2c-poc/resources 
 
       - name: Set artifact path
-        run: echo "ARTIFACT_PATH=./b2c-poc/resources" >> $GITHUB_ENV   
+        run: echo "ARTIFACT_PATH=./b2c-poc/resources" >> $GITHUB_ENV 
+
+      - name: Generate deployment timestamp
+        run: echo "DEPLOYMENT_TIMESTAMP=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_ENV  
 
       - name: Log in with Azure
         uses: azure/login@v2
@@ -88,6 +96,7 @@ jobs:
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           additionalArguments: --what-if --rollback-on-error
           failOnStdErr: true
+          deploymentName: "bicep-deploy-${{ env.DEPLOYMENT_TIMESTAMP }}"
 
       - name: Deploy Bicep file
         if: ${{ inputs.runWhatIf != true }}
@@ -98,3 +107,5 @@ jobs:
           template: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepFile }}
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           failOnStdErr: true
+          deploymentName: "bicep-deploy-${{ env.DEPLOYMENT_TIMESTAMP }}"
+          
