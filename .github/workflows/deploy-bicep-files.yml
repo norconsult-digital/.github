@@ -79,11 +79,22 @@ jobs:
           subscription-id: ${{ inputs.subscription }}
 
       - name: What-If / Deploy Bicep file
+        if: ${{ inputs.runWhatIf == true }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
           resourceGroupName: ${{ inputs.resourceGroupName }}
           template: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepFile }}
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
-          additionalArguments: ${{ inputs.runWhatIf && '--what-if --rollback-on-error' || '' }}
+          additionalArguments: --what-if --rollback-on-error
+          failOnStdErr: true
+
+      - name: Deploy Bicep file
+        if: ${{ inputs.runWhatIf != true }}
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ inputs.subscription }}
+          resourceGroupName: ${{ inputs.resourceGroupName }}
+          template: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepFile }}
+          parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           failOnStdErr: true
