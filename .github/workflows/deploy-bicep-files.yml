@@ -76,13 +76,12 @@ jobs:
       - name: Set artifact path
         run: echo "ARTIFACT_PATH=./b2c-poc/resources" >> $GITHUB_ENV 
 
-      - name: Generate deployment timestamp
-        run: echo "DEPLOYMENT_TIMESTAMP=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_ENV
-
       - name: Set deployment name
         run: |
+          DEPLOYMENT_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          echo "DEPLOYMENT_TIMESTAMP=$DEPLOYMENT_TIMESTAMP" >> $GITHUB_ENV
           BRANCH_NAME=$(echo ${GITHUB_REF_NAME} | tr '/' '-')
-          echo "DEPLOYMENT_NAME=${{ inputs.deploymentBaseName }}-${BRANCH_NAME}-${DEPLOYMENT_TIMESTAMP}" >> $GITHUB_ENV  
+          echo "DEPLOYMENT_NAME=${{ inputs.deploymentBaseName }}-${BRANCH_NAME}-$DEPLOYMENT_TIMESTAMP" >> $GITHUB_ENV  
 
       - name: Log in with Azure
         uses: azure/login@v2
@@ -101,9 +100,10 @@ jobs:
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           additionalArguments: --what-if --rollback-on-error
           failOnStdErr: true
-          deploymentName: "bicep-deploy-${{ env.DEPLOYMENT_TIMESTAMP }}"
+          deploymentName: ${{ env.DEPLOYMENT_NAME }}
 
       - name: Deploy Bicep file
+        if: ${{ inputs.runWhatIf != true }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
@@ -111,5 +111,5 @@ jobs:
           template: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepFile }}
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           failOnStdErr: true
-          deploymentName: "bicep-deploy-${{ env.DEPLOYMENT_TIMESTAMP }}"
+          deploymentName: ${{ env.DEPLOYMENT_NAME }}
           
