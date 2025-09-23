@@ -88,7 +88,7 @@ jobs:
           template: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepFile }}
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           additionalArguments: --what-if --rollback-on-error
-          failOnStdErr: false
+          failOnStdErr: true
      
       - name: Deploy Bicep file
         uses: azure/arm-deploy@v2
