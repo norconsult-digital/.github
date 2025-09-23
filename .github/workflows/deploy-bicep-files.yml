@@ -25,7 +25,7 @@ on:
         description: "Run a What-If deployment before actual deploy"
         type: boolean
         required: false
-        default: true
+        default: false
       subscription:
         description: "Azure Subscription ID"
         required: true
@@ -56,7 +56,7 @@ jobs:
     
   deploy-bicep:
     runs-on: ${{ inputs.vmImage }}
-    if: ${{ inputs.allowedBranches == '' || contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
     environment: ${{ inputs.environment }}
     name: Deploy Bicep File
     steps:
@@ -80,7 +80,6 @@ jobs:
           subscription-id: ${{ inputs.subscription }}
 
       - name: What-If / Deploy Bicep file
-        if: ${{ inputs.runWhatIf == true }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
@@ -89,7 +88,7 @@ jobs:
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           additionalArguments: --what-if --rollback-on-error
           failOnStdErr: true
-          deploymentName: ${{ env.DEPLOYMENT_NAME }}
+          
 
       - name: Deploy Bicep file
         uses: azure/arm-deploy@v2
@@ -99,5 +98,5 @@ jobs:
           template: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepFile }}
           parameters: ${{ env.ARTIFACT_PATH }}/${{ inputs.bicepParameterFile }}
           failOnStdErr: true
-          deploymentName: ${{ env.DEPLOYMENT_NAME }}
+         
           
