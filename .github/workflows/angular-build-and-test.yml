@@ -14,12 +14,24 @@ on:
         required: false
         type: boolean
         default: false
+      allowedBranches:     # added this for controlling which branches can run the workflow
+        description: "Comma-separated list of allowed branches (e.g., 'main,develop,release/')"
+        type: string
+        required: false
+        default: "main"
     secrets:
       NX_CLOUD_CICD:
         required: true
 
 jobs:
+  check-branch: # added this for checking if the workflow should run on the current branch
+    uses: ./.github/workflows/skip-on-branch.yml
+    with:
+      allowed-branches: ${{ inputs.allowedBranches }}
+  
   build-and-test:
+    needs: check-branch  # added this to run this job only if the branch is allowed
+    if: ${{ needs.check-branch.outputs.run-job == 'true' }}
     runs-on: ${{ inputs.vmImage }}
     env:
       WORKING_DIRECTORY: ${{ github.workspace }}/s/${{ inputs.workspaceDir }}
