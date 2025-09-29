@@ -1,0 +1,31 @@
+name: Skip On Branch
+
+on:
+  workflow_call:
+    inputs:
+      allowed-branches:
+        required: true
+        type: string # Comma-separated list, e.g. "main,develop,feature/"
+    outputs:
+      run-job:
+        description: "Whether to run the job or not"
+        value: ${{ jobs.branch-check.outputs.run-job }}
+
+jobs:
+  branch-check:
+    runs-on: ubuntu-latest
+    outputs:
+      run-job: ${{ steps.set-result.outputs.run-job }}
+    steps:
+      - name: Check if branch is allowed
+        id: set-result
+        run: |
+          ALLOWED=false
+          IFS=',' read -ra BRANCHES <<< "${{ inputs.allowed-branches }}"
+          for b in "${BRANCHES[@]}"; do
+            if [[ "${GITHUB_REF##*/}" == "$b" ]] || [[ "${GITHUB_REF##*/}" == *"$b"* ]]; then
+              ALLOWED=true
+              break
+            fi
+          done
+          echo "run-job=$ALLOWED" >> $GITHUB_OUTPUT
