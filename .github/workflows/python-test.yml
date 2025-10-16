@@ -54,7 +54,6 @@ jobs:
         with:
           version: "0.5.7"
           enable-cache: true
-      
       #----------------------------------------------
       #     install poetry if poetry.lock exists
       #----------------------------------------------
@@ -94,13 +93,33 @@ jobs:
           fi
 
       #----------------------------------------------
-      #               run test suite
+      #         install coverage module
       #----------------------------------------------
-      - name: Run tests
+      - name: Install coverage
+        working-directory: ${{ inputs.projectPath }}
+        run: |
+          if [ -f "poetry.lock" ] && [ -f "pyproject.toml" ]; then
+            poetry run pip install coverage
+          else
+            uv pip install coverage
+          fi
+
+      #----------------------------------------------
+      #         run test suite with coverage
+      #----------------------------------------------
+      - name: Run tests with coverage
         working-directory: ${{ inputs.projectPath }}
         run: |
           mkdir -p test-results
-          uv run pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+          if [ -f "poetry.lock" ] && [ -f "pyproject.toml" ]; then
+            poetry run coverage run -m pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+            poetry run coverage report
+            poetry run coverage xml
+          else
+            uv run coverage run -m pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+            uv run coverage report
+            uv run coverage xml
+          fi
 
       #----------------------------------------------
       #           check for test results
@@ -132,3 +151,16 @@ jobs:
           path: ${{ inputs.projectPath }}/test-results/*.xml
           reporter: java-junit
           output-to: 'step-summary'
+
+      #----------------------------------------------
+      #       show coverage report in summary
+      #----------------------------------------------
+      - name: Show coverage summary
+        if: always()
+        working-directory: ${{ inputs.projectPath }}
+        run: |
+          if [ -f "poetry.lock" ] && [ -f "pyproject.toml" ]; then
+            poetry run coverage report
+          else
+            uv run coverage report
+          fi
