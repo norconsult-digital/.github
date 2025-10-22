@@ -103,7 +103,10 @@ jobs:
         working-directory: ${{ inputs.projectPath }}
         run: |
           mkdir -p test-results coverage-results
-          TEST_DIR="${{ inputs.projectPath }}/${{ inputs.testPaths }}"
+          echo "Listing contents of projectPath (${{ inputs.projectPath }}):"
+          ls -1
+
+          TEST_DIR="${{ inputs.testPaths }}"
           if [ -d "$TEST_DIR" ]; then
             echo "Running tests in $TEST_DIR"
             uv run pip install coverage
@@ -112,6 +115,8 @@ jobs:
             uv run coverage report -m
           else
             echo "Test path '$TEST_DIR' not found. Skipping tests."
+            echo "Check the projectPath and testPaths inputs."
+            ls -1
           fi
 
       #----------------------------------------------
@@ -142,7 +147,7 @@ jobs:
       #             report test results
       #----------------------------------------------
       - name: Report test results
-        if: always() && env.present_test_summary == 'true'
+        if: always() && steps.present_test_summary_check.conclusion == 'success'
         uses: phoenix-actions/test-reporting@v15
         with:
           name: Python Tests
