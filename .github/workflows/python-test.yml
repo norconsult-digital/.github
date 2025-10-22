@@ -110,6 +110,15 @@ jobs:
           else
             echo "Test path '${{ inputs.testPaths }}' not found. Skipping tests."
           fi
+
+      #----------------------------------------------
+      #      show coverage summary in logs
+      #----------------------------------------------
+      - name: Show coverage summary
+        working-directory: ${{ inputs.projectPath }}
+        run: |
+          uv run coverage report -m
+
       #----------------------------------------------
       #      upload coverage report
       #----------------------------------------------
