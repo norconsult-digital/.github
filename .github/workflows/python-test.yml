@@ -142,6 +142,6 @@ jobs:
         uses: phoenix-actions/test-reporting@v15
         with:
           name: Python Tests
-          path: ${{ inputs.projectPath }}/test-results/test-results.xml
+          path: ${{ inputs.projectPath }}/test-results/*.xml
           reporter: java-junit
           output-to: 'step-summary'
