@@ -111,6 +111,14 @@ jobs:
             echo "Test path '${{ inputs.testPaths }}' not found. Skipping tests."
           fi
       #----------------------------------------------
+      #      list test-results directory
+      #----------------------------------------------
+      - name: List test-results directory
+        working-directory: ${{ inputs.projectPath }}
+        run: |
+          echo "Contents of test-results:"
+          ls -la test-results || echo "No test-results directory found"
+      #----------------------------------------------
       #      upload coverage report
       #----------------------------------------------
       - name: Upload coverage report
