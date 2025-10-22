@@ -94,7 +94,7 @@ jobs:
             pip install -r requirements.txt
           else
             echo "No pyproject.toml or requirements.txt found. Skipping dependency installation."
-
+          fi
 
       #----------------------------------------------
       #      run tests with coverage
