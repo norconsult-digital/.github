@@ -103,22 +103,13 @@ jobs:
         working-directory: ${{ inputs.projectPath }}
         run: |
           mkdir -p test-results coverage-results
-          echo "Listing contents of projectPath (${{ inputs.projectPath }}):"
-          ls -1
-
-          TEST_DIR="${{ inputs.testPaths }}"
-          if [ -d "$TEST_DIR" ]; then
-            echo "Running tests in $TEST_DIR"
+          if [ -d "${{ inputs.testPaths }}" ]; then
             uv run pip install coverage
-            uv run coverage run -m pytest "$TEST_DIR" -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+            uv run coverage run -m pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
             uv run coverage xml -o coverage-results/coverage.xml
-            uv run coverage report -m
           else
-            echo "Test path '$TEST_DIR' not found. Skipping tests."
-            echo "Check the projectPath and testPaths inputs."
-            ls -1
+            echo "Test path '${{ inputs.testPaths }}' not found. Skipping tests."
           fi
-
       #----------------------------------------------
       #      upload coverage report
       #----------------------------------------------
