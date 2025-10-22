@@ -94,13 +94,24 @@ jobs:
           fi
 
       #----------------------------------------------
-      #               run test suite
+      #      run test suite with coverage
       #----------------------------------------------
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: ${{ inputs.projectPath }}
         run: |
-          mkdir -p test-results
-          uv run pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+          mkdir -p test-results coverage-results
+          uv run pip install coverage
+          uv run coverage run -m pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+          uv run coverage xml -o coverage-results/coverage.xml
+
+      #----------------------------------------------
+      #      upload coverage report
+      #----------------------------------------------
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ${{ inputs.projectPath }}/coverage-results/coverage.xml
 
       #----------------------------------------------
       #           check for test results
