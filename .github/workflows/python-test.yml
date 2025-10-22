@@ -107,17 +107,10 @@ jobs:
             uv run pip install coverage
             uv run coverage run -m pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
             uv run coverage xml -o coverage-results/coverage.xml
+            uv run coverage report -m 
           else
             echo "Test path '${{ inputs.testPaths }}' not found. Skipping tests."
           fi
-
-      #----------------------------------------------
-      #      show coverage summary in logs
-      #----------------------------------------------
-      - name: Show coverage summary
-        working-directory: ${{ inputs.projectPath }}
-        run: |
-          uv run coverage report -m
 
       #----------------------------------------------
       #      upload coverage report
