@@ -97,7 +97,7 @@ jobs:
           fi
 
       #----------------------------------------------
-      #        show working directory and files
+      #       show working directory and files
       #----------------------------------------------
       - name: Show working directory and files
         working-directory: ${{ inputs.projectPath }}
@@ -111,7 +111,7 @@ jobs:
         working-directory: ${{ inputs.projectPath }}
         run: |
           mkdir -p test-results coverage-results
-          uv run pip install coverage
+          uv run pip install coverage pytest
           uv run coverage run -m pytest ${{ inputs.testPaths }} -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
           uv run coverage xml -o coverage-results/coverage.xml
 
