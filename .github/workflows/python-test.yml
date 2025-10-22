@@ -59,7 +59,7 @@ jobs:
       #     install poetry if poetry.lock exists
       #----------------------------------------------
       - name: Install Poetry
-        if: hashFiles(format('{0}/poetry.lock', inputs.projectPath)) != '' || hashFiles(format('{0}/pyproject.toml', inputs.projectPath)) != ''
+        if: hashFiles(format('{0}/poetry.lock', inputs.projectPath)) != ''
         uses: snok/install-poetry@v1
         with:
           virtualenvs-create: true
@@ -147,10 +147,10 @@ jobs:
       #             report test results
       #----------------------------------------------
       - name: Report test results
-        if: always() && steps.present_test_summary_check.conclusion == 'success'
+        if: always() && env.present_test_summary == 'true'
         uses: phoenix-actions/test-reporting@v15
         with:
           name: Python Tests
-          path: ${{ inputs.projectPath }}/test-results/*.xml
+          path: ${{ inputs.projectPath }}/test-results/test-results.xml
           reporter: java-junit
           output-to: 'step-summary'
