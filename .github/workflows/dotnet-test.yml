@@ -3,7 +3,7 @@ name: .NET Test
 permissions:
   id-token: write
   contents: read
-  packages: read  
+  packages: read
 
 on:
   workflow_call:
@@ -86,51 +86,118 @@ jobs:
               }
           }
 
-      - name: Run tests with build verification
+      - name: Run tests with coverage and build verification
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-results
           $projects = Get-ChildItem -Path ${{ inputs.testProjects }} -Recurse -Include '*[T|t]ests.csproj'
+
+          Write-Output "Found $($projects.Count) test projects"
+          if ($projects.Count -eq 0) {
+            Write-Output "No test projects found matching pattern '${{ inputs.testProjects }}'"
+            exit 0
+          }
+
           foreach ($project in $projects) {
             $project_name = [System.IO.Path]::GetFileNameWithoutExtension($project.FullName)
+            Write-Output "Processing: $project_name"
 
             # Build the project explicitly
             dotnet build $project.FullName --configuration ${{ inputs.buildConfiguration }}
             if ($LASTEXITCODE -ne 0) {
               Write-Output "Build failed: $project_name"
-              exit 1  # Stops execution if build fails
+              exit 1
             }
 
-            # Proceed to test
-            dotnet test $project.FullName --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore --logger "trx;LogFileName=$(Get-Location)/test-results/$project_name.trx" --verbosity quiet
-
+            # Test and collect coverage
+            dotnet test $project.FullName `
+              --configuration ${{ inputs.buildConfiguration }} `
+              --no-build --no-restore `
+              --logger "trx;LogFileName=$(Get-Location)/test-results/$project_name.trx" `
+              --verbosity normal `
+              --collect:"XPlat Code Coverage"
             if ($LASTEXITCODE -ne 0) {
               Write-Output "Tests failed: $project_name"
             }
           }
 
+
       - name: Check for TRX files
         id: present_test_summary_check
         if: always()
         run: |
-          # List all files in the test-results directory for debugging purposes
-          echo "Listing all files in the test-results directory:"
-          ls -1 test-results/
+          echo "=== TRX File Check ==="
+          echo "Checking test-results directory..."
 
-          # Check specifically for TRX files and set environment variable accordingly
-          if ls test-results/*.trx 1> /dev/null 2>&1; then
-            echo "TRX files found."
-            echo "present_test_summary=true" >> $GITHUB_ENV
+          if [ -d "test-results" ]; then
+            echo "test-results directory exists"
+            echo "Contents of test-results directory:"
+            ls -la test-results/
+            # Check specifically for TRX files
+            if ls test-results/*.trx 1> /dev/null 2>&1; then
+              echo "✅ TRX files found:"
+              ls -1 test-results/*.trx
+              echo "present_test_summary=true" >> $GITHUB_OUTPUT
+            else
+              echo "❌ No TRX files found in test-results directory"
+              echo "present_test_summary=false" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "No TRX files found."
-            echo "present_test_summary=false" >> $GITHUB_ENV
+            echo "❌ test-results directory does not exist"
+            echo "present_test_summary=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Report test results
-        if: always() && env.present_test_summary == 'true'
+        if: always() && steps.present_test_summary_check.outputs.present_test_summary == 'true'
         uses: phoenix-actions/test-reporting@v15
         with:
           name: .NET Tests
           path: test-results/*.trx
           reporter: dotnet-trx
           output-to: "step-summary"
+
+      - name: Find coverage files
+        id: find_coverage
+        shell: pwsh
+        run: |
+          # Simple check - if TestResults directory exists and has XML files, assume we have coverage
+          $hasTestResults = Test-Path "TestResults"
+          $xmlFilesInTestResults = 0
+
+          if ($hasTestResults) {
+            $xmlFilesInTestResults = (Get-ChildItem -Path "TestResults" -Filter "*.xml" -Recurse -ErrorAction SilentlyContinue).Count
+            Write-Output "TestResults directory found with $xmlFilesInTestResults XML files"
+          } else {
+            Write-Output "No TestResults directory found"
+          }
+
+          # Show what we found for debugging
+          Write-Output "All XML files in workspace:"
+          Get-ChildItem -Recurse -Filter "*.xml" -ErrorAction SilentlyContinue | Select-Object FullName | Format-List
+
+          if ($hasTestResults -and $xmlFilesInTestResults -gt 0) {
+            Write-Output "✅ Coverage data appears to be available"
+            echo "has_coverage=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Output "❌ No coverage data found"
+            echo "has_coverage=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Install ReportGenerator
+        if: steps.find_coverage.outputs.has_coverage == 'true'
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate coverage reports
+        if: steps.find_coverage.outputs.has_coverage == 'true'
+        run: |
+          echo "Looking for coverage files to process..."
+          find . -name "*.xml" -path "*/TestResults/*" -type f -exec echo "Found: {}" \;
+          reportgenerator -reports:**/*.xml -targetdir:coverage-report -reporttypes:Html;HtmlSummary;Badges;TextSummary
+
+      - name: Upload coverage report artifact
+        if: steps.find_coverage.outputs.has_coverage == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
