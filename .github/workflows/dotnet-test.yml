@@ -112,6 +112,10 @@ jobs:
               Write-Output "Tests failed: $project_name"
             }
           }
+          
+          Write-Output "`n=== Post-test file listing ==="
+          Write-Output "Files created after testing:"
+          Get-ChildItem -Recurse | Where-Object { $_.Name -like "*coverage*" -or $_.Name -like "*.xml" } | Select-Object FullName, Name | Format-Table -AutoSize
       - name: Check for TRX files
         id: present_test_summary_check
         if: always()
@@ -120,17 +124,17 @@ jobs:
           echo "Listing all files in the test-results directory:"
           ls -1 test-results/
 
-          # Check specifically for TRX files and set environment variable accordingly
+          # Check specifically for TRX files and set output accordingly
           if ls test-results/*.trx 1> /dev/null 2>&1; then
             echo "TRX files found."
-            echo "present_test_summary=true" >> $GITHUB_ENV
+            echo "present_test_summary=true" >> $GITHUB_OUTPUT
           else
             echo "No TRX files found."
-            echo "present_test_summary=false" >> $GITHUB_ENV
+            echo "present_test_summary=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Report test results
-        if: always() && env.present_test_summary == 'true'
+        if: always() && steps.present_test_summary_check.outputs.present_test_summary == 'true'
         uses: phoenix-actions/test-reporting@v15
         with:
           name: .NET Tests
@@ -142,13 +146,24 @@ jobs:
         id: find_coverage
         shell: pwsh
         run: |
+          Write-Output "=== Coverage File Search Debug ==="
+          Write-Output "Current directory: $(Get-Location)"
+          Write-Output "All files in current directory:"
+          Get-ChildItem -Recurse | Select-Object FullName | Format-Table -AutoSize
+          
+          Write-Output "`n=== Looking for coverage files ==="
           $coverageFiles = Get-ChildItem -Recurse -Filter "coverage.cobertura.xml" | Select-Object -ExpandProperty FullName
+          
+          Write-Output "`n=== Also checking for any .xml files ==="
+          $allXmlFiles = Get-ChildItem -Recurse -Filter "*.xml" | Select-Object FullName, Name
+          $allXmlFiles | Format-Table -AutoSize
+          
           if ($coverageFiles) {
-            Write-Output "Found coverage files:"
+            Write-Output "`n✅ Found coverage files:"
             Write-Output $coverageFiles
             echo "has_coverage=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Output "No coverage files found."
+            Write-Output "`n❌ No coverage.cobertura.xml files found."
             echo "has_coverage=false" >> $env:GITHUB_OUTPUT
           }
 
