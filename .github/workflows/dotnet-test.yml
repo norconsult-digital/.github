@@ -140,29 +140,29 @@ jobs:
 
       - name: Find coverage files
         id: find_coverage
+        shell: pwsh
         run: |
           $coverageFiles = Get-ChildItem -Recurse -Filter "coverage.cobertura.xml" | Select-Object -ExpandProperty FullName
           if ($coverageFiles) {
             Write-Output "Found coverage files:"
             Write-Output $coverageFiles
-            echo "coverage_files=$($coverageFiles -join ',')" >> $env:GITHUB_ENV
-            echo "has_coverage=true" >> $env:GITHUB_ENV
+            echo "has_coverage=true" >> $env:GITHUB_OUTPUT
           } else {
             Write-Output "No coverage files found."
-            echo "has_coverage=false" >> $env:GITHUB_ENV
+            echo "has_coverage=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Install ReportGenerator
-        if: env.has_coverage == 'true'
+        if: steps.find_coverage.outputs.has_coverage == 'true'
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
       - name: Generate coverage reports
-        if: env.has_coverage == 'true'
+        if: steps.find_coverage.outputs.has_coverage == 'true'
         run: |
           reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html;HtmlSummary;Badges;TextSummary
 
       - name: Upload coverage report artifact
-        if: env.has_coverage == 'true'
+        if: steps.find_coverage.outputs.has_coverage == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
