@@ -156,10 +156,10 @@ jobs:
         if: env.has_coverage == 'true'
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
-      - name: Generate coverage HTML report
+      - name: Generate coverage reports
         if: env.has_coverage == 'true'
         run: |
-          reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
+          reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html;HtmlSummary;Badges;TextSummary
 
       - name: Upload coverage report artifact
         if: env.has_coverage == 'true'
