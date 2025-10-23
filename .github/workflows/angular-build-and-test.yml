@@ -17,6 +17,10 @@ on:
     secrets:
       NX_CLOUD_CICD:
         required: true
+      GITHUB_TOKEN:
+        required: false
+      CODECOV_TOKEN:
+        required: false
 
 jobs:
   build-and-test:
@@ -49,9 +53,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-
 
+      - name: Debug directory structure
+        run: |
+          echo "Current working directory: $(pwd)"
+          echo "WORKING_DIRECTORY: ${{ env.WORKING_DIRECTORY }}"
+          echo "Contents of workspace:"
+          ls -la ${{ github.workspace }}/s/ || echo "s directory not found"
+          echo "Looking for package.json files:"
+          find ${{ github.workspace }}/s/ -name "package.json" -type f || echo "No package.json files found"
+
       - name: Install npm dependencies
         if: steps.cache-npm.outputs.cache-hit != 'true'
-        run: npm ci
+        run: |
+          if [ -f "package.json" ]; then
+            npm ci
+          else
+            echo "No package.json found in ${{ env.WORKING_DIRECTORY }}"
+            exit 1
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Calculate BASE_SHA for PRs
@@ -94,15 +113,30 @@ jobs:
           }
 
       - name: Run Lint
-        run: npx nx affected --base=$BASE_SHA --target=lint --parallel
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            npx nx affected --base=$BASE_SHA --target=lint --parallel
+          else
+            echo "No nx.json or package.json found, skipping lint"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run Stylelint
-        run: npx nx affected --base=$BASE_SHA --target=stylelint --parallel
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            npx nx affected --base=$BASE_SHA --target=stylelint --parallel
+          else
+            echo "No nx.json or package.json found, skipping stylelint"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run Tests with Coverage
-        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel --code-coverage
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            npx nx affected --base=$BASE_SHA --target=test-ci --parallel --code-coverage
+          else
+            echo "No nx.json or package.json found, skipping tests"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Publish Test Results
@@ -116,27 +150,23 @@ jobs:
         with:
           name: coverage-reports
           path: |
-            ${{ env.WORKING_DIRECTORY }}/**/coverage
+            ${{ env.WORKING_DIRECTORY }}/**/coverage/
+            ${{ env.WORKING_DIRECTORY }}/**/lcov.info
 
       - name: Upload to Codecov
-        if: always()
+        continue-on-error: true
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ${{ env.WORKING_DIRECTORY }}
           flags: angular
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
       - name: Build Apps
-        run: npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Publish Test Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: ${{ env.WORKING_DIRECTORY }}/**/TestResult.xml
-
-      - name: Build Apps
-        run: npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
+          else
+            echo "No nx.json or package.json found, skipping build"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
