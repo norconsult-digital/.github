@@ -6,7 +6,7 @@ on:
       vmImage:
         required: false
         type: string
-        default: "ubuntu-latest"
+        default: 'ubuntu-latest'
       projectDir:
         required: true
         type: string
@@ -15,7 +15,7 @@ on:
         type: string
       dotnetVersion:
         required: false
-        default: "8.*"
+        default: '8.*'
         type: string
     secrets:
       ADO_NUGET_PAT:
@@ -24,59 +24,50 @@ jobs:
   build-and-test:
     runs-on: ${{ inputs.vmImage }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+    - name: Checkout code
+      uses: actions/checkout@v5
 
-      - name: Setup dotnet ${{ inputs.dotnetVersion }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ inputs.dotnetVersion }}
+    - name: Setup dotnet ${{ inputs.dotnetVersion }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnetVersion }}
 
-      - name: Replace ADO Nuget feed token in NuGet.Config
-        run: |
-          find . -name "NuGet.Config" -exec sed -i 's|<add key="ClearTextPassword" value="[^"]*" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' {} \;
+    - name: Replace ADO Nuget feed token in NuGet.Config
+      run: |
+        sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}/nuget-config/NuGet.Config
 
-      - name: Restore dependencies
-        run: |
-          # Find the first NuGet.Config file to use for restore
-          NUGET_CONFIG=$(find ${{ github.workspace }} -name "NuGet.Config" -type f | head -1)
+    - name: Restore dependencies
+      run: |
+        for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
+          dotnet restore $csproj --configfile ${{ github.workspace }}/nuget-config/NuGet.Config
+        done
 
-          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
-            if [ -n "$NUGET_CONFIG" ]; then
-              echo "Using NuGet.Config: $NUGET_CONFIG"
-              dotnet restore $csproj --configfile "$NUGET_CONFIG"
-            else
-              echo "No NuGet.Config found, using default restore"
-              dotnet restore $csproj
-            fi
-          done
+    - name: Build
+      run: |
+        for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
+          dotnet build $csproj --configuration ${{ inputs.buildConfiguration }} --no-restore
+        done
 
-      - name: Build
-        run: |
-          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet build $csproj --configuration ${{ inputs.buildConfiguration }} --no-restore
-          done
+    - name: Run tests with coverage
+      run: |
+        mkdir -p ${{ github.workspace }}/TestResults
+        for project in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name '*[T|t]ests.csproj'); do
+          dotnet test $project \
+            --configuration ${{ inputs.buildConfiguration }} \
+            --no-build --no-restore \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ${{ github.workspace }}/TestResults
+        done
 
-      - name: Run tests with coverage
-        run: |
-          mkdir -p ${{ github.workspace }}/TestResults
-          for project in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name '*[T|t]ests.csproj'); do
-            dotnet test $project \
-              --configuration ${{ inputs.buildConfiguration }} \
-              --no-build --no-restore \
-              --collect:"XPlat Code Coverage" \
-              --results-directory ${{ github.workspace }}/TestResults
-          done
+    - name: Upload code coverage results
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-coverage
+        path: ${{ github.workspace }}/TestResults
 
-      - name: Upload code coverage results
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-coverage
-          path: ${{ github.workspace }}/TestResults
-
-      - name: Publish nuget sources
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: nuget-sources
-          path: ${{ github.workspace }}/**
+    - name: Publish nuget sources
+      if: ${{ github.event_name != 'pull_request' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuget-sources
+        path: ${{ github.workspace }}/**
