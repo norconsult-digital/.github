@@ -3,7 +3,7 @@ name: .NET Test
 permissions:
   id-token: write
   contents: read
-  packages: read  
+  packages: read
 
 on:
   workflow_call:
@@ -91,13 +91,13 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path test-results
           $projects = Get-ChildItem -Path ${{ inputs.testProjects }} -Recurse -Include '*[T|t]ests.csproj'
-          
+
           Write-Output "Found $($projects.Count) test projects"
           if ($projects.Count -eq 0) {
             Write-Output "No test projects found matching pattern '${{ inputs.testProjects }}'"
             exit 0
           }
-          
+
           foreach ($project in $projects) {
             $project_name = [System.IO.Path]::GetFileNameWithoutExtension($project.FullName)
             Write-Output "Processing: $project_name"
