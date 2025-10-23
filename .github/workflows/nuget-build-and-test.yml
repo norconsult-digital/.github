@@ -50,10 +50,12 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        echo "Available .csproj files:"
-        find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"
+        echo "Repository structure:"
+        ls -la ${{ github.workspace }}
+        echo "All .csproj files in entire repo:"
+        find ${{ github.workspace }} -name "*.csproj" | head -20
         mkdir -p ${{ github.workspace }}/TestResults
-        find ${{ github.workspace }}/${{ inputs.projectDir }} -name '*[Tt]est*.csproj' -exec dotnet test {} --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore --collect:"XPlat Code Coverage" --results-directory ${{ github.workspace }}/TestResults \;
+        find ${{ github.workspace }} -name '*[Tt]est*.csproj' -exec dotnet test {} --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore --collect:"XPlat Code Coverage" --results-directory ${{ github.workspace }}/TestResults \;
 
     - name: Upload code coverage results
       uses: actions/upload-artifact@v4
