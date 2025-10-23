@@ -17,8 +17,6 @@ on:
     secrets:
       NX_CLOUD_CICD:
         required: true
-      GITHUB_TOKEN:
-        required: false
       CODECOV_TOKEN:
         required: false
 
