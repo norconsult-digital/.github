@@ -50,6 +50,8 @@ jobs:
 
     - name: Run tests with coverage
       run: |
+        echo "Available .csproj files:"
+        find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"
         mkdir -p ${{ github.workspace }}/TestResults
         find ${{ github.workspace }}/${{ inputs.projectDir }} -name '*[Tt]est*.csproj' -exec dotnet test {} --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore --collect:"XPlat Code Coverage" --results-directory ${{ github.workspace }}/TestResults \;
 
