@@ -52,15 +52,19 @@ jobs:
             ${{ runner.os }}-npm-
 
       - name: Validate workspace directory
+        id: validate-dir
         run: |
           if [ ! -d "${{ env.WORKING_DIRECTORY }}" ]; then
             echo "Directory ${{ env.WORKING_DIRECTORY }} does not exist"
             echo "This repository may not have an Angular project at the specified path"
+            echo "SKIP_ANGULAR_STEPS=true" >> $GITHUB_OUTPUT
             exit 0
+          else
+            echo "SKIP_ANGULAR_STEPS=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Install npm dependencies
-        if: steps.cache-npm.outputs.cache-hit != 'true'
+        if: steps.cache-npm.outputs.cache-hit != 'true' && steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           if [ -f "package.json" ]; then
             echo "Installing dependencies from package.json..."
@@ -72,7 +76,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Calculate BASE_SHA for PRs
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           pr="${{ github.event.pull_request.base.ref }}"
           baseSha=$(git merge-base origin/$pr HEAD)
@@ -81,7 +85,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Calculate BASE_SHA for feature branches
-        if: contains(github.ref, 'feature')
+        if: contains(github.ref, 'feature') && steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           baseSha=$(git merge-base origin/main HEAD)
           echo "Calculated BASE_SHA: $baseSha"
@@ -89,7 +93,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Calculate BASE_SHA for other branches
-        if: github.event_name != 'pull_request' && !contains(github.ref, 'feature')
+        if: github.event_name != 'pull_request' && !contains(github.ref, 'feature') && steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           baseSha=$(git rev-parse HEAD~1)
           echo "Calculated BASE_SHA: $baseSha"
@@ -111,6 +115,7 @@ jobs:
           }
 
       - name: Run Lint
+        if: steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           if [ -f "nx.json" ] || [ -f "package.json" ]; then
             echo "Running lint..."
@@ -121,6 +126,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run Stylelint
+        if: steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           if [ -f "nx.json" ] || [ -f "package.json" ]; then
             echo "Running stylelint..."
@@ -131,6 +137,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run Tests with Coverage
+        if: steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           if [ -f "nx.json" ] || [ -f "package.json" ]; then
             echo "Running tests with coverage..."
@@ -141,12 +148,14 @@ jobs:
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Publish Test Results
+        if: steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: ${{ env.WORKING_DIRECTORY }}/**/TestResult.xml
 
       - name: Upload Coverage Report
+        if: steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-reports
@@ -155,6 +164,7 @@ jobs:
             ${{ env.WORKING_DIRECTORY }}/**/lcov.info
 
       - name: Upload to Codecov
+        if: steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         continue-on-error: true
         uses: codecov/codecov-action@v4
         with:
@@ -164,6 +174,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Build Apps
+        if: steps.validate-dir.outputs.SKIP_ANGULAR_STEPS != 'true'
         run: |
           if [ -f "nx.json" ] || [ -f "package.json" ]; then
             echo "Building applications..."
