@@ -34,12 +34,21 @@ jobs:
 
       - name: Replace ADO Nuget feed token in NuGet.Config
         run: |
-          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}/nuget-config/NuGet.Config
+          find . -name "NuGet.Config" -exec sed -i 's|<add key="ClearTextPassword" value="[^"]*" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' {} \;
 
       - name: Restore dependencies
         run: |
+          # Find the first NuGet.Config file to use for restore
+          NUGET_CONFIG=$(find ${{ github.workspace }} -name "NuGet.Config" -type f | head -1)
+
           for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet restore $csproj --configfile ${{ github.workspace }}/nuget-config/NuGet.Config
+            if [ -n "$NUGET_CONFIG" ]; then
+              echo "Using NuGet.Config: $NUGET_CONFIG"
+              dotnet restore $csproj --configfile "$NUGET_CONFIG"
+            else
+              echo "No NuGet.Config found, using default restore"
+              dotnet restore $csproj
+            fi
           done
 
       - name: Build
