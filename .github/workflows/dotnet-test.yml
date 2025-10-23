@@ -86,7 +86,7 @@ jobs:
               }
           }
 
-      - name: Run tests with build verification
+      - name: Run tests with coverage and build verification
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-results
@@ -98,17 +98,20 @@ jobs:
             dotnet build $project.FullName --configuration ${{ inputs.buildConfiguration }}
             if ($LASTEXITCODE -ne 0) {
               Write-Output "Build failed: $project_name"
-              exit 1  # Stops execution if build fails
+              exit 1
             }
 
-            # Proceed to test
-            dotnet test $project.FullName --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore --logger "trx;LogFileName=$(Get-Location)/test-results/$project_name.trx" --verbosity quiet
-
+            # Test and collect coverage
+            dotnet test $project.FullName `
+              --configuration ${{ inputs.buildConfiguration }} `
+              --no-build --no-restore `
+              --logger "trx;LogFileName=$(Get-Location)/test-results/$project_name.trx" `
+              --verbosity normal `
+              --collect:"XPlat Code Coverage"
             if ($LASTEXITCODE -ne 0) {
               Write-Output "Tests failed: $project_name"
             }
           }
-
       - name: Check for TRX files
         id: present_test_summary_check
         if: always()
@@ -134,3 +137,34 @@ jobs:
           path: test-results/*.trx
           reporter: dotnet-trx
           output-to: "step-summary"
+
+      - name: Find coverage files
+        id: find_coverage
+        run: |
+          $coverageFiles = Get-ChildItem -Recurse -Filter "coverage.cobertura.xml" | Select-Object -ExpandProperty FullName
+          if ($coverageFiles) {
+            Write-Output "Found coverage files:"
+            Write-Output $coverageFiles
+            echo "coverage_files=$($coverageFiles -join ',')" >> $env:GITHUB_ENV
+            echo "has_coverage=true" >> $env:GITHUB_ENV
+          } else {
+            Write-Output "No coverage files found."
+            echo "has_coverage=false" >> $env:GITHUB_ENV
+          }
+
+      - name: Install ReportGenerator
+        if: env.has_coverage == 'true'
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate coverage HTML report
+        if: env.has_coverage == 'true'
+        run: |
+          reportgenerator -reports:**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
+
+      - name: Upload coverage report artifact
+        if: env.has_coverage == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+
