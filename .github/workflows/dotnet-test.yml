@@ -160,26 +160,26 @@ jobs:
         id: find_coverage
         shell: pwsh
         run: |
-          Write-Output "=== Looking for coverage files ==="
-          # Look for common coverage file patterns
-          $coverageFiles = @()
-          $coverageFiles += Get-ChildItem -Recurse -Filter "coverage.cobertura.xml" -ErrorAction SilentlyContinue
-          $coverageFiles += Get-ChildItem -Recurse -Filter "*.cobertura.xml" -ErrorAction SilentlyContinue
-          $coverageFiles += Get-ChildItem -Recurse -Filter "coverage.xml" -ErrorAction SilentlyContinue
-          $coverageFiles += Get-ChildItem -Recurse -Path "TestResults" -Filter "*.xml" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*coverage*" }
+          # Simple check - if TestResults directory exists and has XML files, assume we have coverage
+          $hasTestResults = Test-Path "TestResults"
+          $xmlFilesInTestResults = 0
 
-          # Remove duplicates
-          $coverageFiles = $coverageFiles | Sort-Object FullName | Get-Unique -AsString
+          if ($hasTestResults) {
+            $xmlFilesInTestResults = (Get-ChildItem -Path "TestResults" -Filter "*.xml" -Recurse -ErrorAction SilentlyContinue).Count
+            Write-Output "TestResults directory found with $xmlFilesInTestResults XML files"
+          } else {
+            Write-Output "No TestResults directory found"
+          }
 
-          Write-Output "All XML files found:"
-          Get-ChildItem -Recurse -Filter "*.xml" -ErrorAction SilentlyContinue | Select-Object FullName, Name | Format-Table -AutoSize
+          # Show what we found for debugging
+          Write-Output "All XML files in workspace:"
+          Get-ChildItem -Recurse -Filter "*.xml" -ErrorAction SilentlyContinue | Select-Object FullName | Format-List
 
-          if ($coverageFiles -and $coverageFiles.Count -gt 0) {
-            Write-Output "`n✅ Found coverage files:"
-            $coverageFiles | ForEach-Object { Write-Output $_.FullName }
+          if ($hasTestResults -and $xmlFilesInTestResults -gt 0) {
+            Write-Output "✅ Coverage data appears to be available"
             echo "has_coverage=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Output "`n❌ No coverage files found."
+            Write-Output "❌ No coverage data found"
             echo "has_coverage=false" >> $env:GITHUB_OUTPUT
           }
 
