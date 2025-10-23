@@ -101,8 +101,34 @@ jobs:
         run: npx nx affected --base=$BASE_SHA --target=stylelint --parallel
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
-      - name: Run Tests
-        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel
+      - name: Run Tests with Coverage
+        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel --code-coverage
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Publish Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ env.WORKING_DIRECTORY }}/**/TestResult.xml
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            ${{ env.WORKING_DIRECTORY }}/**/coverage
+
+      - name: Upload to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ${{ env.WORKING_DIRECTORY }}
+          flags: angular
+          fail_ci_if_error: true
+
+      - name: Build Apps
+        run: npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Publish Test Results
