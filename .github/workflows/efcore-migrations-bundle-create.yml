@@ -72,6 +72,9 @@ jobs:
               }
           }
 
+      - name: Restore project dependencies
+        run: dotnet restore
+
       - name: Create dotnet ef migrations bundle
         run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --verbose --output migrations-bundle/migrations-bundle.exe
 
