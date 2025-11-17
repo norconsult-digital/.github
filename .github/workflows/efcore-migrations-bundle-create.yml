@@ -72,6 +72,13 @@ jobs:
               }
           }
 
+      - name: Restore project dependencies
+        shell: bash
+        run: |
+          projectPath=$(echo "${{ inputs.migrationBundleArguments }}" | awk '{print $2}')
+          echo "Restoring project: $projectPath"
+          dotnet restore "$projectPath"
+          
       - name: Create dotnet ef migrations bundle
         run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --verbose --output migrations-bundle/migrations-bundle.exe
 
