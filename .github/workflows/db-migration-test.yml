@@ -1,0 +1,71 @@
+name: Test dbConnections Parameter
+
+on:
+  workflow_call:
+    inputs:
+      dbConnection:
+        description: 'Single DB connection string (legacy)'
+        required: false
+        type: string
+      dbConnections:
+        description: 'Multiple DB connections as JSON array'
+        required: false
+        default: '[]'
+        type: string
+
+jobs:
+  test-migrations-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if migrations artifact would be downloaded
+        run: |
+          echo "=== Artifact Download Check ==="
+          echo "Condition: inputs.dbConnection != '' || (inputs.dbConnections != '' && inputs.dbConnections != '[]')"
+          echo "dbConnection: '${{ inputs.dbConnection }}'"
+          echo "dbConnections: '${{ inputs.dbConnections }}'"
+          echo ""
+          
+      - name: Would download artifact
+        if: ${{ inputs.dbConnection != '' || (inputs.dbConnections != '' && inputs.dbConnections != '[]') }}
+        run: echo "✅ Would download migrations-bundle artifact"
+          
+      - name: Would skip artifact
+        if: ${{ inputs.dbConnection == '' && (inputs.dbConnections == '' || inputs.dbConnections == '[]') }}
+        run: echo "⏭️  Would skip downloading migrations-bundle artifact (no connections provided)"
+
+      - name: Test single dbConnection parameter
+        if: ${{ inputs.dbConnection != '' }}
+        run: |
+          echo ""
+          echo "=== Testing single dbConnection ==="
+          echo "Connection string received: '${{ inputs.dbConnection }}'"
+          echo ""
+          echo "Would execute:"
+          echo "  chmod +x ./migrations-bundle.exe"
+          echo "  ./migrations-bundle.exe --connection '${{ inputs.dbConnection }}' --verbose"
+
+      - name: Test multiple dbConnections parameter
+        if: ${{ inputs.dbConnections != '' && inputs.dbConnections != '[]' }}
+        run: |
+          echo ""
+          echo "=== Testing multiple dbConnections ==="
+          echo "JSON array received: ${{ inputs.dbConnections }}"
+          echo ""
+          echo "Would execute:"
+          echo "  chmod +x ./migrations-bundle.exe"
+          echo ""
+          echo "Parsing and iterating over connections:"
+          echo '${{ inputs.dbConnections }}' | jq -c '.[]' | while read -r connection; do
+            echo "  → Connection: $connection"
+            echo "    Command: ./migrations-bundle.exe --connection \"$connection\" --verbose"
+            echo ""
+          done
+
+      - name: Test empty/no parameters
+        if: ${{ inputs.dbConnection == '' && (inputs.dbConnections == '' || inputs.dbConnections == '[]') }}
+        run: |
+          echo ""
+          echo "=== No database connections provided ==="
+          echo "⏭️  Neither dbConnection nor dbConnections were provided."
+          echo "⏭️  Migrations artifact would NOT be downloaded."
+          echo "⏭️  All migration steps would be skipped."

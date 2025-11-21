@@ -1,0 +1,113 @@
+name: User Api - Fetch DB Instances
+
+on:
+  workflow_call:
+    inputs:
+      userApiUrl:
+        description: "User Api Base Url"
+        required: true
+        type: string
+      b2cDomain:
+        description: "B2C Domain"
+        required: true
+        type: string
+      tenantIdB2c:
+        description: "B2C Tenant ID to get access token"
+        required: false
+        type: string
+      clientId:
+        description: "ClientId ServiceUser/ApplicationId"
+        required: true
+        type: string
+    secrets:
+      connectionStringTemplate:
+        description: "Connection string template with {DATABASE_NAME} placeholder (e.g., 'Server=myserver.database.windows.net;Database={DATABASE_NAME};User ID=admin;Password=***')"
+        required: false
+    outputs:
+      connectionStrings:
+        description: "JSON array of database connection strings"
+        value: ${{ jobs.fetch-db-instances.outputs.connectionStrings }}
+
+jobs:
+  fetch-db-instances:
+    runs-on: ubuntu-latest
+    outputs:
+      connectionStrings: ${{ steps.parse_instances.outputs.connectionStrings }}
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in with Azure (Federated Creds)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.clientId }}
+          tenant-id: ${{ inputs.tenantIdB2c }}
+          allow-no-subscriptions: true
+
+      - name: Get Access Token
+        id: get_token
+        run: |
+          ACCESS_TOKEN=$(az account get-access-token \
+            --resource "https://${{ inputs.b2cDomain }}/${{ inputs.clientId }}" \
+            --query accessToken -o tsv)
+          echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Verify Access Token
+        run: |
+          if [ -n "${{ steps.get_token.outputs.token }}" ]; then
+            echo "Token: ***"
+          else
+            echo "Token: Empty"
+            exit 1
+          fi
+
+      - name: Get db names from user-api
+        id: call_api
+        env:
+          ACCESS_TOKEN: ${{ steps.get_token.outputs.token }}
+        run: |
+          echo "Calling API..."
+          RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" -X GET \
+            "https://${{ inputs.userApiUrl }}/api/databasesetup/instancenames-for-serviceuser" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}")
+
+          BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
+          STATUS=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+
+          echo "HTTP status: $STATUS"
+
+          BODY_ESCAPED=$(echo "$BODY" | jq -c .)
+          echo "response=$BODY_ESCAPED" >> $GITHUB_OUTPUT
+
+      - name: Create connection strings
+        id: parse_instances
+        env:
+          CONNECTION_TEMPLATE: ${{ secrets.connectionStringTemplate }}
+        run: |
+          # Parse database names from API response
+          INSTANCES=$(echo '${{ steps.call_api.outputs.response }}' | jq -c '.databaseInstanceNames')
+          echo "instances=$INSTANCES" >> $GITHUB_OUTPUT
+          echo "Database instances: $INSTANCES"
+          
+          # Transform to connection strings if template provided
+          if [ -z "$CONNECTION_TEMPLATE" ]; then
+            echo "No connection string template provided, skipping transformation"
+            echo "connectionStrings=[]" >> $GITHUB_OUTPUT
+          else
+            CONNECTION_STRINGS=$(echo "$INSTANCES" | jq -r --arg template "$CONNECTION_TEMPLATE" '
+              map($template | gsub("{DATABASE_NAME}"; .))
+            ' | jq -c .)
+            
+            echo "connectionStrings=$CONNECTION_STRINGS" >> $GITHUB_OUTPUT
+            echo "::add-mask::$CONNECTION_STRINGS"
+            
+            echo "$INSTANCES" | jq -r '.[]' | while read -r name; do
+              echo "Generated connection string for: $name"
+            done
+          fi
+
