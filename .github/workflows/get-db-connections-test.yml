@@ -22,6 +22,7 @@ on:
       connectionStringTemplate:
         description: "Connection string template with {DATABASE_NAME} placeholder (e.g., 'Server=myserver.database.windows.net;Database={DATABASE_NAME};User ID=admin;Password=***')"
         required: false
+        type: string
     outputs:
       connectionStrings:
         description: "JSON array of database connection strings"
