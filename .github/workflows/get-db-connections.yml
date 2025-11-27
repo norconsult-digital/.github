@@ -71,7 +71,6 @@ jobs:
         env:
           ACCESS_TOKEN: ${{ steps.get_token.outputs.token }}
         run: |
-          echo "Calling API..."
           RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" -X GET \
             "https://${{ inputs.userApiUrl }}/api/databasesetup/instancenames" \
             -H "Authorization: Bearer ${ACCESS_TOKEN}")
@@ -92,7 +91,6 @@ jobs:
           # Parse database names from API response
           INSTANCES=$(echo '${{ steps.call_api.outputs.response }}' | jq -c '[.databaseInstances[].name]')
           echo "instances=$INSTANCES" >> $GITHUB_OUTPUT
-          echo "Database instances: $INSTANCES"
           
           # Build connection strings from template
           CONNECTION_STRINGS=$(echo "$INSTANCES" | jq -c --arg template "$CONNECTION_TEMPLATE" '
@@ -100,8 +98,3 @@ jobs:
           ')
           
           echo "connectionStrings=$CONNECTION_STRINGS" >> $GITHUB_OUTPUT
-          echo "::add-mask::$CONNECTION_STRINGS"
-          
-          echo "$INSTANCES" | jq -r '.[]' | while read -r name; do
-            echo "Generated connection string for: $name"
-          done
