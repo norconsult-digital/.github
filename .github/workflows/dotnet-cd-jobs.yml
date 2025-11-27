@@ -102,7 +102,6 @@ jobs:
         run: |
           chmod +x ./migrations-bundle.exe
           echo '${{ inputs.dbConnections }}' | jq -r '.[]' | while read -r connection; do
-            echo "Running migrations for connection..."
             ./migrations-bundle.exe --connection "$connection" --verbose
           done
         working-directory: ./migrations-bundle
