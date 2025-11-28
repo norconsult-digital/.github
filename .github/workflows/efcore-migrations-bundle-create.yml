@@ -75,10 +75,26 @@ jobs:
       - name: Restore project dependencies
         shell: bash
         run: |
-          projectPath=$(echo "${{ inputs.migrationBundleArguments }}" | awk '{print $2}')
-          echo "Restoring project: $projectPath"
-          dotnet restore "$projectPath"
-          
+          args="${{ inputs.migrationBundleArguments }}"
+          projectPath=$(echo "$args" | grep -oE '(--project|-p)[[:space:]]+[^ ]+' | awk '{print $2}')
+          startupProjectPath=$(echo "$args" | grep -oE '(--startup-project|-s)[[:space:]]+[^ ]+' | awk '{print $2}')
+
+          if [ -z "$projectPath" ] && [ -z "$startupProjectPath" ]; then
+            echo "ERROR: Could not extract project paths from migrationBundleArguments"
+            echo "Arguments: $args"
+            exit 1
+          fi
+
+          if [ -n "$projectPath" ]; then
+            echo "Restoring project: $projectPath"
+            dotnet restore "$projectPath"
+          fi
+
+          if [ -n "$startupProjectPath" ] && [ "$startupProjectPath" != "$projectPath" ]; then
+            echo "Restoring startup project: $startupProjectPath"
+            dotnet restore "$startupProjectPath"
+          fi
+
       - name: Create dotnet ef migrations bundle
         run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --verbose --output migrations-bundle/migrations-bundle.exe
 
