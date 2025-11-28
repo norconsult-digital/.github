@@ -72,11 +72,11 @@ jobs:
               }
           }
 
-      - name: Restore project dependencies
+      - name: Restore project dependencies from migrationBundleArguments
         shell: bash
         run: |
           # Extracts --project and --startup-project paths from migrationBundleArguments and restores them
-          # Handles both quoted and unquoted paths, and both long and short argument forms
+          # Handles quoted and unquoted paths, and both long and short argument forms
 
           args="${{ inputs.migrationBundleArguments }}"
 
@@ -95,18 +95,18 @@ jobs:
           if [ -z "$projectPath" ] && [ -z "$startupProjectPath" ]; then
             echo "ERROR: Could not extract project paths from migrationBundleArguments"
             echo "Arguments received: $args"
-            echo "Expected format examples: '--project path/to/project' or '--startup-project path/to/project'"
-            echo "Supported options: --project, -p, --startup-project, -s"
+            echo "Example 1: '-p /path/to/project.csproj -s /path/to/startup.csproj'"
+            echo "Example 2: '--project \"/path/to/project.csproj\" --startup-project \"/path/to/startup.csproj\"'"
             exit 1
           fi
 
           if [ -n "$projectPath" ]; then
-            echo "Restoring project: $projectPath"
+            echo "Restoring --project path from migrationBundleArguments: $projectPath"
             dotnet restore "$projectPath"
           fi
 
           if [ -n "$startupProjectPath" ] && [ "$startupProjectPath" != "$projectPath" ]; then
-            echo "Restoring startup project: $startupProjectPath"
+            echo "Restoring --startup-project from migrationBundleArguments: $startupProjectPath"
             dotnet restore "$startupProjectPath"
           fi
 
