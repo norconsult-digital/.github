@@ -75,9 +75,22 @@ jobs:
       - name: Restore project dependencies
         shell: bash
         run: |
+          # Extracts --project and --startup-project paths from migrationBundleArguments and restores them
+          # Handles both quoted and unquoted paths, and both long and short argument forms
+
           args="${{ inputs.migrationBundleArguments }}"
-          projectPath=$(echo "$args" | grep -oE '(--project|-p)[[:space:]]+[^ ]+' | awk '{print $2}')
-          startupProjectPath=$(echo "$args" | grep -oE '(--startup-project|-s)[[:space:]]+[^ ]+' | awk '{print $2}')
+
+          if [[ "$args" =~ (--project|-p)[[:space:]]+\"([^\"]+)\" ]]; then
+            projectPath="${BASH_REMATCH[2]}"
+          elif [[ "$args" =~ (--project|-p)[[:space:]]+([^[:space:]]+) ]]; then
+            projectPath="${BASH_REMATCH[2]}"
+          fi
+
+          if [[ "$args" =~ (--startup-project|-s)[[:space:]]+\"([^\"]+)\" ]]; then
+            startupProjectPath="${BASH_REMATCH[2]}"
+          elif [[ "$args" =~ (--startup-project|-s)[[:space:]]+([^[:space:]]+) ]]; then
+            startupProjectPath="${BASH_REMATCH[2]}"
+          fi
 
           if [ -z "$projectPath" ] && [ -z "$startupProjectPath" ]; then
             echo "ERROR: Could not extract project paths from migrationBundleArguments"
