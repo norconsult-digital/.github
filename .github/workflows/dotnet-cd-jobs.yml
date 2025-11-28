@@ -98,7 +98,7 @@ jobs:
         working-directory: ./migrations-bundle  
 
       - name: Run migrations for multiple DB connections
-        if: ${{ inputs.migrationBundleArguments != '' && inputs.dbConnections != '[]' }}
+        if: ${{ inputs.migrationBundleArguments != '' && length(fromJSON(inputs.dbConnections)) > 0 }}
         run: |
           chmod +x ./migrations-bundle.exe
           echo '${{ inputs.dbConnections }}' | jq -r '.[]' | while read -r connection; do
