@@ -34,6 +34,11 @@ on:
       dbConnection: 
         required: false
         type: string
+      dbConnections:
+        description: "Multiple DB connections as JSON array"
+        required: false
+        default: "[]"
+        type: string
       optionalDbConnection1: 
         required: false
         type: string
@@ -86,11 +91,20 @@ jobs:
           path: migrations-bundle
 
       - name: Set executable permission for migrations-bundle and run
-        if: ${{ inputs.migrationBundleArguments != '' }}
+        if: ${{ inputs.migrationBundleArguments != '' && inputs.dbConnection != '' }}
         run: |
           chmod +x ./migrations-bundle.exe
           ./migrations-bundle.exe --connection '${{ inputs.dbConnection }}' --verbose
         working-directory: ./migrations-bundle  
+
+      - name: Run migrations for multiple DB connections
+        if: ${{ inputs.migrationBundleArguments != '' && length(fromJSON(inputs.dbConnections)) > 0 }}
+        run: |
+          chmod +x ./migrations-bundle.exe
+          echo '${{ inputs.dbConnections }}' | jq -r '.[]' | while read -r connection; do
+            ./migrations-bundle.exe --connection "$connection" --verbose
+          done
+        working-directory: ./migrations-bundle
 
       # TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
       - name: Run migrations for optionalDbConnection1 if provided
