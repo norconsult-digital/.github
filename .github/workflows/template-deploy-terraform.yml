@@ -95,6 +95,7 @@ jobs:
         with:
           client-id: ${{ inputs.armClientIdPlan }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
 
       - name: Find required Terraform version
         id: tf-required-version
@@ -237,6 +238,7 @@ jobs:
         with:
           client-id: ${{ inputs.armClientIdApply }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
 
       - name: Install kubelogin
         if: ${{ inputs.installKubelogin == true }}
