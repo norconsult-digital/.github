@@ -89,6 +89,13 @@ jobs:
       - name: Set ARM_CLIENT_ID for Plan
         run: echo "ARM_CLIENT_ID=${{ inputs.armClientIdPlan }}" >> $GITHUB_ENV
 
+      # Azure Login for DefaultAzureCredential support
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.armClientIdPlan }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+
       - name: Find required Terraform version
         id: tf-required-version
         run: |
@@ -223,6 +230,13 @@ jobs:
       # Set ARM_CLIENT_ID for terraform-apply
       - name: Set ARM_CLIENT_ID for Apply
         run: echo "ARM_CLIENT_ID=${{ inputs.armClientIdApply }}" >> $GITHUB_ENV
+
+      # Azure Login for DefaultAzureCredential support
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.armClientIdApply }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
 
       - name: Install kubelogin
         if: ${{ inputs.installKubelogin == true }}
