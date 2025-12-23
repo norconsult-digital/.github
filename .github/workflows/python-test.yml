@@ -103,6 +103,10 @@ jobs:
         working-directory: ${{ inputs.projectPath }}
         run: |
           mkdir -p test-results coverage-results
+          # Ensure virtual environment exists
+          if [ ! -d ".venv" ]; then
+            uv venv
+          fi
           uv pip install coverage pytest
           uv run coverage run -m pytest -v --tb=short --durations=10 --junitxml=test-results/test-results.xml ${{ inputs.testPaths }}
           uv run coverage xml -o coverage-results/coverage.xml
