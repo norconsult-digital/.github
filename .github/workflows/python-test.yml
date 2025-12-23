@@ -78,7 +78,7 @@ jobs:
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles(format('{0}/**/*.lock', inputs.projectPath)) }}
 
       #----------------------------------------------
-      # install dependencies if  pyproject.toml exists
+      # install dependencies if pyproject.toml exists
       #----------------------------------------------
       - name: Install dependencies
         working-directory: ${{ inputs.projectPath }}
