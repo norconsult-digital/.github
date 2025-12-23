@@ -104,7 +104,7 @@ jobs:
         run: |
           mkdir -p test-results coverage-results
           uv pip install coverage pytest
-          uv run coverage run -m pytest -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
+          uv run coverage run -m pytest -v --tb=short --durations=10 --junitxml=test-results/test-results.xml ${{ inputs.testPaths }}
           uv run coverage xml -o coverage-results/coverage.xml
 
       #----------------------------------------------
