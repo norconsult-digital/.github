@@ -17,6 +17,8 @@ on:
     secrets:
       NX_CLOUD_CICD:
         required: true
+      CODECOV_TOKEN:
+        required: false
 
 jobs:
   build-and-test:
@@ -35,6 +37,18 @@ jobs:
           path: s
           fetch-depth: 0
 
+      - name: Validate Angular workspace
+        run: |
+          if [ ! -d "${{ env.WORKING_DIRECTORY }}" ]; then
+            echo "❌ ERROR: Angular workspace directory not found: ${{ env.WORKING_DIRECTORY }}"
+            echo "Expected directory structure: ${{ github.workspace }}/s/${{ inputs.workspaceDir }}"
+            echo "This workflow requires a valid Angular project directory."
+            echo "Please check the 'workspaceDir' input parameter matches your Angular project folder."
+            exit 1
+          else
+            echo "✅ Angular workspace directory found: ${{ env.WORKING_DIRECTORY }}"
+          fi
+
       - name: Setup .NET 9
         uses: actions/setup-dotnet@v4
         with:
@@ -51,7 +65,14 @@ jobs:
 
       - name: Install npm dependencies
         if: steps.cache-npm.outputs.cache-hit != 'true'
-        run: npm ci
+        run: |
+          if [ -f "package.json" ]; then
+            echo "Installing dependencies from package.json..."
+            npm ci
+          else
+            echo "No package.json found - this may not be an Angular project"
+            exit 1
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Calculate BASE_SHA for PRs
@@ -94,15 +115,33 @@ jobs:
           }
 
       - name: Run Lint
-        run: npx nx affected --base=$BASE_SHA --target=lint --parallel
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            echo "Running lint..."
+            npx nx affected --base=$BASE_SHA --target=lint --parallel
+          else
+            echo "Skipping lint - no nx.json or package.json found"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Run Stylelint
-        run: npx nx affected --base=$BASE_SHA --target=stylelint --parallel
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            echo "Running stylelint..."
+            npx nx affected --base=$BASE_SHA --target=stylelint --parallel
+          else
+            echo "Skipping stylelint - no nx.json or package.json found"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
-      - name: Run Tests
-        run: npx nx affected --base=$BASE_SHA --target=test-ci --parallel
+      - name: Run Tests with Coverage
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            echo "Running tests with coverage..."
+            npx nx affected --base=$BASE_SHA --target=test-ci --parallel --code-coverage
+          else
+            echo "Skipping tests - no nx.json or package.json found"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
 
       - name: Publish Test Results
@@ -111,6 +150,29 @@ jobs:
           name: test-results
           path: ${{ env.WORKING_DIRECTORY }}/**/TestResult.xml
 
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            ${{ env.WORKING_DIRECTORY }}/**/coverage/
+            ${{ env.WORKING_DIRECTORY }}/**/lcov.info
+
+      - name: Upload to Codecov
+        continue-on-error: true
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ${{ env.WORKING_DIRECTORY }}
+          flags: angular
+          fail_ci_if_error: false
+
       - name: Build Apps
-        run: npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
+        run: |
+          if [ -f "nx.json" ] || [ -f "package.json" ]; then
+            echo "Building applications..."
+            npx nx affected --base=$BASE_SHA --target=build --configuration=production --parallel
+          else
+            echo "Skipping build - no nx.json or package.json found"
+          fi
         working-directory: ${{ env.WORKING_DIRECTORY }}
