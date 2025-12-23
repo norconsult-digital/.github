@@ -103,7 +103,7 @@ jobs:
         working-directory: ${{ inputs.projectPath }}
         run: |
           mkdir -p test-results coverage-results
-          uv run pip install coverage pytest
+          uv pip install coverage pytest
           uv run coverage run -m pytest -v --tb=short --durations=10 --junitxml=test-results/test-results.xml
           uv run coverage xml -o coverage-results/coverage.xml
 
