@@ -97,14 +97,6 @@ jobs:
           fi
 
       #----------------------------------------------
-      #       show working directory and files
-      #----------------------------------------------
-      - name: Show working directory and files
-        working-directory: ${{ inputs.projectPath }}
-        run: |
-          pwd
-          ls -la
-    #----------------------------------------------
       #      run tests with coverage
       #----------------------------------------------
       - name: Run tests with coverage
