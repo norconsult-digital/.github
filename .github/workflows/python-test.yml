@@ -116,7 +116,7 @@ jobs:
       #----------------------------------------------
       - name: Upload coverage report
         if: always() && hashFiles(format('{0}/coverage-results/coverage.xml', inputs.projectPath)) != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-report
           path: ${{ inputs.projectPath }}/coverage-results/coverage.xml
