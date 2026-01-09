@@ -30,18 +30,18 @@ on:
 jobs:
   migrations-bundle-create:
     runs-on: ubuntu-latest
-    name: Creat Migration Bundle
+    name: Create Migration Bundle
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Default Checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
         uses: actions/setup-dotnet@v4
@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload migrations bundle as artifact
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: migrations-bundle
           path: migrations-bundle/

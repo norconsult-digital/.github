@@ -37,14 +37,14 @@ jobs:
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Default Checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Replace GitHub Packages feed token in NuGet.Config files
         shell: pwsh
@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload Docker Image as Artifact
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ inputs.artifactName }}
           path: artifact/image.tar
