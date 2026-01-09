@@ -34,14 +34,14 @@ jobs:
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Default Checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
         uses: actions/setup-dotnet@v4
