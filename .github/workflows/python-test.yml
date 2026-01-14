@@ -23,6 +23,9 @@ on:
         required: true
         type: string
         description: 'Paths to test directories or files relative to the project directory'
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}

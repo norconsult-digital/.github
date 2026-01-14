@@ -26,6 +26,9 @@ on:
         required: true
         type: string
         default: "7.*"
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   migrations-bundle-create:

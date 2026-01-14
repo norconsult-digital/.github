@@ -17,6 +17,8 @@ on:
     secrets:
       NX_CLOUD_CICD:
         required: true
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   build-and-test:
