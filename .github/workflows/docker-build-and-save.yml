@@ -29,6 +29,9 @@ on:
         required: false
         default: "container-image"
         type: string
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   docker-build-and-save:
