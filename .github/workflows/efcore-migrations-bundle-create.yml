@@ -30,7 +30,7 @@ on:
 jobs:
   migrations-bundle-create:
     runs-on: ubuntu-latest
-    name: Creat Migration Bundle
+    name: Create Migration Bundle
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
