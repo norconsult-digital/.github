@@ -40,7 +40,7 @@ jobs:
           ls -la ${{ inputs.bicepFolder }}
 
       - name: Upload Bicep files as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: bicep
           path: ${{ inputs.bicepFolder }}
