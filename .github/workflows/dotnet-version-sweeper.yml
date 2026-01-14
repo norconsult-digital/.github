@@ -8,6 +8,9 @@ on:
         type: string
         required: true
         default: "STS"
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   dotnet-version-sweeper:

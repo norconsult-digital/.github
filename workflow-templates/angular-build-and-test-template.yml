@@ -13,6 +13,8 @@ jobs:
       vmImage: ${{ inputs.vmImage }}
       workspaceDir: ${{ inputs.workspaceDir }} 
       disableNxCloud: ${{ inputs.disableNxCloud }}
+    secrets:
       NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
