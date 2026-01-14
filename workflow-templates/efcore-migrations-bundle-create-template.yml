@@ -39,3 +39,5 @@ jobs:
       migrationBundleArguments: ${{ github.event.inputs.migrationBundleArguments }}
       migrationBundleAppSettingsPath: ${{ github.event.inputs.migrationBundleAppSettingsPath }}
       dotnetVersion: ${{ github.event.inputs.dotnetVersion }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
