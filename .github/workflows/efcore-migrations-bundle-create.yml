@@ -102,16 +102,16 @@ jobs:
 
           if [ -n "$projectPath" ]; then
             echo "Restoring --project path from migrationBundleArguments: $projectPath"
-            dotnet restore "$projectPath"
+            dotnet restore "$projectPath" --runtime linux-x64
           fi
 
           if [ -n "$startupProjectPath" ] && [ "$startupProjectPath" != "$projectPath" ]; then
             echo "Restoring --startup-project from migrationBundleArguments: $startupProjectPath"
-            dotnet restore "$startupProjectPath"
+            dotnet restore "$startupProjectPath" --runtime linux-x64
           fi
 
       - name: Create dotnet ef migrations bundle
-        run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --verbose --output migrations-bundle/migrations-bundle.exe
+        run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --runtime linux-x64 --verbose --output migrations-bundle/migrations-bundle.exe
 
       - name: Copy appsettings.json to migrations-bundle
         run: cp -v ${{ inputs.migrationBundleAppSettingsPath }}/appsettings.json migrations-bundle/
