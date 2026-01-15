@@ -44,7 +44,7 @@ jobs:
           dotnet-version: 10.0.101 # hardcoded
 
       - name: Install EF tools
-        run: dotnet tool install -g dotnet-ef --version 10.0.* # hardcode version to something that works
+        run: dotnet tool install -g dotnet-ef --version 10.0.1 # hardcode version to something that works
 
       - name: Create migrations-bundle directory
         run: mkdir -p migrations-bundle
