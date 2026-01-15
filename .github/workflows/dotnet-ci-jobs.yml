@@ -68,13 +68,12 @@ jobs:
 
   create_migration_bundle:
     if: ${{ inputs.migrationBundleArguments != '' }}
-    uses: ./.github/workflows/efcore-migrations-bundle-create.yml
+    uses: ./.github/workflows/efcore-migrations-bundle-create.yml@sdk1001
     with:
       gitRepo: ${{ inputs.gitRepo }}
       nugetConfigPath: ${{ inputs.nugetConfigPath }}
       migrationBundleArguments: ${{ inputs.migrationBundleArguments }}
       migrationBundleAppSettingsPath: ${{ inputs.migrationBundleAppSettingsPath }}
-      dotnetVersion: ${{ inputs.dotnetVersion }}
 
   build_docker_image:
     needs: [test, create_migration_bundle]

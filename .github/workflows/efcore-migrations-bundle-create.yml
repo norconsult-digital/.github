@@ -21,11 +21,6 @@ on:
         description: Path to appsettings.json for the migrations bundle
         required: true
         type: string
-      dotnetVersion:
-        description: .NET SDK version to use
-        required: true
-        type: string
-        default: "7.*"
 
 jobs:
   migrations-bundle-create:
@@ -43,13 +38,13 @@ jobs:
         if: ${{ inputs.gitRepo == '' }}
         uses: actions/checkout@v5
 
-      - name: Setup dotnet ${{ inputs.dotnetVersion }}
+      - name: Setup dotnet 10.0.101 # hardcoded
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ inputs.dotnetVersion }}
+          dotnet-version: 10.0.101 # hardcoded
 
       - name: Install EF tools
-        run: dotnet tool install -g dotnet-ef --version ${{ inputs.dotnetVersion }}
+        run: dotnet tool install -g dotnet-ef --version 10.0.* # hardcode version to something that works
 
       - name: Create migrations-bundle directory
         run: mkdir -p migrations-bundle
