@@ -68,7 +68,7 @@ jobs:
 
   create_migration_bundle:
     if: ${{ inputs.migrationBundleArguments != '' }}
-    uses: ./.github/workflows/efcore-migrations-bundle-create.yml@sdk1001
+    uses: ./.github/workflows/efcore-migrations-bundle-create.yml
     with:
       gitRepo: ${{ inputs.gitRepo }}
       nugetConfigPath: ${{ inputs.nugetConfigPath }}
