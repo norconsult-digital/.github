@@ -24,6 +24,14 @@ on:
       environmentApply:
         type: string
         default: "azure-platform-tf-apply" # Default environment for terraform-apply
+      skipStateRefresh:
+        type: boolean
+        default: false
+        description: "Skip state refresh during plan to improve performance when state is known to be current"
+      refreshStateOnly:
+        type: boolean
+        default: false
+        description: "Only refresh Terraform state without planning or applying - ideal for cron schedules"
     secrets:
       APP_PEM_FILE:
         required: false
@@ -75,7 +83,62 @@ env:
   TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
 jobs:
+  terraform-refresh-only:
+    if: inputs.refreshStateOnly == true
+    runs-on: private-ubuntu-runner
+    environment: ${{ inputs.environmentPlan }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Set ARM_CLIENT_ID for terraform refresh
+      - name: Set ARM_CLIENT_ID for Refresh
+        run: echo "ARM_CLIENT_ID=${{ inputs.armClientIdPlan }}" >> $GITHUB_ENV
+
+      # Azure Login for DefaultAzureCredential support
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.armClientIdPlan }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Find required Terraform version
+        id: tf-required-version
+        run: |
+          version=$(grep -h 'required_version' ${{ inputs.path }}/*.tf | head -1 | sed -E "s/.*required_version *= *['\"]?([^'\"]*)['\"]?.*/\1/")
+          if [ -z "$version" ]; then
+            version="latest" # fallback to desired default
+          fi
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Install kubelogin
+        if: ${{ inputs.installKubelogin == true }}
+        uses: azure/use-kubelogin@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Install the latest version of Terraform CLI
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tf-required-version.outputs.version }}
+
+      # Initialize a new or existing Terraform working directory
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ inputs.path }}
+
+      # Refresh Terraform state only
+      - name: Terraform Refresh State
+        run: |
+          echo "🔄 Refreshing Terraform state to sync with actual infrastructure..."
+          terraform refresh -auto-approve
+          echo "✅ State refresh completed successfully"
+        working-directory: ${{ inputs.path }}
+
   terraform-plan:
+    if: inputs.refreshStateOnly != true
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentPlan }}
     outputs:
@@ -132,7 +195,13 @@ jobs:
       # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes.
       - name: Terraform Plan
         id: tf-plan
-        run: terraform plan -detailed-exitcode -no-color -out tfplan
+        run: |
+          if [ "${{ inputs.skipStateRefresh }}" = "true" ]; then
+            terraform plan -detailed-exitcode -no-color -out tfplan -refresh=false
+            echo "⚡ State refresh skipped for faster execution"
+          else
+            terraform plan -detailed-exitcode -no-color -out tfplan
+          fi
         working-directory: ${{ inputs.path }}
 
       # Save plan to artifacts
@@ -218,7 +287,7 @@ jobs:
 
   terraform-apply:
     name: "Terraform Apply"
-    if: github.ref == inputs.deployfrombranch && needs.terraform-plan.outputs.tfplanExitCode == 2 #exitcode 2 indicates there are pending changes
+    if: inputs.refreshStateOnly != true && github.ref == inputs.deployfrombranch && needs.terraform-plan.outputs.tfplanExitCode == 2 #exitcode 2 indicates there are pending changes
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentApply }}
     needs: [terraform-plan]
