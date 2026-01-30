@@ -131,7 +131,7 @@ jobs:
         run: docker load --input image.tar
 
       - name: Set Docker image tag
-        run: echo "imageTag=${{ inputs.environmentName }}-$(date +%s)" >> $GITHUB_ENV
+        run: echo "imageTag=dummyTest-${{ inputs.environmentName }}-Pipeline-$(date +%s)" >> $GITHUB_ENV # for making argoCD not detect new tag
 
       - name: Log in to the Azure Container Registry
         run: |
