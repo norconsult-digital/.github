@@ -1,0 +1,73 @@
+name: APIM Publish - Reusable workflow to publish APIs to Non-Prod and Prod
+
+on:
+  # Can be called from other repositories only
+  workflow_call:
+    inputs:
+      COMMIT_ID_CHOICE:
+        description: 'Choose "publish-all-artifacts-in-repo" only when you want to force republishing all artifacts (e.g. after build failure). Otherwise stick with the default behavior of "publish-artifacts-in-last-commit"'
+        required: false
+        type: string
+        default: "publish-artifacts-in-last-commit"
+      API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH:
+        description: 'Path to the artifacts folder'
+        required: false
+        type: string
+        default: "apimartifacts"
+      CONFIGURATION_PROD_YML_PATH:
+        description: 'Path to production configuration file'
+        required: false
+        type: string
+        default: "configuration.prod.yml"
+
+jobs:
+  get-commit:
+    runs-on: ubuntu-latest
+    steps:
+      # Set the COMMIT_ID env variable
+      - name: Set the Commit Id
+        id: commit
+        run: echo "commit_id=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+    outputs:
+      commit_id: ${{ steps.commit.outputs.commit_id }}
+  #Publish with Commit ID
+  Push-Changes-To-APIM-Dev-With-Commit-ID:
+    if: (github.event.inputs.COMMIT_ID_CHOICE == 'publish-artifacts-in-last-commit' || github.event.inputs.COMMIT_ID_CHOICE == '' || github.event.inputs.COMMIT_ID_CHOICE == null)
+    needs: get-commit
+    uses: ./.github/workflows/apim-run-publisher-with-env.yml
+    with:
+      API_MANAGEMENT_ENVIRONMENT: api-ops-non-prod
+      COMMIT_ID: ${{ needs.get-commit.outputs.commit_id }}
+      API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH || 'apimartifacts' }}
+    secrets: inherit
+
+  #Publish without Commit ID. Publishes all artifacts that reside in the artifacts folder
+  Push-Changes-To-APIM-Dev-Without-Commit-ID:
+    if: (github.event.inputs.COMMIT_ID_CHOICE == 'publish-all-artifacts-in-repo')
+    needs: get-commit
+    uses: ./.github/workflows/apim-run-publisher-with-env.yml
+    with:
+      API_MANAGEMENT_ENVIRONMENT: api-ops-non-prod
+      API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH || 'apimartifacts' }}
+    secrets: inherit
+
+  Push-Changes-To-APIM-Prod-With-Commit-ID:
+    if: (github.event.inputs.COMMIT_ID_CHOICE == 'publish-artifacts-in-last-commit' || github.event.inputs.COMMIT_ID_CHOICE == '' || github.event.inputs.COMMIT_ID_CHOICE == null)
+    needs: [get-commit, Push-Changes-To-APIM-Dev-With-Commit-ID]
+    uses: ./.github/workflows/apim-run-publisher-with-env.yml
+    with:
+      API_MANAGEMENT_ENVIRONMENT: api-ops-prod
+      CONFIGURATION_YML_PATH: ${{ inputs.CONFIGURATION_PROD_YML_PATH || 'configuration.prod.yml' }}
+      API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH || 'apimartifacts' }}
+      COMMIT_ID: ${{ needs.get-commit.outputs.commit_id }}
+    secrets: inherit
+
+  Push-Changes-To-APIM-Prod-Without-Commit-ID:
+    if: (github.event.inputs.COMMIT_ID_CHOICE == 'publish-all-artifacts-in-repo')
+    needs: [get-commit, Push-Changes-To-APIM-Dev-Without-Commit-ID]
+    uses: ./.github/workflows/apim-run-publisher-with-env.yml
+    with:
+      API_MANAGEMENT_ENVIRONMENT: api-ops-prod
+      CONFIGURATION_YML_PATH: ${{ inputs.CONFIGURATION_PROD_YML_PATH || 'configuration.prod.yml' }}
+      API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH || 'apimartifacts' }}
+    secrets: inherit

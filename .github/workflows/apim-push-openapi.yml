@@ -1,0 +1,104 @@
+name: APIM Push OpenAPI - Upload API Specification
+
+on:
+  workflow_call:
+    inputs:
+      API_NAME:
+        required: true
+        type: string
+        description: "Name of the API in APIM"
+      OPENAPI_FILE_PATH:
+        required: true
+        type: string
+        description: "Path to OpenAPI specification file"
+  
+  workflow_dispatch:
+    inputs:
+      API_NAME:
+        description: "Name of the API in APIM"
+        required: true
+        type: string
+      OPENAPI_FILE_PATH:
+        description: "Path to OpenAPI specification file (relative to repo root)"
+        required: true
+        type: string
+
+jobs:
+  push-openapi:
+    runs-on: ubuntu-latest
+    environment: api-ops-non-prod
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate OpenAPI file exists
+        run: |
+          if [ ! -f "${{ inputs.OPENAPI_FILE_PATH }}" ]; then
+            echo "Error: OpenAPI file not found at ${{ inputs.OPENAPI_FILE_PATH }}"
+            exit 1
+          fi
+          echo "✅ OpenAPI file found: ${{ inputs.OPENAPI_FILE_PATH }}"
+        shell: bash
+
+      - name: Import/Update API in APIM
+        run: |
+          echo "Importing API: ${{ inputs.API_NAME }}"
+          echo "From file: ${{ inputs.OPENAPI_FILE_PATH }}"
+          echo "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
+          
+          # Import or update the API
+          az apim api import \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --api-id ${{ inputs.API_NAME }} \
+            --path ${{ inputs.API_NAME }} \
+            --specification-path ${{ inputs.OPENAPI_FILE_PATH }} \
+            --specification-format OpenApi \
+            --display-name "${{ inputs.API_NAME }}" \
+            --protocols https \
+            --subscription-required true
+          
+          echo "✅ API imported successfully"
+        shell: bash
+
+      - name: Get API details
+        id: api-details
+        run: |
+          api_info=$(az apim api show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --api-id ${{ inputs.API_NAME }} \
+            --output json)
+          
+          echo "API Details:"
+          echo "$api_info" | jq '.'
+          
+          api_path=$(echo "$api_info" | jq -r '.path')
+          api_revision=$(echo "$api_info" | jq -r '.apiRevision // "1"')
+          
+          echo "api_path=$api_path" >> $GITHUB_OUTPUT
+          echo "api_revision=$api_revision" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Summary
+        run: |
+          echo "## ✅ API Push Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**API Name:** ${{ inputs.API_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** non-prod" >> $GITHUB_STEP_SUMMARY
+          echo "**OpenAPI File:** ${{ inputs.OPENAPI_FILE_PATH }}" >> $GITHUB_STEP_SUMMARY
+          echo "**API Path:** ${{ steps.api-details.outputs.api_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Revision:** ${{ steps.api-details.outputs.api_revision }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**APIM Instance:** ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+        shell: bash
