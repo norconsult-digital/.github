@@ -24,6 +24,10 @@ on:
       environmentApply:
         type: string
         default: "azure-platform-tf-apply" # Default environment for terraform-apply
+      skipStateRefresh:
+        type: boolean
+        default: false
+        description: "Skip state refresh during plan to improve performance when state is known to be current"
     secrets:
       APP_PEM_FILE:
         required: false
@@ -132,7 +136,13 @@ jobs:
       # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes.
       - name: Terraform Plan
         id: tf-plan
-        run: terraform plan -detailed-exitcode -no-color -out tfplan
+        run: |
+          if [ "${{ inputs.skipStateRefresh }}" = "true" ]; then
+            terraform plan -detailed-exitcode -no-color -out tfplan -refresh=false
+            echo "⚡ State refresh skipped for faster execution"
+          else
+            terraform plan -detailed-exitcode -no-color -out tfplan
+          fi
         working-directory: ${{ inputs.path }}
 
       # Save plan to artifacts
