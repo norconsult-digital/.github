@@ -1,0 +1,95 @@
+name: Export OpenAPI Specification
+
+on:
+  workflow_call:
+    inputs:
+      apiProject:
+        description: 'Path to the API project (e.g., admin/src/api/Admin.csproj)'
+        required: true
+        type: string
+      apiName:
+        description: 'Name of the API for the output file (e.g., bim-admin-api)'
+        required: true
+        type: string
+      dotnetVersion:
+        description: '.NET SDK version (default: 10.*)'
+        required: false
+        type: string
+        default: '10.*'
+      outputPath:
+        description: 'Output path for the OpenAPI spec (default: docs/api-specs)'
+        required: false
+        type: string
+        default: 'docs/api-specs'
+      nswagVersion:
+        description: 'NSwag.ConsoleCore version (default: 14.6.2)'
+        required: false
+        type: string
+        default: '14.6.2'
+
+jobs:
+  export-openapi:
+    name: Export OpenAPI Specification
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnetVersion }}
+
+      - name: Install NSwag CLI
+        run: |
+          # Install specific version to match project's NSwag.Core dependency
+          dotnet tool install -g NSwag.ConsoleCore --version ${{ inputs.nswagVersion }}
+
+      - name: Restore and Build
+        run: |
+          dotnet restore ${{ inputs.apiProject }}
+          dotnet build ${{ inputs.apiProject }} -c Release --no-restore
+
+      - name: Generate OpenAPI Spec with NSwag
+        run: |
+          # Create output directory
+          mkdir -p ${{ inputs.outputPath }}
+          
+          OUTPUT_FILE="${{ inputs.outputPath }}/${{ inputs.apiName }}-openapi.json"
+          
+          echo "📦 Project: ${{ inputs.apiProject }}"
+          echo "📄 Output: $OUTPUT_FILE"
+          
+          # Generate OpenAPI spec using NSwag aspnetcore2openapi
+          # This uses the project file to locate the assembly and generate spec
+          # /NoBuild:true since we already built above
+          nswag aspnetcore2openapi \
+            /project:${{ inputs.apiProject }} \
+            /output:$OUTPUT_FILE \
+            /NoBuild:true \
+            /configuration:Release
+          
+          # Validate JSON
+          if jq empty "$OUTPUT_FILE" 2>/dev/null; then
+            echo "✅ OpenAPI spec is valid JSON"
+            echo ""
+            echo "=== API Info ==="
+            jq '.info' "$OUTPUT_FILE"
+            echo ""
+            echo "=== Endpoints Count ==="
+            jq '.paths | keys | length' "$OUTPUT_FILE"
+          else
+            echo "❌ OpenAPI spec is not valid JSON"
+            echo "=== Response Content ==="
+            cat "$OUTPUT_FILE"
+            exit 1
+          fi
+
+      - name: Upload OpenAPI Spec as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.apiName }}-openapi
+          path: ${{ inputs.outputPath }}/${{ inputs.apiName }}-openapi.json
+          retention-days: 14
