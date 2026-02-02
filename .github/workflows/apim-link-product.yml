@@ -1,0 +1,200 @@
+name: APIM Link Product - Associate API with Product
+
+on:
+  workflow_call:
+    inputs:
+      API_NAME:
+        required: true
+        type: string
+        description: "Name of the API in APIM"
+      PRODUCT_NAME:
+        required: true
+        type: string
+        description: "Product name or ID to link"
+  
+  workflow_dispatch:
+    inputs:
+      API_NAME:
+        description: "Name of the API in APIM"
+        required: true
+        type: string
+      PRODUCT_NAME:
+        description: "Product name or ID to link the API to"
+        required: true
+        type: string
+
+jobs:
+  link-product:
+    runs-on: ubuntu-latest
+    environment: api-ops-non-prod
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify API exists
+        run: |
+          echo "Verifying API exists: ${{ inputs.API_NAME }}"
+          
+          api_exists=$(az apim api show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --api-id ${{ inputs.API_NAME }} \
+            --query 'name' \
+            --output tsv 2>/dev/null || echo "")
+          
+          if [ -z "$api_exists" ]; then
+            echo "❌ API not found: ${{ inputs.API_NAME }}"
+            exit 1
+          fi
+          
+          echo "✅ API verified: ${{ inputs.API_NAME }}"
+        shell: bash
+
+      - name: Verify product exists
+        id: verify-product
+        run: |
+          echo "Verifying product exists: ${{ inputs.PRODUCT_NAME }}"
+          
+          # Try to find the product by ID first, then by display name
+          product_id=$(az apim product show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --product-id ${{ inputs.PRODUCT_NAME }} \
+            --query 'name' \
+            --output tsv 2>/dev/null || echo "")
+          
+          if [ -z "$product_id" ]; then
+            # Try to find by display name
+            product_id=$(az apim product list \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+              --query "[?displayName=='${{ inputs.PRODUCT_NAME }}'].name | [0]" \
+              --output tsv 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$product_id" ]; then
+            echo "❌ Product not found: ${{ inputs.PRODUCT_NAME }}"
+            echo "Available products:"
+            az apim product list \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+              --query '[].{Name:name, DisplayName:displayName}' \
+              --output table
+            exit 1
+          fi
+          
+          echo "✅ Product verified: $product_id"
+          echo "product_id=$product_id" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Check if API is already linked to product
+        id: check-link
+        run: |
+          echo "Checking if API is already linked to product..."
+          
+          api_in_product=$(az apim product api list \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --product-id ${{ steps.verify-product.outputs.product_id }} \
+            --query "[?name=='${{ inputs.API_NAME }}'].name | [0]" \
+            --output tsv 2>/dev/null || echo "")
+          
+          if [ -n "$api_in_product" ]; then
+            echo "already_linked=true" >> $GITHUB_OUTPUT
+            echo "ℹ️ API is already linked to product"
+          else
+            echo "already_linked=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ API is not yet linked to product"
+          fi
+        shell: bash
+
+      - name: Link API to product
+        if: steps.check-link.outputs.already_linked != 'true'
+        run: |
+          echo "Linking API ${{ inputs.API_NAME }} to product ${{ steps.verify-product.outputs.product_id }}"
+          
+          az apim product api add \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --product-id ${{ steps.verify-product.outputs.product_id }} \
+            --api-id ${{ inputs.API_NAME }}
+          
+          echo "✅ API linked to product successfully"
+        shell: bash
+
+      - name: Skip linking (already linked)
+        if: steps.check-link.outputs.already_linked == 'true'
+        run: |
+          echo "ℹ️ API is already linked to product, skipping..."
+        shell: bash
+
+      - name: Verify link
+        run: |
+          echo "Verifying API-Product link..."
+          
+          apis_in_product=$(az apim product api list \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --product-id ${{ steps.verify-product.outputs.product_id }} \
+            --query '[].{Name:name, DisplayName:displayName, Path:path}' \
+            --output table)
+          
+          echo "APIs in product ${{ steps.verify-product.outputs.product_id }}:"
+          echo "$apis_in_product"
+          
+          # Check if our API is in the list
+          our_api=$(echo "$apis_in_product" | grep -i "${{ inputs.API_NAME }}" || echo "")
+          if [ -n "$our_api" ]; then
+            echo "✅ Link verified successfully"
+          else
+            echo "⚠️ Could not verify link"
+          fi
+        shell: bash
+
+      - name: Get product details
+        id: product-details
+        run: |
+          product_info=$(az apim product show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --product-id ${{ steps.verify-product.outputs.product_id }} \
+            --output json)
+          
+          display_name=$(echo "$product_info" | jq -r '.displayName')
+          state=$(echo "$product_info" | jq -r '.state')
+          subscription_required=$(echo "$product_info" | jq -r '.subscriptionRequired')
+          
+          echo "display_name=$display_name" >> $GITHUB_OUTPUT
+          echo "state=$state" >> $GITHUB_OUTPUT
+          echo "subscription_required=$subscription_required" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Summary
+        run: |
+          echo "## ✅ Product Link Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**API Name:** ${{ inputs.API_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** non-prod" >> $GITHUB_STEP_SUMMARY
+          echo "**Product ID:** ${{ steps.verify-product.outputs.product_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Product Display Name:** ${{ steps.product-details.outputs.display_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Product State:** ${{ steps.product-details.outputs.state }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Subscription Required:** ${{ steps.product-details.outputs.subscription_required }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check-link.outputs.already_linked }}" == "true" ]; then
+            echo "**Status:** Already linked (no action needed)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Status:** Newly linked" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**APIM Instance:** ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+        shell: bash
