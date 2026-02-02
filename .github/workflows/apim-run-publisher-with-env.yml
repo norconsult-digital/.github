@@ -25,11 +25,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     environment: ${{ inputs.API_MANAGEMENT_ENVIRONMENT }}
+    permissions:
+      id-token: write
+      contents: read
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Azure Access Token
+        id: get_token
+        run: |
+          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+        shell: bash
 
       # Run Spectral
       - uses: actions/setup-node@v4
@@ -55,7 +73,7 @@ jobs:
         if: ( inputs.CONFIGURATION_YML_PATH == '' &&  inputs.COMMIT_ID != '')
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_BEARER_TOKEN: ${{ steps.get_token.outputs.token }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
@@ -111,7 +129,7 @@ jobs:
         if: ( inputs.CONFIGURATION_YML_PATH == '' &&  inputs.COMMIT_ID == '')
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_BEARER_TOKEN: ${{ steps.get_token.outputs.token }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
@@ -166,7 +184,7 @@ jobs:
         if: ( inputs.CONFIGURATION_YML_PATH != '' &&  inputs.COMMIT_ID != '')
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_BEARER_TOKEN: ${{ steps.get_token.outputs.token }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
@@ -223,7 +241,7 @@ jobs:
         if: ( inputs.CONFIGURATION_YML_PATH != '' &&  inputs.COMMIT_ID == '')
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_BEARER_TOKEN: ${{ steps.get_token.outputs.token }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
