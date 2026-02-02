@@ -1,7 +1,0 @@
-{
-  "name": "APIM Publish Template",
-  "description": "Publishes APIM artifacts to non-prod and prod environments automatically when apimartifacts folder changes on main branch",
-  "iconName": "isy",
-  "categories": ["Deployment", "APIM"],
-  "filePatterns": ["apimartifacts/**"]
-}
