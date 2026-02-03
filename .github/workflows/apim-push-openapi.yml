@@ -4,24 +4,9 @@ on:
   workflow_call:
     inputs:
       API_NAME:
-        required: false
-        type: string
-        description: "Name of the API in APIM (optional if single file, derived from filename)"
-      OPENAPI_FILE_PATHS:
         required: true
         type: string
-        description: "Path(s) to OpenAPI specification file(s) - one per line or comma-separated"
-  
-  workflow_dispatch:
-    inputs:
-      API_NAME:
-        description: "Name of the API in APIM (optional if single file, derived from filename)"
-        required: false
-        type: string
-      OPENAPI_FILE_PATHS:
-        description: "Path(s) to OpenAPI specification file(s) - one per line or comma-separated"
-        required: true
-        type: string
+        description: "Name of the API in APIM"
 
 jobs:
   push-openapi:
@@ -34,6 +19,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Download OpenAPI artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.API_NAME }}-openapi
+          path: ./artifacts
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -41,117 +32,69 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Parse and validate OpenAPI file paths
-        id: parse-paths
+      - name: Validate OpenAPI file exists
         run: |
-          # Parse input (supports newline or comma-separated)
-          paths="${{ inputs.OPENAPI_FILE_PATHS }}"
-          paths=$(echo "$paths" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$')
-          
-          echo "Parsed paths:"
-          echo "$paths"
-          
-          # Validate all files exist
-          all_valid=true
-          while IFS= read -r path; do
-            if [ ! -f "$path" ]; then
-              echo "❌ Error: OpenAPI file not found at $path"
-              all_valid=false
-            else
-              echo "✅ Found: $path"
-            fi
-          done <<< "$paths"
-          
-          if [ "$all_valid" = false ]; then
+          file_path="./artifacts/${{ inputs.API_NAME }}-openapi.json"
+          if [ ! -f "$file_path" ]; then
+            echo "Error: OpenAPI file not found at $file_path"
+            echo "Listing artifact contents:"
+            ls -R ./artifacts/
             exit 1
           fi
-          
-          # Save paths for next step
-          echo "$paths" > /tmp/openapi_paths.txt
-          
-          # Count files
-          file_count=$(echo "$paths" | wc -l)
-          echo "file_count=$file_count" >> $GITHUB_OUTPUT
+          echo "✅ OpenAPI file found: $file_path"
         shell: bash
 
-      - name: Import/Update APIs in APIM
-        id: import-apis
+      - name: Import/Update API in APIM
         run: |
-          api_results=""
-          success_count=0
-          fail_count=0
+          file_path="./artifacts/${{ inputs.API_NAME }}-openapi.json"
           
-          while IFS= read -r spec_path; do
-            # Derive API name from filename if not provided
-            if [ -n "${{ inputs.API_NAME }}" ] && [ "${{ steps.parse-paths.outputs.file_count }}" = "1" ]; then
-              api_name="${{ inputs.API_NAME }}"
-            else
-              # Extract filename without extension
-              api_name=$(basename "$spec_path" | sed 's/\.[^.]*$//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
-            fi
-            
-            echo "========================================="
-            echo "Processing: $spec_path"
-            echo "API Name: $api_name"
-            echo "========================================="
-            
-            # Import or update the API
-            if az apim api import \
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-              --api-id "$api_name" \
-              --path "$api_name" \
-              --specification-path "$spec_path" \
-              --specification-format OpenApi \
-              --display-name "$api_name" \
-              --protocols https \
-              --subscription-required true; then
-              
-              echo "✅ Successfully imported: $api_name"
-              api_results="${api_results}✅ $api_name|$spec_path|success\n"
-              success_count=$((success_count + 1))
-            else
-              echo "❌ Failed to import: $api_name"
-              api_results="${api_results}❌ $api_name|$spec_path|failed\n"
-              fail_count=$((fail_count + 1))
-            fi
-            
-          done < /tmp/openapi_paths.txt
+          echo "Importing API: ${{ inputs.API_NAME }}"
+          echo "From file: $file_path"
+          echo "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
           
-          # Save results
-          echo -e "$api_results" > /tmp/api_results.txt
-          echo "success_count=$success_count" >> $GITHUB_OUTPUT
-          echo "fail_count=$fail_count" >> $GITHUB_OUTPUT
+          # Import or update the API
+          az apim api import \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --api-id ${{ inputs.API_NAME }} \
+            --path ${{ inputs.API_NAME }} \
+            --specification-path "$file_path" \
+            --specification-format OpenApi \
+            --display-name "${{ inputs.API_NAME }}" \
+            --protocols https \
+            --subscription-required true
           
-          # Exit with error if any failed
-          if [ $fail_count -gt 0 ]; then
-            echo "⚠️ $fail_count API(s) failed to import"
-            exit 1
-          fi
+          echo "✅ API imported successfully"
+        shell: bash
+
+      - name: Get API details
+        id: api-details
+        run: |
+          api_info=$(az apim api show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --api-id ${{ inputs.API_NAME }} \
+            --output json)
+          
+          echo "API Details:"
+          echo "$api_info" | jq '.'
+          
+          api_path=$(echo "$api_info" | jq -r '.path')
+          api_revision=$(echo "$api_info" | jq -r '.apiRevision // "1"')
+          
+          echo "api_path=$api_path" >> $GITHUB_OUTPUT
+          echo "api_revision=$api_revision" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Summary
-        if: always()
         run: |
-          echo "## 📋 API Push Results" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ API Push Completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**API Name:** ${{ inputs.API_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "**Environment:** non-prod" >> $GITHUB_STEP_SUMMARY
+          echo "**OpenAPI File:** ${{ inputs.API_NAME }}-openapi.json" >> $GITHUB_STEP_SUMMARY
+          echo "**API Path:** ${{ steps.api-details.outputs.api_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Revision:** ${{ steps.api-details.outputs.api_revision }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**APIM Instance:** ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Total APIs Processed:** ${{ steps.parse-paths.outputs.file_count }}" >> $GITHUB_STEP_SUMMARY
-          echo "**✅ Successful:** ${{ steps.import-apis.outputs.success_count }}" >> $GITHUB_STEP_SUMMARY
-          echo "**❌ Failed:** ${{ steps.import-apis.outputs.fail_count }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Details" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | API Name | Spec File |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|----------|-----------|" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f /tmp/api_results.txt ]; then
-            while IFS='|' read -r status name path result; do
-              if [ -n "$name" ]; then
-                echo "| $status | $name | \`$path\` |" >> $GITHUB_STEP_SUMMARY
-              fi
-            done < /tmp/api_results.txt
-          fi
         shell: bash

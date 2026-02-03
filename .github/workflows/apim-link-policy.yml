@@ -1,4 +1,4 @@
-name: APIM Link Policy - Apply API Policies
+name: APIM Link Policy - Apply API-Level Policy
 
 on:
   workflow_call:
@@ -7,19 +7,10 @@ on:
         required: true
         type: string
         description: "Name of the API in APIM"
-      POLICY_FILE_PATH:
+      POLICY_FRAGMENT_ID:
         required: true
         type: string
-        description: "Path to policy XML file"
-      POLICY_SCOPE:
-        required: false
-        type: string
-        default: "api"
-        description: "Policy scope: api, operation, or all-operations"
-      OPERATION_ID:
-        required: false
-        type: string
-        description: "Operation ID (required if POLICY_SCOPE is 'operation')"
+        description: "Policy fragment ID that exists in APIM"
   
   workflow_dispatch:
     inputs:
@@ -27,22 +18,9 @@ on:
         description: "Name of the API in APIM"
         required: true
         type: string
-      POLICY_FILE_PATH:
-        description: "Path to policy XML file (relative to repo root)"
+      POLICY_FRAGMENT_ID:
+        description: "Policy fragment ID that exists in APIM"
         required: true
-        type: string
-      POLICY_SCOPE:
-        description: "Policy scope"
-        required: false
-        type: choice
-        default: "api"
-        options:
-          - api
-          - operation
-          - all-operations
-      OPERATION_ID:
-        description: "Operation ID (required if scope is 'operation')"
-        required: false
         type: string
 
 jobs:
@@ -63,188 +41,44 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Validate policy file exists
+      - name: Apply policy fragment to API
         run: |
-          if [ ! -f "${{ inputs.POLICY_FILE_PATH }}" ]; then
-            echo "Error: Policy file not found at ${{ inputs.POLICY_FILE_PATH }}"
-            exit 1
-          fi
-          echo "✅ Policy file found: ${{ inputs.POLICY_FILE_PATH }}"
-        shell: bash
-
-      - name: Validate policy XML
-        run: |
-          # Check if the file is valid XML
-          if command -v xmllint &> /dev/null; then
-            xmllint --noout "${{ inputs.POLICY_FILE_PATH }}" 2>&1
-            if [ $? -eq 0 ]; then
-              echo "✅ Policy XML is valid"
-            else
-              echo "❌ Policy XML is invalid"
-              exit 1
-            fi
-          else
-            echo "⚠️ xmllint not available, skipping XML validation"
-          fi
-        shell: bash
-
-      - name: Get existing policy (before update)
-        id: existing-policy
-        run: |
-          echo "Fetching existing policy..."
+          echo "Linking policy fragment to API: ${{ inputs.API_NAME }}"
+          echo "Policy fragment: ${{ inputs.POLICY_FRAGMENT_ID }}"
           
-          if [ "${{ inputs.POLICY_SCOPE }}" == "api" ]; then
-            existing_policy=$(az apim api policy show \
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-              --api-id ${{ inputs.API_NAME }} \
-              --output json 2>/dev/null || echo "{}")
-            
-            if [ "$existing_policy" != "{}" ]; then
-              # Extract policy content and save to file
-              echo "$existing_policy" | jq -r '.value' > /tmp/existing_policy.xml
-              echo "policy_exists=true" >> $GITHUB_OUTPUT
-              echo "ℹ️ Found existing policy"
-            else
-              echo "policy_exists=false" >> $GITHUB_OUTPUT
-              echo "ℹ️ No existing policy found"
-            fi
-          else
-            echo "policy_exists=unknown" >> $GITHUB_OUTPUT
-            echo "ℹ️ Policy comparison only supported for API-level policies"
-          fi
-        shell: bash
-
-      - name: Apply API-level policy
-        if: inputs.POLICY_SCOPE == 'api'
-        run: |
-          echo "Applying API-level policy to: ${{ inputs.API_NAME }}"
+          # Create policy XML that references the fragment
+          cat > /tmp/policy.xml << 'EOF'
+          <policies>
+            <inbound>
+              <include-fragment fragment-id="${{ inputs.POLICY_FRAGMENT_ID }}" />
+            </inbound>
+            <backend>
+              <base />
+            </backend>
+            <outbound>
+              <base />
+            </outbound>
+            <on-error>
+              <base />
+            </on-error>
+          </policies>
+          EOF
           
+          # Apply the policy to the API
           az apim api policy create \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
             --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
             --api-id ${{ inputs.API_NAME }} \
-            --xml-path "${{ inputs.POLICY_FILE_PATH }}"
+            --xml-path /tmp/policy.xml
           
-          echo "✅ API-level policy applied successfully"
-        shell: bash
-
-      - name: Apply operation-level policy
-        if: inputs.POLICY_SCOPE == 'operation' && inputs.OPERATION_ID != ''
-        run: |
-          echo "Applying operation-level policy to: ${{ inputs.API_NAME }}/${{ inputs.OPERATION_ID }}"
-          
-          az apim api operation policy create \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            --operation-id ${{ inputs.OPERATION_ID }} \
-            --xml-path "${{ inputs.POLICY_FILE_PATH }}"
-          
-          echo "✅ Operation-level policy applied successfully"
-        shell: bash
-
-      - name: Apply policy to all operations
-        if: inputs.POLICY_SCOPE == 'all-operations'
-        run: |
-          echo "Applying policy to all operations in API: ${{ inputs.API_NAME }}"
-          
-          # Get all operations for the API
-          operations=$(az apim api operation list \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            --query '[].name' \
-            --output tsv)
-          
-          if [ -z "$operations" ]; then
-            echo "⚠️ No operations found for API: ${{ inputs.API_NAME }}"
-            exit 0
-          fi
-          
-          # Apply policy to each operation
-          while IFS= read -r operation_id; do
-            echo "Applying policy to operation: $operation_id"
-            az apim api operation policy create \
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-              --api-id ${{ inputs.API_NAME }} \
-              --operation-id "$operation_id" \
-              --xml-path "${{ inputs.POLICY_FILE_PATH }}"
-          done <<< "$operations"
-          
-          echo "✅ Policy applied to all operations successfully"
-        shell: bash
-
-      - name: Verify policy application and detect changes
-        id: verify-policy
-        run: |
-          echo "Verifying policy application..."
-          
-          if [ "${{ inputs.POLICY_SCOPE }}" == "api" ]; then
-            # Get the current policy after application
-            current_policy=$(az apim api policy show \
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-              --api-id ${{ inputs.API_NAME }} \
-              --output json 2>/dev/null || echo "{}")
-            
-            if [ "$current_policy" != "{}" ]; then
-              echo "✅ API policy verified"
-              
-              # Extract current policy content
-              echo "$current_policy" | jq -r '.value' > /tmp/current_policy.xml
-              
-              # Compare with existing policy if it existed
-              if [ "${{ steps.existing-policy.outputs.policy_exists }}" == "true" ]; then
-                # Normalize whitespace and compare
-                if diff -w /tmp/existing_policy.xml /tmp/current_policy.xml > /dev/null 2>&1; then
-                  echo "policy_changed=false" >> $GITHUB_OUTPUT
-                  echo "ℹ️ Policy content unchanged - no actual changes detected"
-                else
-                  echo "policy_changed=true" >> $GITHUB_OUTPUT
-                  echo "✅ Policy content updated - changes detected"
-                  
-                  # Show diff
-                  echo "Policy differences:"
-                  diff -u /tmp/existing_policy.xml /tmp/current_policy.xml || true
-                fi
-              else
-                echo "policy_changed=true" >> $GITHUB_OUTPUT
-                echo "✅ New policy created"
-              fi
-            else
-              echo "⚠️ Could not verify API policy"
-              echo "policy_changed=unknown" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "ℹ️ Policy verification only supported for API-level policies"
-            echo "policy_changed=unknown" >> $GITHUB_OUTPUT
-          fi
+          echo "✅ Policy fragment linked successfully"
         shell: bash
 
       - name: Summary
         run: |
-          echo "## ✅ Policy Application Completed" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Policy Fragment Linked" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**API Name:** ${{ inputs.API_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** non-prod" >> $GITHUB_STEP_SUMMARY
-          echo "**Policy File:** ${{ inputs.POLICY_FILE_PATH }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Policy Scope:** ${{ inputs.POLICY_SCOPE }}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ inputs.POLICY_SCOPE }}" == "operation" ]; then
-            echo "**Operation ID:** ${{ inputs.OPERATION_ID }}" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Show change status
-          if [ "${{ steps.verify-policy.outputs.policy_changed }}" == "true" ]; then
-            echo "**Change Status:** ✅ Policy content updated" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.verify-policy.outputs.policy_changed }}" == "false" ]; then
-            echo "**Change Status:** ℹ️ No changes (policy already up-to-date)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Change Status:** ⚠️ Could not verify changes" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Policy Fragment ID:** ${{ inputs.POLICY_FRAGMENT_ID }}" >> $GITHUB_STEP_SUMMARY
           echo "**APIM Instance:** ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
         shell: bash
