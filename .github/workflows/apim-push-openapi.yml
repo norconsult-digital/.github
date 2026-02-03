@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download OpenAPI artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v5
         with:
           name: ${{ inputs.API_NAME }}-openapi
           path: ./artifacts
@@ -54,6 +54,7 @@ jobs:
           
           # Import or update the API
           az apim api import \
+            --debug
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
             --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
             --api-id ${{ inputs.API_NAME }} \
