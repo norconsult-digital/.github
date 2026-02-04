@@ -46,32 +46,33 @@ jobs:
           echo "First 500 characters:"
           head -c 500 "$file_path"
         shell: bash
-
-      - name: Upgrade Azure CLI (work around APIM LRO polling bug)
-        run: |
-          set -euo pipefail
-          az --version
-          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-          az --version  
           
-      - name: Azure PowerShell - import via ARM
-        uses: azure/powershell@v2
-        with:
-          azPSVersion: "latest"
-          inlineScript: |
-            $apiId = '${{ inputs.API_NAME }}'
-            $rg = '${{ secrets.AZURE_RESOURCE_GROUP_NAME }}'
-            $apim = '${{ secrets.API_MANAGEMENT_SERVICE_NAME }}'
-            $sub = '${{ secrets.AZURE_SUBSCRIPTION_ID }}'
-            $file = "./artifacts/$apiId-openapi.json"
-
-            $spec = Get-Content $file -Raw
-            $body = @{ properties = @{ path = $apiId; value = $spec } } | ConvertTo-Json -Depth 50
-
-            $url = "https://management.azure.com/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.ApiManagement/service/$apim/apis/$apiId?api-version=2022-08-01"
-            Invoke-AzRestMethod -Method PUT -Path $url -Payload $body
-
-            # then poll provisioningState with GETs
+      - name: Import/Update API in APIM
+        run: |
+          $filePath = "./artifacts/${{ inputs.API_NAME }}-openapi.json"
+          
+          Write-Host "Importing API: ${{ inputs.API_NAME }}"
+          Write-Host "From file: $filePath"
+          Write-Host "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
+          
+          # Import or update the API
+          az apim api import `
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
+            --api-id ${{ inputs.API_NAME }} `
+            --path ${{ inputs.API_NAME }} `
+            --specification-path $filePath `
+            --specification-format OpenApi `
+            --verbose `
+            --debug
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "API import failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          
+          Write-Host "✅ API imported successfully"
+        shell: pwsh    
       
       - name: Verify API exists even if import step failed
         if: always()
