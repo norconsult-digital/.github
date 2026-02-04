@@ -63,6 +63,9 @@ jobs:
             --path /${{ inputs.API_NAME }} \
             --specification-path "$file_path" \
             --specification-format OpenApi
+            --verbose
+            --debug
+
           
           echo "✅ API imported successfully"
         shell: bash    
