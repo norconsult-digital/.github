@@ -46,6 +46,13 @@ jobs:
           echo "First 500 characters:"
           head -c 500 "$file_path"
         shell: bash
+
+      - name: Upgrade Azure CLI (work around APIM LRO polling bug)
+        run: |
+          set -euo pipefail
+          az --version
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          az --version  
           
       - name: Import/Update API in APIM
         run: |
@@ -60,7 +67,7 @@ jobs:
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
             --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
             --api-id ${{ inputs.API_NAME }} \
-            --path /${{ inputs.API_NAME }} \
+            --path ${{ inputs.API_NAME }} \
             --specification-path "$file_path" \
             --specification-format OpenApi \
             --verbose \
@@ -69,6 +76,15 @@ jobs:
           
           echo "✅ API imported successfully"
         shell: bash    
+      
+      - name: Verify API exists even if import step failed
+        if: always()
+        run: |
+          az apim api show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
+            --api-id ${{ inputs.API_NAME }} \
+            -o json | jq '.id, .properties.provisioningState, .path'
       
       - name: Get API details
         id: api-details
