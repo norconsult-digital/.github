@@ -54,28 +54,24 @@ jobs:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az --version  
           
-      - name: Import/Update API in APIM
-        run: |
-          file_path="./artifacts/${{ inputs.API_NAME }}-openapi.json"
-          
-          echo "Importing API: ${{ inputs.API_NAME }}"
-          echo "From file: $file_path"
-          echo "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
-          
-          # Import or update the API
-          az apim api import \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            --path ${{ inputs.API_NAME }} \
-            --specification-path "$file_path" \
-            --specification-format OpenApi \
-            --verbose \
-            --debug
+      - name: Azure PowerShell - import via ARM
+        uses: azure/powershell@v2
+        with:
+          azPSVersion: "latest"
+          inlineScript: |
+            $apiId = '${{ inputs.API_NAME }}'
+            $rg = '${{ secrets.AZURE_RESOURCE_GROUP_NAME }}'
+            $apim = '${{ secrets.API_MANAGEMENT_SERVICE_NAME }}'
+            $sub = '${{ secrets.AZURE_SUBSCRIPTION_ID }}'
+            $file = "./artifacts/$apiId-openapi.json"
 
-          
-          echo "✅ API imported successfully"
-        shell: bash    
+            $spec = Get-Content $file -Raw
+            $body = @{ properties = @{ path = $apiId; value = $spec } } | ConvertTo-Json -Depth 50
+
+            $url = "https://management.azure.com/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.ApiManagement/service/$apim/apis/$apiId?api-version=2022-08-01"
+            Invoke-AzRestMethod -Method PUT -Path $url -Payload $body
+
+            # then poll provisioningState with GETs
       
       - name: Verify API exists even if import step failed
         if: always()
