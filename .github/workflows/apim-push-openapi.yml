@@ -55,7 +55,28 @@ jobs:
           Write-Host "From file: $filePath"
           Write-Host "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
           
-          # Import or update the API
+          # Check if API already exists
+          $apiExists = az apim api show `
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
+            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
+            --api-id ${{ inputs.API_NAME }} `
+            2>$null
+          
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "API exists - updating..."
+            # Update existing API with --if-match *
+            az apim api update `
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
+              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
+              --api-id ${{ inputs.API_NAME }} `
+              --if-match "*" `
+              --verbose `
+              --debug
+          } else {
+            Write-Host "API does not exist - importing..."
+          }
+          
+          # Import (works for both create and update)
           az apim api import `
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
             --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
