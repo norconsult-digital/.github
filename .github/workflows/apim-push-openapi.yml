@@ -62,8 +62,8 @@ jobs:
             --api-id ${{ inputs.API_NAME }} \
             --path /${{ inputs.API_NAME }} \
             --specification-path "$file_path" \
-            --specification-format OpenApi
-            --verbose
+            --specification-format OpenApi \
+            --verbose \
             --debug
 
           
