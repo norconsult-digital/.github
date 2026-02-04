@@ -54,15 +54,10 @@ jobs:
           
           # Import or update the API
           az apim api import \
+            --path ${{ inputs.API_NAME }} \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
             --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            --path ${{ inputs.API_NAME }} \
-            --specification-path "$file_path" \
             --specification-format OpenApi \
-            --display-name "${{ inputs.API_NAME }}" \
-            --protocols https \
-            --subscription-required true \
             --debug
           
           echo "✅ API imported successfully"
