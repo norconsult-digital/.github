@@ -44,13 +44,19 @@ jobs:
           echo "✅ OpenAPI file found: $file_path"
         shell: bash
           
-      - name: Import OpenAPI Specification to APIM
-        uses: azure/cli@v2
+      # - name: Import OpenAPI Specification to APIM
+      #   uses: azure/cli@v2
+      #   with:
+      #     azcliversion: latest
+      #     inlineScript: |
+      #       az apim api import --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} --path ${{ inputs.API_NAME }} --specification-path ./artifacts/${{ inputs.API_NAME }}-openapi.json --specification-format OpenApi --display-name "BIM Admin API"
+      - name: Update Azure API Management
+        uses: solidify/github-action-update-azapim@master
         with:
-          azcliversion: latest
-          inlineScript: |
-            az apim api import --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} --path ${{ inputs.API_NAME }} --specification-path ./artifacts/${{ inputs.API_NAME }}-openapi.json --specification-format OpenApi --display-name "BIM Admin API"
-
+          swaggerUrl: ./artifacts/${{ inputs.API_NAME }}-openapi.json
+          apiManagementEndpointUrl: ${{ secrets.API_MANAGER_URL }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}    
+      
       - name: Get API details
         id: api-details
         run: |
