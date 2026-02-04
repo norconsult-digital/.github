@@ -43,27 +43,13 @@ jobs:
           fi
           echo "✅ OpenAPI file found: $file_path"
         shell: bash
-
-      - name: Import/Update API in APIM
-        run: |
-          file_path="./artifacts/${{ inputs.API_NAME }}-openapi.json"
           
-          echo "Importing API: ${{ inputs.API_NAME }}"
-          echo "From file: $file_path"
-          echo "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
-          
-          # Import or update the API
-          az apim api import \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --path ${{ inputs.API_NAME }} \
-            --specification-path "$file_path" \
-            --specification-format OpenApi \
-            --display-name "BIM Admin API"
-
-          
-          echo "✅ API imported successfully"
-        shell: bash
+      - name: Import OpenAPI Specification to APIM
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az apim api import --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} --path ${{ inputs.API_NAME }} --specification-path "$file_path" --specification-format OpenApi --display-name "BIM Admin API"
 
       - name: Get API details
         id: api-details
