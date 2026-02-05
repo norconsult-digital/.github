@@ -24,6 +24,8 @@ jobs:
         with:
           name: ${{ inputs.API_NAME }}-openapi
           path: ./artifacts
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
