@@ -28,6 +28,10 @@ on:
         type: boolean
         default: false
         description: "Skip state refresh during plan to improve performance when state is known to be current"
+      setupManagedGrafanaAuth:
+        type: boolean
+        default: false
+        description: "Setup Grafana authentication for Azure Managed Grafana by retrieving an access token using the Azure CLI and setting it as an environment variable for use in Terraform"
     secrets:
       APP_PEM_FILE:
         required: false
@@ -249,6 +253,13 @@ jobs:
           client-id: ${{ inputs.armClientIdApply }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
           allow-no-subscriptions: true
+
+      # Set Grafana authentication token for Azure Managed Grafana
+      - name: Set Grafana Auth
+        if: ${{ inputs.setupManagedGrafanaAuth == true }}
+        run: |
+          GRAFANA_TOKEN=$(az account get-access-token --resource ce34e7e5-485f-4d76-964f-b3d2b16d1e4f --query accessToken -o tsv)
+          echo "GRAFANA_AUTH=$GRAFANA_TOKEN" >> $GITHUB_ENV
 
       - name: Install kubelogin
         if: ${{ inputs.installKubelogin == true }}

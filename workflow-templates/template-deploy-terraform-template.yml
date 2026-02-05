@@ -35,6 +35,14 @@ on:
       environmentApply:
         required: false
         type: string
+      skipStateRefresh:
+        type: boolean
+        default: false
+        description: "Skip state refresh during plan to improve performance when state is known to be current"
+      setupManagedGrafanaAuth:
+        type: boolean
+        default: false
+        description: "Setup Grafana authentication for Azure Managed Grafana by retrieving an access token using the Azure CLI and setting it as an environment variable for use in Terraform"
 
 jobs:
   call-terraform:
@@ -47,6 +55,8 @@ jobs:
       armClientIdApply: ${{ github.event.inputs.armClientIdApply }}
       environmentPlan: ${{ github.event.inputs.environmentPlan }}
       environmentApply: ${{ github.event.inputs.environmentApply }}
+      skipStateRefresh: ${{ github.event.inputs.skipStateRefresh }}
+      setupManagedGrafanaAuth: ${{ github.event.inputs.setupManagedGrafanaAuth }}
     secrets:
       APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
       BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
