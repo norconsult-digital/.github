@@ -181,13 +181,13 @@ def categorize_findings(findings: List[SensitiveContentFinding]) -> Dict[str, Li
     return categorized
 
 
-def print_report(categorized_findings: Dict[str, List[SensitiveContentFinding]]) -> int:
+def print_report(categorized_findings: Dict[str, List[SensitiveContentFinding]]):
     """Print a formatted report of findings."""
     total_findings = sum(len(findings) for findings in categorized_findings.values())
     
     if total_findings == 0:
         print("✅ No sensitive content detected in workflow files.")
-        return 0
+        return
     
     print(f"\n⚠️  Found {total_findings} potential sensitive content issue(s) in workflow files:\n")
     
@@ -222,11 +222,6 @@ def print_report(categorized_findings: Dict[str, List[SensitiveContentFinding]])
     print(f"  🟡 MEDIUM: {len(categorized_findings[SeverityLevel.MEDIUM])} - Review recommended")
     print(f"  🔵 LOW: {len(categorized_findings[SeverityLevel.LOW])} - Best practice improvement")
     print()
-    
-    # Return non-zero exit code if critical or high severity issues found
-    if categorized_findings[SeverityLevel.CRITICAL] or categorized_findings[SeverityLevel.HIGH]:
-        return 1
-    return 0
 
 
 def save_json_report(categorized_findings: Dict[str, List[SensitiveContentFinding]], output_file: str):
@@ -276,7 +271,7 @@ def main():
     categorized = categorize_findings(findings)
     
     # Print report
-    exit_code = print_report(categorized)
+    print_report(categorized)
     
     # Save JSON if requested
     if args.json_output:

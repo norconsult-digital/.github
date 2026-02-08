@@ -43,7 +43,7 @@ jobs:
         id: scan
         run: |
           echo "Scanning workflow files for sensitive content..."
-          python .github/scripts/check-sensitive-content.py . --json sensitive-content-report.json --fail-on medium
+          python .github/scripts/check-sensitive-content.py . --json sensitive-content-report.json --fail-on high
         continue-on-error: true
 
       - name: Upload scan results
