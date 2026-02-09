@@ -32,6 +32,8 @@ on:
         required: true
       NUGET_GITHUB_PAT:
         required: false
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   deploy:

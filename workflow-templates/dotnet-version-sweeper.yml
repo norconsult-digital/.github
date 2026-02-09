@@ -16,3 +16,5 @@ jobs:
     uses: norconsult-digital/.github/.github/workflows/dotnet-version-sweeper.yml@main
     with:
       support: ${{ inputs.support }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

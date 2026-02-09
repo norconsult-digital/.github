@@ -47,3 +47,4 @@ jobs:
     secrets:
       ADO_NUGET_PAT: ${{ secrets.ADO_NUGET_PAT }}
       NUGET_GITHUB_PAT: ${{ secrets.NUGET_GITHUB_PAT }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

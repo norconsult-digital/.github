@@ -51,6 +51,8 @@ on:
       # secret for copilot-usage-dashboard application
       GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY:
         required: false
+      GITHUB_TOKEN:
+        required: true
 
 permissions:
   id-token: write
