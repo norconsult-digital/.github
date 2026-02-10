@@ -51,50 +51,7 @@ jobs:
           
       - name: Import/Update API in APIM
         run: |
-          $filePath = "./artifacts/${{ inputs.API_NAME }}-openapi.json"
-          
-          Write-Host "Importing API: ${{ inputs.API_NAME }}"
-          Write-Host "From file: $filePath"
-          Write-Host "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
-          
-          # Check if API already exists
-          $apiExists = az apim api show `
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
-            --api-id ${{ inputs.API_NAME }} `
-            2>$null
-          
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "API exists - updating..."
-            # Update existing API with --if-match *
-            az apim api update `
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
-              --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
-              --api-id ${{ inputs.API_NAME }} `
-              --if-match "*" `
-              --verbose `
-              --debug
-          } else {
-            Write-Host "API does not exist - importing..."
-          }
-          
-          # Import (works for both create and update)
-          az apim api import `
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
-            --api-id ${{ inputs.API_NAME }} `
-            --path ${{ inputs.API_NAME }} `
-            --specification-path $filePath `
-            --specification-format OpenApi `
-            --verbose `
-            --debug
-          
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "API import failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
-          
-          Write-Host "✅ API imported successfully"
+          az apim api import --resource-group rg-nd-shared-apim-non-prod --service-name apim-nd-shared-non-prod-01 --path bim-admin-api --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json"  --specification-format OpenApi --display-name "BIM Admin API"
         shell: pwsh    
       
       - name: Verify API exists even if import step failed
