@@ -55,15 +55,90 @@ jobs:
           echo "⚠️ Validation issues should be fixed in the source API code"
           npx @redocly/cli lint ./artifacts/${{ inputs.API_NAME }}-openapi.json --skip-rule operation-summary --skip-rule no-identical-paths --skip-rule info-license --skip-rule no-server-example.com || true
           
-      - name: Probe APIM access (fail fast)
+      - name: Import OpenAPI into APIM via REST (no Azure CLI LRO poller)
         shell: bash
+        env:
+          SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          RESOURCE_GROUP:   ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
+          APIM_NAME:        ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
+          API_ID:           ${{ inputs.API_NAME }}
+          API_PATH:         ${{ inputs.API_NAME }}
+          DISPLAY_NAME:     ${{ inputs.API_NAME }}
+          SPEC_FILE:        ./artifacts/${{ inputs.API_NAME }}-openapi.json
+          API_VERSION:      2022-08-01
         run: |
-          az apim show -g rg-nd-shared-apim-non-prod -n apim-nd-shared-non-prod-01 -o jsonc
-          
-      - name: Import/Update API in APIM
-        run: |
-          az apim api import --resource-group rg-nd-shared-apim-non-prod --service-name apim-nd-shared-non-prod-01 --path bim-admin-api --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json"  --specification-format OpenApi --display-name "BIM Admin API" --debug
-        shell: pwsh    
+          set -euo pipefail
+
+          test -s "$SPEC_FILE" || (echo "Spec missing/empty: $SPEC_FILE" && ls -la ./artifacts && exit 1)
+
+          # Build request body (OpenAPI JSON must be embedded as a string in properties.value)
+          body="$(jq -n \
+            --arg displayName "$DISPLAY_NAME" \
+            --arg path "$API_PATH" \
+            --rawfile spec "$SPEC_FILE" \
+            '{properties: {displayName:$displayName, path:$path, format:"openapi+json", value:$spec}}'
+          )"
+
+          url="https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.ApiManagement/service/$APIM_NAME/apis/$API_ID?api-version=$API_VERSION"
+
+          echo "PUT $url"
+          # Use --verbose to capture headers; we need Azure-AsyncOperation or Location for polling.
+          resp_headers="$(mktemp)"
+          resp_body="$(mktemp)"
+
+          # az rest doesn't expose headers directly, so we use --verbose and parse, or use curl with token.
+          # Easiest reliable method: use access token + curl.
+          token="$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)"
+
+          # Do the PUT
+          curl -sS -D "$resp_headers" -o "$resp_body" -X PUT "$url" \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data-binary "$body"
+
+          http_code="$(awk 'NR==1{print $2}' "$resp_headers")"
+          echo "HTTP $http_code"
+          cat "$resp_body" | head -c 800 || true
+          echo
+
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ] && [ "$http_code" != "202" ]; then
+            echo "Import failed (unexpected status code)"
+            echo "Headers:"
+            cat "$resp_headers"
+            exit 1
+          fi
+
+          # If async, poll the operation URL until Succeeded/Failed
+          async_url="$(grep -i '^Azure-AsyncOperation:' "$resp_headers" | sed -E 's/^Azure-AsyncOperation:\s*//I' | tr -d '\r')"
+          loc_url="$(grep -i '^Location:' "$resp_headers" | sed -E 's/^Location:\s*//I' | tr -d '\r')"
+
+          poll_url="${async_url:-$loc_url}"
+
+          if [ -z "$poll_url" ]; then
+            echo "No async polling header found; assuming operation completed."
+            exit 0
+          fi
+
+          echo "Polling: $poll_url"
+          for i in $(seq 1 60); do
+            poll="$(curl -sS -X GET "$poll_url" -H "Authorization: Bearer $token")"
+            status="$(echo "$poll" | jq -r '.status // .properties.provisioningState // empty')"
+
+            echo "Poll #$i status: ${status:-<none>}"
+            if [ "$status" = "Succeeded" ]; then
+              exit 0
+            fi
+            if [ "$status" = "Failed" ] || [ "$status" = "Canceled" ]; then
+              echo "Operation did not succeed:"
+              echo "$poll" | jq -C . || echo "$poll"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for import operation to finish"
+          exit 1
       
       - name: Verify API exists even if import step failed
         if: always()
