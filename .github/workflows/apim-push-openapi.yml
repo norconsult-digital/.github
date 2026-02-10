@@ -37,7 +37,7 @@ jobs:
       - name: Check Azure CLI version
         run: |
           az  --version
-          az upgrade
+          az upgrade --yes
           az  --version
         shell: bash
 
