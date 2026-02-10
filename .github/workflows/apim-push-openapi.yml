@@ -48,10 +48,19 @@ jobs:
           echo "First 500 characters:"
           head -c 500 "$file_path"
         shell: bash
+
+      - name: Validate OpenAPI Syntax
+        run: |
+          npx @apidevtools/swagger-cli validate ./artifacts/bim-admin-api-openapi.json
+          
+      - name: Probe APIM access (fail fast)
+        shell: bash
+        run: |
+          az apim show -g rg-nd-shared-apim-non-prod -n apim-nd-shared-non-prod-01 -o jsonc
           
       - name: Import/Update API in APIM
         run: |
-          az apim api import --resource-group rg-nd-shared-apim-non-prod --service-name apim-nd-shared-non-prod-01 --path bim-admin-api --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json"  --specification-format OpenApi --display-name "BIM Admin API"
+          az apim api import --resource-group rg-nd-shared-apim-non-prod --service-name apim-nd-shared-non-prod-01 --path bim-admin-api --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json"  --specification-format OpenApi --display-name "BIM Admin API" --debug
         shell: pwsh    
       
       - name: Verify API exists even if import step failed
