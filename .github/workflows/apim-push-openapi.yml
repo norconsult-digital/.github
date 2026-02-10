@@ -51,7 +51,7 @@ jobs:
 
       - name: Validate OpenAPI Syntax
         run: |
-          npx @apidevtools/swagger-cli validate ./artifacts/bim-admin-api-openapi.json
+          npx @redocly/cli lint ./artifacts/${{ inputs.API_NAME }}-openapi.json
           
       - name: Probe APIM access (fail fast)
         shell: bash
