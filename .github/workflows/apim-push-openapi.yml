@@ -10,7 +10,7 @@ on:
 
 jobs:
   push-openapi:
-    runs-on: ubuntu-latest
+    runs-on: private-ubuntu-runner
     environment: api-ops-non-prod
     permissions:
       id-token: write
@@ -35,7 +35,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Check Azure CLI version
-        run: az --version
+        run: |
+          az  --version
+          az upgrade
+          az  --version
         shell: bash
 
       - name: Validate OpenAPI file exists
