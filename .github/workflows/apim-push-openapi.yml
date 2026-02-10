@@ -79,34 +79,6 @@ jobs:
           --display-name "${{ inputs.API_NAME }}" `
           --no-wait
         shell: pwsh    
-      
-      - name: Verify API exists even if import step failed
-        if: always()
-        run: |
-          az apim api show \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            -o json | jq '.id, .properties.provisioningState, .path'
-      
-      - name: Get API details
-        id: api-details
-        run: |
-          api_info=$(az apim api show \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            --output json)
-          
-          echo "API Details:"
-          echo "$api_info" | jq '.'
-          
-          api_path=$(echo "$api_info" | jq -r '.path')
-          api_revision=$(echo "$api_info" | jq -r '.apiRevision // "1"')
-          
-          echo "api_path=$api_path" >> $GITHUB_OUTPUT
-          echo "api_revision=$api_revision" >> $GITHUB_OUTPUT
-        shell: bash
 
       - name: Summary
         run: |
