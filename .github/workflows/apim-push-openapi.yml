@@ -70,12 +70,13 @@ jobs:
       - name: Import/Update API in APIM
         run: |
           az apim api import `
-          --resource-group rg-nd-shared-apim-non-prod `
-          --service-name apim-nd-shared-non-prod-01 `
-          --path bim-admin-api `
-          --specification-path "./artifacts/bim-admin-api-openapi.json" `
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
+          --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
+          --api-id ${{ inputs.API_NAME }} `
+          --path ${{ inputs.API_NAME }} `
+          --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json" `
           --specification-format OpenApi `
-          --display-name "BIM Admin API" `
+          --display-name "${{ inputs.API_NAME }}" `
           --no-wait
         shell: pwsh    
       
