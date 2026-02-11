@@ -84,7 +84,17 @@ env:
   TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
 jobs:
+  tflint:
+    uses: ./.github/workflows/tflint-scan.yml
+    with:
+      path: ${{ inputs.path }}
+      compare-branch: main
+    permissions:
+      contents: read
+      security-events: write
+
   terraform-plan:
+    needs: [tflint]
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentPlan }}
     outputs:
@@ -134,59 +144,16 @@ jobs:
         with:
           terraform_version: ${{ steps.tf-required-version.outputs.version }}
 
-      # Cache TFLint plugins
-      - name: Cache TFLint plugins
-        uses: actions/cache@v5
+      # Download TFLint output from previous job
+      - name: Download TFLint output
+        uses: actions/download-artifact@v5
         with:
-          path: ~/.tflint.d/plugins
-          key: ubuntu-tflint-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
-
-      # Setup TFLint
-      - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v6
-        with:
-          tflint_version: v0.52.0
-
-      - name: Show TFLint version
-        run: tflint --version
-
-      # Initialize TFLint plugins
-      - name: Init TFLint plugins
-        run: tflint --init
-        working-directory: ${{ inputs.path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Run TFLint and capture output
-      - name: Run TFLint
-        id: tflint
-        run: |
-          # Always compare changed .tf files against main branch
-          git fetch origin main
-          CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/main...HEAD | grep '\.tf$' || true)
-          
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "No .tf files changed compared to main"
-            echo "No Terraform files changed compared to main" > tflint-output.txt
-          else
-            echo "Changed files compared to main:"
-            echo "$CHANGED_FILES"
-            echo "$CHANGED_FILES" | xargs -r tflint --format=compact --minimum-failure-severity=notice > tflint-output.txt 2>&1 || true
-            echo "$CHANGED_FILES" | xargs -r tflint --format=sarif --minimum-failure-severity=notice > tflint-results.sarif 2>&1 || true
-          fi
-        working-directory: ${{ inputs.path }}
+          name: tflint-output
+          path: ${{ inputs.path }}
         continue-on-error: true
 
-      # Upload TFLint SARIF results to GitHub Security
-      - name: Upload TFLint SARIF results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() && hashFiles(format('{0}/tflint-results.sarif', inputs.path)) != ''
-        with:
-          sarif_file: ${{ inputs.path }}/tflint-results.sarif
-          category: tflint
-
-      # Publish TFLint results to task summary
-      - name: Publish TFLint Results to Task Summary
+      # Add TFLint results to summary
+      - name: Add TFLint to Summary
         if: always()
         run: |
           if [ -f tflint-output.txt ]; then
