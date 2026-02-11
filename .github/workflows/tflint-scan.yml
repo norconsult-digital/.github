@@ -1,0 +1,120 @@
+name: TFLint Scan
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        required: true
+        type: string
+        description: "Path to Terraform files"
+      repository:
+        required: false
+        type: string
+        default: "default"
+        description: "Repository identifier for cache isolation"
+      compare-branch:
+        required: false
+        type: string
+        default: "main"
+        description: "Branch to compare changes against"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Cache TFLint plugins
+      - name: Cache TFLint plugins
+        uses: actions/cache@v5
+        with:
+          path: ~/.tflint.d/plugins
+          key: ${{ runner.os }}-tflint-v0.52.0-${{ inputs.repository }}-${{ inputs.path }}-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
+          restore-keys: ${{ runner.os }}-tflint-v0.52.0-${{ inputs.repository }}-
+
+      # Setup TFLint
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.52.0
+
+      - name: Show TFLint version
+        run: tflint --version
+
+      # Initialize TFLint plugins
+      - name: Init TFLint plugins
+        run: tflint --init
+        working-directory: ${{ inputs.path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Run TFLint and capture output
+      - name: Run TFLint
+        id: tflint
+        run: |
+          # Always compare changed .tf files against specified branch
+          git fetch origin ${{ inputs.compare-branch }}
+          
+          # Get changed .tf files within the target path (repo-root relative)
+          CHANGED_FILES_FULL=$(git diff --name-only --diff-filter=d origin/${{ inputs.compare-branch }}...HEAD | grep '^${{ inputs.path }}/' | grep '\.tf$' || true)
+          
+          if [ -z "$CHANGED_FILES_FULL" ]; then
+            echo "No .tf files changed in ${{ inputs.path }} compared to ${{ inputs.compare-branch }}"
+            echo "No Terraform files changed compared to ${{ inputs.compare-branch }}" > tflint-output.txt
+          else
+            echo "Changed files in ${{ inputs.path }} compared to ${{ inputs.compare-branch }}:"
+            echo "$CHANGED_FILES_FULL"
+            
+            # Strip the path prefix to get working-directory relative paths
+            CHANGED_FILES=$(echo "$CHANGED_FILES_FULL" | sed 's|^${{ inputs.path }}/||')
+            
+            cd ${{ inputs.path }}
+            echo "$CHANGED_FILES" | xargs -r tflint --format=compact --minimum-failure-severity=notice > tflint-output.txt 2>&1 || true
+            echo "$CHANGED_FILES" | xargs -r tflint --format=sarif --minimum-failure-severity=notice > tflint-results.sarif || true
+          fi
+        continue-on-error: true
+
+      # Upload TFLint SARIF results to GitHub Security
+      - name: Upload TFLint SARIF results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles(format('{0}/tflint-results.sarif', inputs.path)) != ''
+        with:
+          sarif_file: ${{ inputs.path }}/tflint-results.sarif
+          category: tflint
+
+      # Upload TFLint output as artifact
+      - name: Upload TFLint output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tflint-output
+          path: ${{ inputs.path }}/tflint-output.txt
+          retention-days: 5
+
+      # Publish TFLint results to task summary
+      - name: Publish TFLint Results to Task Summary
+        if: always()
+        run: |
+          if [ -f tflint-output.txt ]; then
+            TFLINT_OUTPUT=$(cat tflint-output.txt)
+            
+            {
+              echo "## TFLint Results"
+              echo "\`${{ inputs.path }}\`"
+              echo "<details><summary>Click to expand</summary>"
+              echo ""
+              echo '```'
+              echo "${TFLINT_OUTPUT}"
+              echo '```'
+              echo "</details>"
+              echo ""
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+        working-directory: ${{ inputs.path }}

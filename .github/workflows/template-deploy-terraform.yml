@@ -56,6 +56,7 @@ permissions:
   id-token: write
   contents: read
   pull-requests: write
+  security-events: write
 
 env:
   # These environment variables are used by the terraform azure provider to setup OIDD authenticate.
@@ -83,7 +84,15 @@ env:
   TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
 jobs:
+  tflint:
+    uses: ./.github/workflows/tflint-scan.yml
+    with:
+      path: ${{ inputs.path }}
+      compare-branch: main
+      repository: ${{ github.repository }}
+
   terraform-plan:
+    needs: [tflint]
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentPlan }}
     outputs:
@@ -132,6 +141,35 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ steps.tf-required-version.outputs.version }}
+
+      # Download TFLint output from previous job
+      - name: Download TFLint output
+        uses: actions/download-artifact@v5
+        with:
+          name: tflint-output
+          path: ${{ inputs.path }}
+        continue-on-error: true
+
+      # Add TFLint results to summary
+      - name: Add TFLint to Summary
+        if: always()
+        run: |
+          if [ -f tflint-output.txt ]; then
+            TFLINT_OUTPUT=$(cat tflint-output.txt)
+            
+            {
+              echo "## TFLint Results"
+              echo "\`${{ inputs.path }}\`"
+              echo "<details><summary>Click to expand</summary>"
+              echo ""
+              echo '```'
+              echo "${TFLINT_OUTPUT}"
+              echo '```'
+              echo "</details>"
+              echo ""
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+        working-directory: ${{ inputs.path }}
 
       # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
       - name: Terraform Init
