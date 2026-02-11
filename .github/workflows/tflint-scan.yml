@@ -64,6 +64,8 @@ jobs:
           
           # Get changed .tf files within the target path (repo-root relative)
           CHANGED_FILES_FULL=$(git diff --name-only --diff-filter=d origin/${{ inputs.compare-branch }}...HEAD | grep '^${{ inputs.path }}/' | grep '\.tf$' || true)
+
+          cd ${{ inputs.path }}
           
           if [ -z "$CHANGED_FILES_FULL" ]; then
             echo "No .tf files changed in ${{ inputs.path }} compared to ${{ inputs.compare-branch }}"
