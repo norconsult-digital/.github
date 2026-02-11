@@ -89,9 +89,7 @@ jobs:
     with:
       path: ${{ inputs.path }}
       compare-branch: main
-    permissions:
-      contents: read
-      security-events: write
+      repository: ${{ github.repository }}
 
   terraform-plan:
     needs: [tflint]
