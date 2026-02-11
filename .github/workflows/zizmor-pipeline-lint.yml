@@ -1,4 +1,4 @@
-name: Workflow Security Scan with zizmor
+name: "[SEC] Workflow Security Zizmor"
 
 on:
   schedule:
