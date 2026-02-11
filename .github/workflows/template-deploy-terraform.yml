@@ -56,6 +56,7 @@ permissions:
   id-token: write
   contents: read
   pull-requests: write
+  security-events: write
 
 env:
   # These environment variables are used by the terraform azure provider to setup OIDD authenticate.
@@ -132,6 +133,78 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ steps.tf-required-version.outputs.version }}
+
+      # Cache TFLint plugins
+      - name: Cache TFLint plugins
+        uses: actions/cache@v5
+        with:
+          path: ~/.tflint.d/plugins
+          key: ubuntu-tflint-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
+
+      # Setup TFLint
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.52.0
+
+      - name: Show TFLint version
+        run: tflint --version
+
+      # Initialize TFLint plugins
+      - name: Init TFLint plugins
+        run: tflint --init
+        working-directory: ${{ inputs.path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Run TFLint and capture output
+      - name: Run TFLint
+        id: tflint
+        run: |
+          # Always compare changed .tf files against main branch
+          git fetch origin main
+          CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/main...HEAD | grep '\.tf$' || true)
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No .tf files changed compared to main"
+            echo "No Terraform files changed compared to main" > tflint-output.txt
+          else
+            echo "Changed files compared to main:"
+            echo "$CHANGED_FILES"
+            echo "$CHANGED_FILES" | xargs -r tflint --format=compact --minimum-failure-severity=notice > tflint-output.txt 2>&1 || true
+            echo "$CHANGED_FILES" | xargs -r tflint --format=sarif --minimum-failure-severity=notice > tflint-results.sarif 2>&1 || true
+          fi
+        working-directory: ${{ inputs.path }}
+        continue-on-error: true
+
+      # Upload TFLint SARIF results to GitHub Security
+      - name: Upload TFLint SARIF results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles(format('{0}/tflint-results.sarif', inputs.path)) != ''
+        with:
+          sarif_file: ${{ inputs.path }}/tflint-results.sarif
+          category: tflint
+
+      # Publish TFLint results to task summary
+      - name: Publish TFLint Results to Task Summary
+        if: always()
+        run: |
+          if [ -f tflint-output.txt ]; then
+            TFLINT_OUTPUT=$(cat tflint-output.txt)
+            
+            {
+              echo "## TFLint Results"
+              echo "\`${{ inputs.path }}\`"
+              echo "<details><summary>Click to expand</summary>"
+              echo ""
+              echo '```'
+              echo "${TFLINT_OUTPUT}"
+              echo '```'
+              echo "</details>"
+              echo ""
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+        working-directory: ${{ inputs.path }}
 
       # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
       - name: Terraform Init
