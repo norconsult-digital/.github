@@ -53,6 +53,7 @@ on:
         required: false
 
 permissions:
+  actions: read
   id-token: write
   contents: read
   pull-requests: write
