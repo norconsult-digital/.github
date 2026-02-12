@@ -1,4 +1,4 @@
-name: TFLint Scan
+name: Trivy Security Scan
 
 on:
   workflow_call:
@@ -17,13 +17,28 @@ on:
         type: string
         default: "main"
         description: "Branch to compare changes against"
+      scan-type:
+        required: false
+        type: string
+        default: "config"
+        description: "Type of scan to perform"
+      severity:
+        required: false
+        type: string
+        default: "LOW,MEDIUM,HIGH,CRITICAL"
+        description: "Severity levels to report"
+      skip-files:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated list of files to skip"
 
 permissions:
   contents: read
   security-events: write
 
 jobs:
-  tflint:
+  trivy-scan:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,33 +48,9 @@ jobs:
           # For PRs, fetch both base and head refs
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      # Cache TFLint plugins
-      - name: Cache TFLint plugins
-        uses: actions/cache@v5
-        with:
-          path: ~/.tflint.d/plugins
-          key: ${{ runner.os }}-tflint-v0.52.0-${{ inputs.repository }}-${{ inputs.path }}-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
-          restore-keys: ${{ runner.os }}-tflint-v0.52.0-${{ inputs.repository }}-
-
-      # Setup TFLint
-      - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v6
-        with:
-          tflint_version: v0.52.0
-
-      - name: Show TFLint version
-        run: tflint --version
-
-      # Initialize TFLint plugins
-      - name: Init TFLint plugins
-        run: tflint --init
-        working-directory: ${{ inputs.path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Run TFLint and capture output
-      - name: Run TFLint
-        id: tflint
+      # Determine changed files
+      - name: Get changed Terraform files
+        id: changed-files
         run: |
           set -e
           
@@ -97,7 +88,7 @@ jobs:
               # Fetch compare branch if it exists
               if ! git fetch origin "${COMPARE_BRANCH}" 2>/dev/null; then
                 echo "Warning: Could not fetch compare branch '${COMPARE_BRANCH}', it may not exist"
-                echo "Cannot compare - branch '${COMPARE_BRANCH}' not found" > ${{ inputs.path }}/tflint-output.txt
+                echo "has_changes=false" >> $GITHUB_OUTPUT
                 exit 0
               fi
             fi
@@ -108,52 +99,83 @@ jobs:
           
           if [ -z "$CHANGED_FILES_FULL" ]; then
             echo "No .tf files changed in ${{ inputs.path }} compared to ${COMPARE_BRANCH}"
-            echo "No Terraform files changed compared to ${COMPARE_BRANCH}" > ${{ inputs.path }}/tflint-output.txt
+            echo "has_changes=false" >> $GITHUB_OUTPUT
           else
             echo "Changed files in ${{ inputs.path }} compared to ${COMPARE_BRANCH}:"
             echo "$CHANGED_FILES_FULL"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
             
-            # Strip the path prefix to get working-directory relative paths
-            CHANGED_FILES=$(echo "$CHANGED_FILES_FULL" | sed 's|^${{ inputs.path }}/||')
-            
-            cd ${{ inputs.path }}
-            echo "$CHANGED_FILES" | xargs -r tflint --format=compact --minimum-failure-severity=notice > tflint-output.txt 2>&1 || true
-            echo "$CHANGED_FILES" | xargs -r tflint --format=sarif --minimum-failure-severity=notice > tflint-results.sarif || true
+            # Save changed files list
+            echo "$CHANGED_FILES_FULL" > /tmp/changed_files.txt
           fi
+
+      - name: Terraform Security Scan (Trivy) - SARIF
+        if: steps.changed-files.outputs.has_changes == 'true'
+        uses: aquasecurity/trivy-action@0.33.1
         continue-on-error: true
-
-      # Upload TFLint SARIF results to GitHub Security
-      - name: Upload TFLint SARIF results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() && hashFiles(format('{0}/tflint-results.sarif', inputs.path)) != ''
         with:
-          sarif_file: ${{ inputs.path }}/tflint-results.sarif
-          category: tflint
+          scan-type: ${{ inputs.scan-type }}
+          scan-ref: ${{ inputs.path }}
+          format: "sarif"
+          output: "${{ inputs.path }}/trivy-results.sarif"
+          exit-code: "0"
+          ignore-unfixed: "false"
+          severity: ${{ inputs.severity }}
+          skip-files: ${{ inputs.skip-files }}
 
-      # Upload TFLint output as artifact
-      - name: Upload TFLint output
+      # Upload Trivy SARIF results to GitHub Security
+      - name: Upload Trivy SARIF results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && steps.changed-files.outputs.has_changes == 'true' && hashFiles(format('{0}/trivy-results.sarif', inputs.path)) != ''
+        with:
+          sarif_file: ${{ inputs.path }}/trivy-results.sarif
+          category: trivy
+
+      # Run Trivy for human-readable output
+      - name: Run Trivy for output
+        if: steps.changed-files.outputs.has_changes == 'true'
+        uses: aquasecurity/trivy-action@0.33.1
+        continue-on-error: true
+        with:
+          scan-type: ${{ inputs.scan-type }}
+          scan-ref: ${{ inputs.path }}
+          format: "table"
+          output: "${{ inputs.path }}/trivy-output.txt"
+          exit-code: "0"
+          ignore-unfixed: "false"
+          severity: ${{ inputs.severity }}
+          skip-files: ${{ inputs.skip-files }}
+
+      # Create output for no changes case
+      - name: Create no changes output
+        if: steps.changed-files.outputs.has_changes != 'true'
+        run: |
+          mkdir -p ${{ inputs.path }}
+          echo "No Terraform files changed - skipping Trivy scan" > ${{ inputs.path }}/trivy-output.txt
+
+      # Upload Trivy output as artifact
+      - name: Upload Trivy output
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: tflint-output
-          path: ${{ inputs.path }}/tflint-output.txt
+          name: trivy-output
+          path: ${{ inputs.path }}/trivy-output.txt
           retention-days: 5
 
-
-      #Publish TFLint results to task summary
-      - name: Publish TFLint Results to Task Summary
+      # Publish Trivy results to task summary
+      - name: Publish Trivy Results to Task Summary
         if: always()
         run: |
-          if [ -f tflint-output.txt ]; then
-            TFLINT_OUTPUT=$(cat tflint-output.txt)
+          if [ -f trivy-output.txt ]; then
+            TRIVY_OUTPUT=$(cat trivy-output.txt)
             
             {
-              echo "## TFLint Results"
+              echo "## Trivy Security Scan Results"
               echo "\`${{ inputs.path }}\`"
               echo "<details><summary>Click to expand</summary>"
               echo ""
               echo '```'
-              echo "${TFLINT_OUTPUT}"
+              echo "${TRIVY_OUTPUT}"
               echo '```'
               echo "</details>"
               echo ""
