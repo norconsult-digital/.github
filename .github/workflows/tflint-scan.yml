@@ -86,7 +86,7 @@ jobs:
             CURRENT_BRANCH="${{ github.ref_name }}"
             COMPARE_BRANCH="${{ inputs.compare-branch }}"
             
-            # Edge case: if pushing to the compare branch itself, use the before commit
+            # If pushing to the compare branch itself, use the before commit to see changes
             if [ "${CURRENT_BRANCH}" == "${COMPARE_BRANCH}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.before }}" ]; then
               COMPARE_REF="${{ github.event.before }}"
               echo "Pushing to ${COMPARE_BRANCH} - comparing current commit against previous: ${COMPARE_REF}"
@@ -104,7 +104,32 @@ jobs:
           fi
           
           # Get changed .tf files within the target path (repo-root relative)
-          CHANGED_FILES_FULL=$(git diff --name-only --diff-filter=d "${COMPARE_REF}...HEAD" | grep '^${{ inputs.path }}/' | grep '\.tf$' || true)
+          # Normalize path by removing leading ./
+          NORMALIZED_PATH="${{ inputs.path }}"
+          NORMALIZED_PATH="${NORMALIZED_PATH#./}"
+          
+          echo "Debug: Running git diff ${COMPARE_REF}...HEAD"
+          echo "Debug: Input path: ${{ inputs.path }}"
+          echo "Debug: Normalized path: ${NORMALIZED_PATH}"
+          echo "Debug: Current directory: $(pwd)"
+          
+          # First, see all changed files
+          ALL_CHANGED=$(git diff --name-only --diff-filter=d "${COMPARE_REF}...HEAD" || true)
+          echo "Debug: All changed files:"
+          echo "${ALL_CHANGED}"
+          echo "---"
+          
+          # Filter for the path
+          PATH_FILTERED=$(echo "${ALL_CHANGED}" | grep "^${NORMALIZED_PATH}/" || true)
+          echo "Debug: Files matching path filter '${NORMALIZED_PATH}/':"
+          echo "${PATH_FILTERED}"
+          echo "---"
+          
+          # Then filter for .tf extension
+          CHANGED_FILES_FULL=$(echo "${PATH_FILTERED}" | grep '\.tf$' || true)
+          echo "Debug: Files matching .tf extension:"
+          echo "${CHANGED_FILES_FULL}"
+          echo "---"
           
           if [ -z "$CHANGED_FILES_FULL" ]; then
             echo "No .tf files changed in ${{ inputs.path }} compared to ${COMPARE_BRANCH}"
@@ -114,7 +139,7 @@ jobs:
             echo "$CHANGED_FILES_FULL"
             
             # Strip the path prefix to get working-directory relative paths
-            CHANGED_FILES=$(echo "$CHANGED_FILES_FULL" | sed 's|^${{ inputs.path }}/||')
+            CHANGED_FILES=$(echo "$CHANGED_FILES_FULL" | sed "s|^${NORMALIZED_PATH}/||")
             
             cd ${{ inputs.path }}
             echo "$CHANGED_FILES" | xargs -r tflint --format=compact --minimum-failure-severity=notice > tflint-output.txt 2>&1 || true
