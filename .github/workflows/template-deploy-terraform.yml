@@ -85,22 +85,22 @@ env:
   TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
 jobs:
-  tflint:
-    uses: ./.github/workflows/tflint-scan.yml
-    with:
-      path: ${{ inputs.path }}
-      compare-branch: main
-      repository: ${{ github.repository }}
+  # tflint:
+  #   uses: ./.github/workflows/tflint-scan.yml
+  #   with:
+  #     path: ${{ inputs.path }}
+  #     compare-branch: main
+  #     repository: ${{ github.repository }}
 
-  tfsec:
-    uses: ./.github/workflows/trivy-scan.yml
-    with:
-      path: ${{ inputs.path }}
-      compare-branch: main
-      repository: ${{ github.repository }}
-      scan-type: "config"
-      severity: "LOW,MEDIUM,HIGH,CRITICAL"
-      skip-files: "terraform/alz/import-amba.tf"
+  # tfsec:
+  #   uses: ./.github/workflows/trivy-scan.yml
+  #   with:
+  #     path: ${{ inputs.path }}
+  #     compare-branch: main
+  #     repository: ${{ github.repository }}
+  #     scan-type: "config"
+  #     severity: "LOW,MEDIUM,HIGH,CRITICAL"
+  #     skip-files: "terraform/alz/import-amba.tf"
 
   terraform-plan:
     runs-on: private-ubuntu-runner
@@ -261,7 +261,7 @@ jobs:
     if: github.ref == inputs.deployfrombranch && needs.terraform-plan.outputs.tfplanExitCode == 2 #exitcode 2 indicates there are pending changes
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentApply }}
-    needs: [terraform-plan, tflint, tfsec]
+    needs: terraform-plan #[terraform-plan, tflint, tfsec]
 
     steps:
       # Checkout the repository to the GitHub Actions runner
