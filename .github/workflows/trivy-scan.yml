@@ -131,23 +131,57 @@ jobs:
             echo "$CHANGED_FILES_FULL"
             echo "has_changes=true" >> $GITHUB_OUTPUT
             
-            # Save changed files list
+            # Save changed files list (repo-root relative paths)
             echo "$CHANGED_FILES_FULL" > /tmp/changed_files.txt
           fi
 
-      - name: Terraform Security Scan (Trivy) - SARIF
+      # Install Trivy
+      - name: Install Trivy
         if: steps.changed-files.outputs.has_changes == 'true'
-        uses: aquasecurity/trivy-action@0.33.1
+        run: |
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+
+      - name: Run Trivy Security Scan
+        if: steps.changed-files.outputs.has_changes == 'true'
         continue-on-error: true
-        with:
-          scan-type: ${{ inputs.scan-type }}
-          scan-ref: ${{ inputs.path }}
-          format: "sarif"
-          output: "${{ inputs.path }}/trivy-results.sarif"
-          exit-code: "0"
-          ignore-unfixed: "false"
-          severity: ${{ inputs.severity }}
-          skip-files: ${{ inputs.skip-files }}
+        run: |
+          # Scan only changed files
+          CHANGED_FILES=$(cat /tmp/changed_files.txt)
+          
+          # Build skip-files argument if provided
+          SKIP_FILES_ARG=""
+          if [ -n "${{ inputs.skip-files }}" ]; then
+            SKIP_FILES_ARG="--skip-files ${{ inputs.skip-files }}"
+          fi
+          
+          # Initialize output files
+          echo "Scanning changed Terraform files:" > ${{ inputs.path }}/trivy-output.txt
+          
+          # Scan each changed file and generate both SARIF and table output
+          echo "$CHANGED_FILES" | while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              # Generate SARIF output
+              trivy config \
+                --format sarif \
+                --severity ${{ inputs.severity }} \
+                $SKIP_FILES_ARG \
+                --exit-code 0 \
+                "$file" >> ${{ inputs.path }}/trivy-results.sarif 2>&1 || true
+              
+              # Generate table output
+              echo "" >> ${{ inputs.path }}/trivy-output.txt
+              echo "=== $file ===" >> ${{ inputs.path }}/trivy-output.txt
+              trivy config \
+                --format table \
+                --severity ${{ inputs.severity }} \
+                $SKIP_FILES_ARG \
+                --exit-code 0 \
+                "$file" >> ${{ inputs.path }}/trivy-output.txt 2>&1 || true
+            fi
+          done
 
       # Upload Trivy SARIF results to GitHub Security
       - name: Upload Trivy SARIF results
@@ -156,21 +190,6 @@ jobs:
         with:
           sarif_file: ${{ inputs.path }}/trivy-results.sarif
           category: trivy
-
-      # Run Trivy for human-readable output
-      - name: Run Trivy for output
-        if: steps.changed-files.outputs.has_changes == 'true'
-        uses: aquasecurity/trivy-action@0.33.1
-        continue-on-error: true
-        with:
-          scan-type: ${{ inputs.scan-type }}
-          scan-ref: ${{ inputs.path }}
-          format: "table"
-          output: "${{ inputs.path }}/trivy-output.txt"
-          exit-code: "0"
-          ignore-unfixed: "false"
-          severity: ${{ inputs.severity }}
-          skip-files: ${{ inputs.skip-files }}
 
       # Create output for no changes case
       - name: Create no changes output
