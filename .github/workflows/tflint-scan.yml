@@ -4,8 +4,9 @@ on:
   workflow_call:
     inputs:
       path:
-        required: true
+        required: false
         type: string
+        default: "./terraform"
         description: "Path to Terraform files"
       repository:
         required: false
@@ -39,14 +40,14 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.tflint.d/plugins
-          key: ${{ runner.os }}-tflint-v0.52.0-${{ inputs.repository }}-${{ inputs.path }}-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
-          restore-keys: ${{ runner.os }}-tflint-v0.52.0-${{ inputs.repository }}-
+          key: ${{ runner.os }}-tflint-latest-${{ inputs.repository }}-${{ inputs.path }}-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
+          restore-keys: ${{ runner.os }}-tflint-latest-${{ inputs.repository }}-
 
       # Setup TFLint
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v6
         with:
-          tflint_version: v0.52.0
+          tflint_version: latest
 
       - name: Show TFLint version
         run: tflint --version
@@ -156,15 +157,16 @@ jobs:
             cd ${{ inputs.path }}
             
             # Initialize output
-            echo "Changed files detected:" > tflint-output.txt
+            echo "Scanning path: ${{ inputs.path }}" > tflint-output.txt
+            echo "Changed files detected:" >> tflint-output.txt
             echo "$CHANGED_FILES" >> tflint-output.txt
             echo "" >> tflint-output.txt
-            echo "TFLint Results:" >> tflint-output.txt
+            echo "TFLint Results (recursive scan):" >> tflint-output.txt
             echo "" >> tflint-output.txt
             
-            # Run TFLint once on the entire directory (v0.47+ doesn't support per-file scanning)
-            tflint --format=compact --minimum-failure-severity=notice >> tflint-output.txt 2>&1 || true
-            tflint --format=sarif --minimum-failure-severity=notice > tflint-results.sarif 2>/dev/null || true
+            # Run TFLint recursively on entire directory and subdirectories
+            tflint --recursive --format=compact --minimum-failure-severity=notice >> tflint-output.txt 2>&1 || true
+            tflint --recursive --format=sarif --minimum-failure-severity=notice > tflint-results.sarif 2>/dev/null || true
             
             # If SARIF is empty or invalid, create empty valid SARIF
             if [ ! -s tflint-results.sarif ] || ! jq empty tflint-results.sarif 2>/dev/null; then
