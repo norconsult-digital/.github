@@ -152,12 +152,14 @@ jobs:
             # Strip the path prefix to get working-directory relative paths
             CHANGED_FILES=$(echo "$CHANGED_FILES_FULL" | sed "s|^${NORMALIZED_PATH}/||")
             
-            # Create temp directory for individual SARIF files
-            SARIF_DIR="${{ inputs.path }}/tflint-sarif-temp"
+            # Change to target directory
+            cd ${{ inputs.path }}
+            
+            # Create temp directory for individual SARIF files (relative to current dir)
+            SARIF_DIR="./tflint-sarif-temp"
             mkdir -p "${SARIF_DIR}"
             
             # Initialize compact output
-            cd ${{ inputs.path }}
             echo "" > tflint-output.txt
             
             # Scan each file individually
