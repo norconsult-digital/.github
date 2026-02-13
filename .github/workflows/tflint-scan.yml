@@ -51,6 +51,10 @@ jobs:
       - name: Show TFLint version
         run: tflint --version
 
+      # Install jq for SARIF merging
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       # Initialize TFLint plugins
       - name: Init TFLint plugins
         run: tflint --init
@@ -148,9 +152,46 @@ jobs:
             # Strip the path prefix to get working-directory relative paths
             CHANGED_FILES=$(echo "$CHANGED_FILES_FULL" | sed "s|^${NORMALIZED_PATH}/||")
             
+            # Create temp directory for individual SARIF files
+            SARIF_DIR="${{ inputs.path }}/tflint-sarif-temp"
+            mkdir -p "${SARIF_DIR}"
+            
+            # Initialize compact output
             cd ${{ inputs.path }}
-            echo "$CHANGED_FILES" | xargs -r tflint --format=compact --minimum-failure-severity=notice > tflint-output.txt 2>&1 || true
-            echo "$CHANGED_FILES" | xargs -r tflint --format=sarif --minimum-failure-severity=notice > tflint-results.sarif || true
+            echo "" > tflint-output.txt
+            
+            # Scan each file individually
+            counter=0
+            echo "$CHANGED_FILES" | while IFS= read -r file; do
+              if [ -n "$file" ]; then
+                counter=$((counter + 1))
+                echo "Scanning: $file" >> tflint-output.txt
+                
+                # Generate compact output
+                tflint --format=compact --minimum-failure-severity=notice "$file" >> tflint-output.txt 2>&1 || true
+                
+                # Generate individual SARIF output
+                tflint --format=sarif --minimum-failure-severity=notice "$file" > "${SARIF_DIR}/tflint-${counter}.sarif" 2>/dev/null || true
+              fi
+            done
+            
+            # Merge all SARIF files into one valid SARIF document
+            if ls "${SARIF_DIR}"/*.sarif 1> /dev/null 2>&1; then
+              jq -s 'reduce .[] as $item (
+                {
+                  "version": "2.1.0",
+                  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+                  "runs": []
+                };
+                .runs += $item.runs
+              )' "${SARIF_DIR}"/*.sarif > tflint-results.sarif
+            else
+              # Create empty SARIF if no valid results
+              echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"TFLint","informationUri":"https://github.com/terraform-linters/tflint"}},"results":[]}]}' > tflint-results.sarif
+            fi
+            
+            # Clean up temp directory
+            rm -rf "${SARIF_DIR}"
           fi
         continue-on-error: true
 
