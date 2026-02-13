@@ -169,8 +169,13 @@ jobs:
                 counter=$((counter + 1))
                 echo "Scanning: $file" >> tflint-output.txt
                 
-                # Generate compact output (use --filter since v0.47+ doesn't support direct file args)
-                tflint --format=compact --minimum-failure-severity=notice --filter="$file" >> tflint-output.txt 2>&1 || true
+                # Run tflint and capture both output and errors for debugging
+                TFLINT_OUTPUT=$(tflint --format=compact --minimum-failure-severity=notice --filter="$file" 2>&1 || true)
+                if [ -n "$TFLINT_OUTPUT" ]; then
+                  echo "$TFLINT_OUTPUT" >> tflint-output.txt
+                else
+                  echo "  No issues found" >> tflint-output.txt
+                fi
                 
                 # Generate individual SARIF output
                 tflint --format=sarif --minimum-failure-severity=notice --filter="$file" > "${SARIF_DIR}/tflint-${counter}.sarif" 2>/dev/null || true
