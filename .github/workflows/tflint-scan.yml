@@ -98,7 +98,10 @@ jobs:
               # Fetch compare branch if it exists
               if ! git fetch origin "${COMPARE_BRANCH}" 2>/dev/null; then
                 echo "Warning: Could not fetch compare branch '${COMPARE_BRANCH}', it may not exist"
+                mkdir -p ${{ inputs.path }}
                 echo "Cannot compare - branch '${COMPARE_BRANCH}' not found" > ${{ inputs.path }}/tflint-output.txt
+                # Create empty SARIF file for Code Scanning
+                echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"TFLint","informationUri":"https://github.com/terraform-linters/tflint"}},"results":[]}]}' > ${{ inputs.path }}/tflint-results.sarif
                 exit 0
               fi
             fi
@@ -134,7 +137,10 @@ jobs:
           
           if [ -z "$CHANGED_FILES_FULL" ]; then
             echo "No .tf files changed in ${{ inputs.path }} compared to ${COMPARE_BRANCH}"
+            mkdir -p ${{ inputs.path }}
             echo "No Terraform files changed compared to ${COMPARE_BRANCH}" > ${{ inputs.path }}/tflint-output.txt
+            # Create empty SARIF file for Code Scanning
+            echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"TFLint","informationUri":"https://github.com/terraform-linters/tflint"}},"results":[]}]}' > ${{ inputs.path }}/tflint-results.sarif
           else
             echo "Changed files in ${{ inputs.path }} compared to ${COMPARE_BRANCH}:"
             echo "$CHANGED_FILES_FULL"
