@@ -162,9 +162,9 @@ jobs:
             # Initialize compact output
             echo "" > tflint-output.txt
             
-            # Scan each file individually
+            # Scan each file individually (use process substitution to avoid subshell issues)
             counter=0
-            echo "$CHANGED_FILES" | while IFS= read -r file; do
+            while IFS= read -r file; do
               if [ -n "$file" ]; then
                 counter=$((counter + 1))
                 echo "Scanning: $file" >> tflint-output.txt
@@ -175,7 +175,7 @@ jobs:
                 # Generate individual SARIF output
                 tflint --format=sarif --minimum-failure-severity=notice --filter="$file" > "${SARIF_DIR}/tflint-${counter}.sarif" 2>/dev/null || true
               fi
-            done
+            done < <(echo "$CHANGED_FILES")
             
             # Merge all SARIF files into one valid SARIF document
             if ls "${SARIF_DIR}"/*.sarif 1> /dev/null 2>&1; then
