@@ -181,7 +181,7 @@ jobs:
               if trivy config \
                 --format sarif \
                 --severity ${{ inputs.severity }} \
-                "$SKIP_FILES_ARG" \
+                $SKIP_FILES_ARG \
                 --exit-code 0 \
                 "$file" > "${SARIF_DIR}/trivy-${counter}-${SANITIZED_NAME}.sarif" 2>/dev/null; then
                 : # Success - no action needed
@@ -195,7 +195,7 @@ jobs:
               if ! trivy config \
                 --format table \
                 --severity ${{ inputs.severity }} \
-                "$SKIP_FILES_ARG" \
+                $SKIP_FILES_ARG \
                 --exit-code 0 \
                 "$file" >> ${{ inputs.path }}/trivy-output.txt 2>&1; then
                 echo "Warning: Failed to scan $file (table output)" >> ${{ inputs.path }}/trivy-output.txt
