@@ -131,11 +131,7 @@ jobs:
           }
 
           Write-Information "Running extractor..."
-          Write-Information "Using config: $env:CONFIGURATION_YML_PATH"
-          if (-not (Test-Path -Path $env:CONFIGURATION_YML_PATH)) {
-            throw "Extractor configuration file not found at '$env:CONFIGURATION_YML_PATH'"
-          }
-          & "$executableFilePath" --configuration "$env:CONFIGURATION_YML_PATH"
+          & "$executableFilePath"
           if ($LASTEXITCODE -ne 0) { throw "Running extractor failed."}
 
           Write-Information "Execution complete."
