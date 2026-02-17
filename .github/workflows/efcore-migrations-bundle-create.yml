@@ -124,5 +124,5 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.projectName }}
+          name: ${{ inputs.projectName }}-bundle
           path: migrations-bundle/
