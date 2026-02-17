@@ -198,16 +198,16 @@ jobs:
             throw "Extractor configuration file not found at '$env:CONFIGURATION_YML_PATH'"
           }
           
-          Write-Information "========== Config file contents =========="
+          Write-Information "CONFIG CONTENTS:"
           Get-Content -Raw -LiteralPath $env:CONFIGURATION_YML_PATH | Write-Information
-          Write-Information "=========================================="
+          Write-Information "===================================="
           
-          Write-Information "========== Extractor version =========="
-          & "$executableFilePath" --version
-          Write-Information "======================================="
+          Write-Information "EXTRACTOR VERSION:"
+          & "$executableFilePath" --version | Out-String | Write-Information
+          Write-Information "===================================="
           
-          Write-Information "========== Extractor help =========="
-          & "$executableFilePath" --help
+          Write-Information "EXTRACTOR HELP:"
+          & "$executableFilePath" --help | Out-String | Write-Information
           Write-Information "===================================="
           
           & "$executableFilePath" --configuration "$env:CONFIGURATION_YML_PATH"
