@@ -90,7 +90,7 @@ jobs:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
           API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
-          API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ GITHUB.WORKSPACE }}/apimartifacts # change this to the artifacts folder
+          API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ github.workspace }}/apimartifacts # change this to the artifacts folder
           API_SPECIFICATION_FORMAT: ${{ inputs.API_SPECIFICATION_FORMAT }}
         run: |
           Set-StrictMode -Version Latest
@@ -146,9 +146,9 @@ jobs:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
           API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
-          API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ GITHUB.WORKSPACE }}/apimartifacts # change this to the artifacts folder
+          API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ github.workspace }}/apimartifacts # change this to the artifacts folder
           API_SPECIFICATION_FORMAT: ${{ inputs.API_SPECIFICATION_FORMAT }}
-          CONFIGURATION_YML_PATH: ${{ GITHUB.WORKSPACE }}/${{ inputs.CONFIGURATION_YML_PATH }}
+          CONFIGURATION_YML_PATH: ${{ github.workspace }}/${{ inputs.CONFIGURATION_YML_PATH }}
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = "Stop"
@@ -189,9 +189,15 @@ jobs:
 
           Write-Information "Running extractor..."
           Write-Information "Using config: $env:CONFIGURATION_YML_PATH"
-          if (-not (Test-Path -Path $env:CONFIGURATION_YML_PATH)) {
+          
+          if ([string]::IsNullOrWhiteSpace($env:CONFIGURATION_YML_PATH)) {
+            throw "CONFIGURATION_YML_PATH is empty"
+          }
+          
+          if (-not (Test-Path -LiteralPath $env:CONFIGURATION_YML_PATH)) {
             throw "Extractor configuration file not found at '$env:CONFIGURATION_YML_PATH'"
           }
+          
           & "$executableFilePath" --configuration "$env:CONFIGURATION_YML_PATH"
           if ($LASTEXITCODE -ne 0) { throw "Running extractor failed."}
 
@@ -202,7 +208,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.set-artifact-name.outputs.artifact_name }}
-          path: ${{ GITHUB.WORKSPACE }}/apimartifacts
+          path: ${{ github.workspace }}/apimartifacts
 
   create-pull-request:
     needs: extract
@@ -221,7 +227,7 @@ jobs:
           API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: apimartifacts
         with:
           name: ${{ needs.extract.outputs.artifact_name }}
-          path: "${{ GITHUB.WORKSPACE }}/${{ env.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}"
+          path: "${{ github.workspace }}/${{ env.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}"
 
       - name: Create artifacts pull request
         uses: peter-evans/create-pull-request@v8
