@@ -187,29 +187,23 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Setting file permissions failed."}
           }
 
+          Write-Information "==== CONFIGURATION VALIDATION ===="
+          Write-Information "CONFIGURATION_YML_PATH env var: $env:CONFIGURATION_YML_PATH"
+          
+          if (-not [string]::IsNullOrWhiteSpace($env:CONFIGURATION_YML_PATH)) {
+            if (Test-Path -LiteralPath $env:CONFIGURATION_YML_PATH) {
+              Write-Information "✓ Config file exists"
+              Write-Information "Config file contents:"
+              Get-Content -Raw -LiteralPath $env:CONFIGURATION_YML_PATH | Write-Information
+            } else {
+              Write-Warning "✗ Config file NOT FOUND at: $env:CONFIGURATION_YML_PATH"
+            }
+          } else {
+            Write-Information "No config file specified - will extract all APIs"
+          }
+          Write-Information "===================================="
+
           Write-Information "Running extractor..."
-          Write-Information "Using config: $env:CONFIGURATION_YML_PATH"
-          
-          if ([string]::IsNullOrWhiteSpace($env:CONFIGURATION_YML_PATH)) {
-            throw "CONFIGURATION_YML_PATH is empty"
-          }
-          
-          if (-not (Test-Path -LiteralPath $env:CONFIGURATION_YML_PATH)) {
-            throw "Extractor configuration file not found at '$env:CONFIGURATION_YML_PATH'"
-          }
-          
-          Write-Information "CONFIG CONTENTS:"
-          Get-Content -Raw -LiteralPath $env:CONFIGURATION_YML_PATH | Write-Information
-          Write-Information "===================================="
-          
-          Write-Information "EXTRACTOR VERSION:"
-          & "$executableFilePath" --version | Out-String | Write-Information
-          Write-Information "===================================="
-          
-          Write-Information "EXTRACTOR HELP:"
-          & "$executableFilePath" --help | Out-String | Write-Information
-          Write-Information "===================================="
-          
           & "$executableFilePath"
           if ($LASTEXITCODE -ne 0) { throw "Running extractor failed."}
 
