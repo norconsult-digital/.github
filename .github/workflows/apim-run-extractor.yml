@@ -39,7 +39,7 @@ on:
           - OpenAPIV3Json
 
 env:
-  apiops_release_version: v6.0.1.10
+  apiops_release_version: v7.0.0-alpha.3.0.0
 
 concurrency:
   group: ${{ github.workflow }}
@@ -210,7 +210,7 @@ jobs:
           & "$executableFilePath" --help | Out-String | Write-Information
           Write-Information "===================================="
           
-          & "$executableFilePath" --configuration "$env:CONFIGURATION_YML_PATH"
+          & "$executableFilePath"
           if ($LASTEXITCODE -ne 0) { throw "Running extractor failed."}
 
           Write-Information "Execution complete."
