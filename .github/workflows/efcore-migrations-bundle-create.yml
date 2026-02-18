@@ -28,7 +28,8 @@ on:
         default: "7.*"
       projectName:
         description: Name of the project (used for artifact naming)
-        required: true
+        required: false
+        default: "migrations-bundle"
         type: string
 
 jobs:
@@ -124,5 +125,5 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.projectName }}-bundle
+          name: ${{ inputs.projectName }}
           path: migrations-bundle/
