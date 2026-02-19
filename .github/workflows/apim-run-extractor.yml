@@ -39,7 +39,7 @@ on:
           - OpenAPIV3Json
 
 env:
-  apiops_release_version: v6.0.2 #v7.0.0-alpha.3.0.0
+  apiops_release_version: v7.0.0-beta.1.0.0
 
 concurrency:
   group: ${{ github.workflow }}
