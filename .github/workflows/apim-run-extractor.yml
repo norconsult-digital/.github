@@ -7,6 +7,7 @@ on:
         required: false
         type: string
         description: "Path to extractor config file (or 'Extract All APIs')"
+        default: "configuration.extractor.admin.yaml"
       API_SPECIFICATION_FORMAT:
         required: false
         type: string
@@ -29,6 +30,7 @@ on:
         type: choice
         options:
           - Extract All APIs
+          - configuration.extractor.admin.yaml
           - configuration.extractor.someOtherTeam.yml
           - configuration.extractor.platform-team.yml
       API_SPECIFICATION_FORMAT:
