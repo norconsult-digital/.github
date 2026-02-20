@@ -30,7 +30,7 @@ on:
       nugetConfigPath:
         required: false
         type: string
-        default: "/nuget-sources/nuget-config/NuGet.Config"
+        default: "/nuget-config/NuGet.Config"
     secrets:
       ADO_NUGET_PAT:
         required: true
@@ -76,12 +76,12 @@ jobs:
 
       - name: Replace ADO Nuget feed token in NuGet.Config
         run: |
-          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}${{ inputs.nugetConfigPath }}
+          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}/nuget-sources${{ inputs.nugetConfigPath }}
 
       - name: Restore dependencies
         run: |
           for csproj in $(find ${{ github.workspace }}/nuget-sources/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet restore $csproj --configfile ${{ github.workspace }}${{ inputs.nugetConfigPath }}
+            dotnet restore $csproj --configfile ${{ github.workspace }}/nuget-sources${{ inputs.nugetConfigPath }}
           done
 
       - name: Dotnet Pack (with version suffix)
