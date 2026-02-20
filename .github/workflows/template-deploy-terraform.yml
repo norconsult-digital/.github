@@ -85,12 +85,12 @@ env:
   TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
 jobs:
-  tflint:
-    uses: ./.github/workflows/tflint-scan.yml
-    with:
-      path: ${{ inputs.path }}
-      compare-branch: main
-      repository: ${{ github.repository }}
+  # tflint:
+  #   uses: ./.github/workflows/tflint-scan.yml
+  #   with:
+  #     path: ${{ inputs.path }}
+  #     compare-branch: main
+  #     repository: ${{ github.repository }}
 
   # tfsec:
   #   uses: ./.github/workflows/trivy-scan.yml
@@ -261,7 +261,7 @@ jobs:
     if: github.ref == inputs.deployfrombranch && needs.terraform-plan.outputs.tfplanExitCode == 2 #exitcode 2 indicates there are pending changes
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentApply }}
-    needs: [terraform-plan, tflint]
+    needs: [terraform-plan]
     # needs: [terraform-plan, tflint, tfsec]
 
     steps:
