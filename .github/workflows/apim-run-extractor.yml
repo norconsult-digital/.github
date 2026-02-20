@@ -5,7 +5,7 @@ on:
     inputs:
       CONFIGURATION_YAML_PATH:
         description: 'Choose Wether to extract all Apis or extract apis listed an extraction configuration file'     
-        required: false
+        required: true
         type: string
       API_SPECIFICATION_FORMAT:
         description: 'API Specification Format'     
