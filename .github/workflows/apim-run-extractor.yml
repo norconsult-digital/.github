@@ -36,15 +36,31 @@ jobs:
   extract:
     runs-on: ubuntu-latest
     environment: api-ops-non-prod # change this to match the dev environment created in settings 
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
-          
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Azure Bearer Token
+        run: |
+          $token = az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv
+          Write-Output "AZURE_BEARER_TOKEN=$token" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
       - name: Run extractor without Config Yaml
         if: ${{ inputs.CONFIGURATION_YAML_PATH == 'Extract All APIs' }}
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_BEARER_TOKEN: ${{ env.AZURE_BEARER_TOKEN }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
           API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
@@ -99,8 +115,8 @@ jobs:
         if: ${{ inputs.CONFIGURATION_YAML_PATH != 'Extract All APIs' }}
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_BEARER_TOKEN: ${{ env.AZURE_BEARER_TOKEN }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_RESOURCE_GROUP_NAME: ${{ secrets.AZURE_RESOURCE_GROUP_NAME }}
           API_MANAGEMENT_SERVICE_NAME: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}
