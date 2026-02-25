@@ -126,7 +126,7 @@ jobs:
           DEFAULT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $token = if ([string]::IsNullOrWhiteSpace($env:CUSTOM_TOKEN)) { $env:DEFAULT_TOKEN } else { $env:CUSTOM_TOKEN }
-          dotnet nuget push (Join-Path $env:GITHUB_WORKSPACE "nuget\*.nupkg") `
+          dotnet nuget push (Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget") "*.nupkg") `
             --source "https://nuget.pkg.github.com/norconsult-digital/index.json" `
             --api-key "$token" --skip-duplicate
 
@@ -141,4 +141,4 @@ jobs:
       - name: Dotnet Push to Azure Artifacts
         shell: pwsh
         run: |
-          dotnet nuget push --api-key AzureArtifacts (Join-Path $env:GITHUB_WORKSPACE "nuget\*.nupkg") --skip-duplicate
+          dotnet nuget push --api-key AzureArtifacts (Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget") "*.nupkg") --skip-duplicate
