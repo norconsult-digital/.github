@@ -66,6 +66,7 @@ jobs:
             echo "preLabel=" >> $GITHUB_ENV
             echo "addVersionSuffix=false" >> $GITHUB_ENV
           fi
+        shell: bash
 
       - name: Set version suffix
         if: ${{ env.addVersionSuffix == 'true' }}
@@ -77,12 +78,14 @@ jobs:
       - name: Replace ADO Nuget feed token in NuGet.Config
         run: |
           sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}/nuget-sources${{ inputs.nugetConfigPath }}
+        shell: bash
 
       - name: Restore dependencies
         run: |
           for csproj in $(find ${{ github.workspace }}/nuget-sources/${{ inputs.projectDir }} -name "*.csproj"); do
             dotnet restore $csproj --configfile ${{ github.workspace }}/nuget-sources${{ inputs.nugetConfigPath }}
           done
+        shell: bash
 
       - name: Dotnet Pack (with version suffix)
         if: ${{ env.addVersionSuffix == 'true' }}
@@ -100,6 +103,7 @@ jobs:
             # Execute dotnet pack with the conditionally set version suffix
             dotnet pack "$csproj" --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --version-suffix "$version_suffix" --output "${{ github.workspace }}/nuget"
           done
+        shell: bash
 
       - name: Dotnet Pack (without version suffix)
         if: ${{ env.addVersionSuffix == 'false' }}
@@ -107,6 +111,7 @@ jobs:
           for csproj in $(find ${{ github.workspace }}/nuget-sources/${{ inputs.projectDir }} -name "*.csproj"); do
             dotnet pack "$csproj" --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --output "${{ github.workspace }}/nuget"
           done
+        shell: bash
 
       - name: Dotnet Push to GitHub Packages
         env:
@@ -117,6 +122,7 @@ jobs:
           dotnet nuget push ${{ github.workspace }}/nuget/*.nupkg \
             --source "https://nuget.pkg.github.com/norconsult-digital/index.json" \
             --api-key "$TOKEN" --skip-duplicate
+        shell: bash
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -128,3 +134,4 @@ jobs:
 
       - name: "Dotnet Push to Azure Artifacts"
         run: dotnet nuget push --api-key AzureArtifacts ${{ github.workspace }}/nuget/*.nupkg --skip-duplicate
+        shell: bash
