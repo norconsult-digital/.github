@@ -3,24 +3,6 @@ name: APIM - Deploy API (Orchestrator)
 on:
   workflow_call:
     inputs:
-      apiProjectPath:
-        description: 'Path to the API project (e.g., src/api/MyApi.csproj)'
-        required: true
-        type: string
-      apiName:
-        description: 'Name of the API in APIM (e.g., my-api)'
-        required: true
-        type: string
-      dotnetVersion:
-        description: '.NET SDK version'
-        required: false
-        type: string
-        default: '10.*'
-      swaggerPath:
-        description: 'Relative swagger endpoint exposed by the API (default: /swagger/v1/swagger.json)'
-        required: false
-        type: string
-        default: '/swagger/v1/swagger.json'
       runExtractor:
         description: 'Run the APIM extractor after pushing the API spec'
         required: false
@@ -53,18 +35,8 @@ on:
         default: 'configuration.prod.yml'
 
 jobs:
-  create-openapi:
-    name: Export OpenAPI Specification
-    uses: norconsult-digital/.github/.github/workflows/apim-create-openapi.yml@apim
-    with:
-      apiProjectPath: ${{ inputs.apiProjectPath }}
-      apiName: ${{ inputs.apiName }}
-      dotnetVersion: ${{ inputs.dotnetVersion }}
-      swaggerPath: ${{ inputs.swaggerPath }}
-
   push-to-apim:
     name: Push OpenAPI to APIM
-    needs: create-openapi
     uses: norconsult-digital/.github/.github/workflows/apim-push-openapi.yml@apim
     with:
       API_NAME: ${{ inputs.apiName }}
