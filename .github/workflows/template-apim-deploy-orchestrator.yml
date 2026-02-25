@@ -7,11 +7,6 @@ on:
         description: 'Name of the API being deployed (e.g., bim-admin-api)'
         required: true
         type: string
-      runExtractor:
-        description: 'Run the APIM extractor after pushing the API spec'
-        required: false
-        type: boolean
-        default: true
       CONFIGURATION_YAML_PATH:
         description: 'Extractor config ("Extract All APIs" or a config yaml filename)'
         required: false
@@ -49,7 +44,6 @@ jobs:
   run-extractor:
     name: Run APIM Extractor
     needs: push-to-apim
-    if: ${{ inputs.runExtractor == true }}
     uses: norconsult-digital/.github/.github/workflows/apim-run-extractor.yml@apim
     with:
       CONFIGURATION_YAML_PATH: ${{ inputs.CONFIGURATION_YAML_PATH }}
