@@ -27,11 +27,6 @@ on:
         required: false
         type: string
         default: 'apimartifacts'
-      CONFIGURATION_PROD_YML_PATH:
-        description: 'Path to the production configuration file'
-        required: false
-        type: string
-        default: 'configuration.prod.yml'
 
 jobs:
   push-to-apim:
@@ -57,5 +52,5 @@ jobs:
     with:
       COMMIT_ID_CHOICE: ${{ inputs.COMMIT_ID_CHOICE }}
       API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
-      CONFIGURATION_PROD_YML_PATH: ${{ inputs.CONFIGURATION_PROD_YML_PATH }}
+      CONFIGURATION_PROD_YML_PATH: ${{ inputs.CONFIGURATION_YAML_PATH }}
     secrets: inherit
