@@ -20,10 +20,11 @@ on:
       nugetConfigPath:
         required: false
         type: string
-        default: "nuget-config/NuGet.Config"
+        default: "/nuget-config/NuGet.Config"
     secrets:
       ADO_NUGET_PAT:
         required: true
+
 jobs:
   build-and-test:
     runs-on: ${{ inputs.vmImage }}
@@ -37,33 +38,36 @@ jobs:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
       - name: Replace ADO Nuget feed token in NuGet.Config
-        env:
-          MSYS_NO_PATHCONV: 1
+        shell: pwsh
         run: |
-          FILE="${{ github.workspace }}/${{ inputs.nugetConfigPath }}"
-          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' "$FILE"
-        shell: bash
+          $nugetConfig = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.nugetConfigPath }}"
+          $content = Get-Content -Path $nugetConfig -Raw
+          $content = $content -replace '<add key="ClearTextPassword" value="password" />', '<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />'
+          Set-Content -Path $nugetConfig -Value $content
 
       - name: Restore dependencies
+        shell: pwsh
         run: |
-          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet restore $csproj --configfile ${{ github.workspace }}${{ inputs.nugetConfigPath }}
-          done
-        shell: bash
+          $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
+            dotnet restore $_.FullName --configfile (Join-Path $env:GITHUB_WORKSPACE "${{ inputs.nugetConfigPath }}")
+          }
 
       - name: Build
+        shell: pwsh
         run: |
-          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet build $csproj --configuration ${{ inputs.buildConfiguration }} --no-restore
-          done
-        shell: bash
+          $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
+            dotnet build $_.FullName --configuration ${{ inputs.buildConfiguration }} --no-restore
+          }
 
       - name: Run tests
+        shell: pwsh
         run: |
-          for project in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name '*[T|t]ests.csproj'); do
-            dotnet test $project --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore
-          done
-        shell: bash
+          $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *tests.csproj | ForEach-Object {
+            dotnet test $_.FullName --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore
+          }
 
       - name: Publish nuget sources
         if: ${{ github.event_name != 'pull_request' }}
