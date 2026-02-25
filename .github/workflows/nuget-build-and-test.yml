@@ -65,7 +65,7 @@ jobs:
         shell: pwsh
         run: |
           $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
-          Get-ChildItem -Path $projectRoot -Recurse -Filter *tests.csproj | ForEach-Object {
+          Get-ChildItem -Path $projectRoot -Recurse -Include '*Tests.csproj', '*tests.csproj' | ForEach-Object {
             dotnet test $_.FullName --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore
           }
 
