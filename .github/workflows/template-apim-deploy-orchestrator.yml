@@ -9,7 +9,7 @@ on:
         type: string
       CONFIGURATION_YAML_PATH:
         description: 'Extractor config ("Extract All APIs" or a config yaml filename)'
-        required: false
+        required: true
         type: string
         default: 'Extract All APIs'
       API_SPECIFICATION_FORMAT:
