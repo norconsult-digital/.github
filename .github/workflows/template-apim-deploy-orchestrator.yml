@@ -3,6 +3,10 @@ name: APIM - Deploy API (Orchestrator)
 on:
   workflow_call:
     inputs:
+      API_NAME:
+        description: 'Name of the API being deployed (e.g., bim-admin-api)'
+        required: true
+        type: string
       runExtractor:
         description: 'Run the APIM extractor after pushing the API spec'
         required: false
@@ -39,7 +43,7 @@ jobs:
     name: Push OpenAPI to APIM
     uses: norconsult-digital/.github/.github/workflows/apim-push-openapi.yml@apim
     with:
-      API_NAME: ${{ inputs.apiName }}
+      API_NAME: ${{ inputs.API_NAME }}
     secrets: inherit
 
   run-extractor:
