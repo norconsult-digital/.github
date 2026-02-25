@@ -30,7 +30,7 @@ on:
       nugetConfigPath:
         required: false
         type: string
-        default: "/nuget-config/NuGet.Config"
+        default: "nuget-config/NuGet.Config"
     secrets:
       ADO_NUGET_PAT:
         required: true
