@@ -3,7 +3,7 @@ name: Export OpenAPI Specification
 on:
   workflow_call:
     inputs:
-      apiProject:
+      apiProjectPath:
         description: 'Path to the API project (e.g., admin/src/api/Admin.csproj)'
         required: true
         type: string
@@ -49,8 +49,8 @@ jobs:
 
       - name: Restore and Build
         run: |
-          dotnet restore ${{ inputs.apiProject }}
-          dotnet build ${{ inputs.apiProject }} -c Release --no-restore
+          dotnet restore ${{ inputs.apiProjectPath }}
+          dotnet build ${{ inputs.apiProjectPath }} -c Release --no-restore
 
       - name: Generate OpenAPI Spec with NSwag
         run: |
@@ -59,14 +59,14 @@ jobs:
           
           OUTPUT_FILE="${{ inputs.outputPath }}/${{ inputs.apiName }}-openapi.json"
           
-          echo "📦 Project: ${{ inputs.apiProject }}"
+          echo "📦 Project: ${{ inputs.apiProjectPath }}"
           echo "📄 Output: $OUTPUT_FILE"
           
           # Generate OpenAPI spec using NSwag aspnetcore2openapi
           # This uses the project file to locate the assembly and generate spec
           # /NoBuild:true since we already built above
           nswag aspnetcore2openapi \
-            /project:${{ inputs.apiProject }} \
+            /project:${{ inputs.apiProjectPath }} \
             /output:$OUTPUT_FILE \
             /NoBuild:true \
             /configuration:Release
