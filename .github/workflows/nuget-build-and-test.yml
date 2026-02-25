@@ -20,10 +20,11 @@ on:
       nugetConfigPath:
         required: false
         type: string
-        default: "/nuget-config/NuGet.Config"
+        default: "nuget-config/NuGet.Config"
     secrets:
       ADO_NUGET_PAT:
         required: true
+
 jobs:
   build-and-test:
     runs-on: ${{ inputs.vmImage }}
@@ -36,27 +37,58 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
-      - name: Replace ADO Nuget feed token in NuGet.Config
+      - name: Validate nugetConfigPath and projectDir are workspace-relative
+        shell: pwsh
         run: |
-          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}${{ inputs.nugetConfigPath }}
+          $workspaceRoot = (Resolve-Path $env:GITHUB_WORKSPACE).Path
+          function Get-ValidatedPath([string]$basePath, [string]$relativePath, [string]$inputName) {
+            if ([System.IO.Path]::IsPathRooted($relativePath)) {
+              throw "$inputName must be workspace-relative (no leading / or \\)."
+            }
+            $candidate = Join-Path $basePath $relativePath
+            $resolved = (Resolve-Path $candidate -ErrorAction Stop).Path
+            if (-not $resolved.StartsWith($basePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+              throw "$inputName must resolve within $basePath."
+            }
+            return $resolved
+          }
+
+          Get-ValidatedPath $workspaceRoot "${{ inputs.nugetConfigPath }}" "inputs.nugetConfigPath" | Out-Null
+          Get-ValidatedPath $workspaceRoot "${{ inputs.projectDir }}" "inputs.projectDir" | Out-Null
+
+      - name: Create temporary NuGet.Config with ADO feed token
+        shell: pwsh
+        run: |
+          $sourceConfig = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.nugetConfigPath }}"
+          $content = Get-Content -Path $sourceConfig -Raw
+          $content = $content.Replace('<add key="ClearTextPassword" value="password" />', '<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />')
+          $tempConfig = Join-Path $env:RUNNER_TEMP "NuGet.Config"
+          Set-Content -Path $tempConfig -Value $content
+          "NUGET_CONFIG_TEMP=$tempConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Restore dependencies
+        shell: pwsh
         run: |
-          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet restore $csproj --configfile ${{ github.workspace }}${{ inputs.nugetConfigPath }}
-          done
+          $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
+            dotnet restore $_.FullName --configfile $env:NUGET_CONFIG_TEMP
+          }
 
       - name: Build
+        shell: pwsh
         run: |
-          for csproj in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet build $csproj --configuration ${{ inputs.buildConfiguration }} --no-restore
-          done
+          $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
+            dotnet build $_.FullName --configuration ${{ inputs.buildConfiguration }} --no-restore
+          }
 
       - name: Run tests
+        shell: pwsh
         run: |
-          for project in $(find ${{ github.workspace }}/${{ inputs.projectDir }} -name '*[T|t]ests.csproj'); do
-            dotnet test $project --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore
-          done
+          $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Include '*Tests.csproj', '*tests.csproj' | ForEach-Object {
+            dotnet test $_.FullName --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore
+          }
 
       - name: Publish nuget sources
         if: ${{ github.event_name != 'pull_request' }}

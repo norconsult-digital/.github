@@ -30,7 +30,7 @@ on:
       nugetConfigPath:
         required: false
         type: string
-        default: "/nuget-config/NuGet.Config"
+        default: "nuget-config/NuGet.Config"
     secrets:
       ADO_NUGET_PAT:
         required: true
@@ -54,69 +54,104 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
-      - name: Set environment-specific variables
+      - name: Validate nugetConfigPath and projectDir are workspace-relative
+        shell: pwsh
         run: |
-          if [[ "${{ inputs.environmentName }}" == "test" ]]; then
-            echo "preLabel=dev" >> $GITHUB_ENV
-            echo "addVersionSuffix=true" >> $GITHUB_ENV
-          elif [[ "${{ inputs.environmentName }}" == "stage" ]]; then
-            echo "preLabel=rc" >> $GITHUB_ENV
-            echo "addVersionSuffix=true" >> $GITHUB_ENV
-          elif [[ "${{ inputs.environmentName }}" == "prod" ]]; then
-            echo "preLabel=" >> $GITHUB_ENV
-            echo "addVersionSuffix=false" >> $GITHUB_ENV
-          fi
+          $sourcesRoot = (Resolve-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources")).Path
+          function Get-ValidatedPath([string]$basePath, [string]$relativePath, [string]$inputName) {
+            if ([System.IO.Path]::IsPathRooted($relativePath)) {
+              throw "$inputName must be workspace-relative (no leading / or \\)."
+            }
+            $candidate = Join-Path $basePath $relativePath
+            $resolved = (Resolve-Path $candidate -ErrorAction Stop).Path
+            if (-not $resolved.StartsWith($basePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+              throw "$inputName must resolve within $basePath."
+            }
+            return $resolved
+          }
+
+          Get-ValidatedPath $sourcesRoot "${{ inputs.nugetConfigPath }}" "inputs.nugetConfigPath" | Out-Null
+          Get-ValidatedPath $sourcesRoot "${{ inputs.projectDir }}" "inputs.projectDir" | Out-Null
+
+      - name: Set environment-specific variables
+        shell: pwsh
+        run: |
+          switch ("${{ inputs.environmentName }}") {
+            "test" {
+              "preLabel=dev" | Out-File -FilePath $env:GITHUB_ENV -Append
+              "addVersionSuffix=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            }
+            "stage" {
+              "preLabel=rc" | Out-File -FilePath $env:GITHUB_ENV -Append
+              "addVersionSuffix=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            }
+            "prod" {
+              "preLabel=" | Out-File -FilePath $env:GITHUB_ENV -Append
+              "addVersionSuffix=false" | Out-File -FilePath $env:GITHUB_ENV -Append
+            }
+            default {
+              throw "inputs.environmentName must be one of: test, stage, prod."
+            }
+          }
 
       - name: Set version suffix
         if: ${{ env.addVersionSuffix == 'true' }}
+        shell: pwsh
         run: |
-          date=$(date +'%Y%m%d-%H%M%S')
-          echo "isy_versionSuffix=${{ env.preLabel }}-$date" >> $GITHUB_ENV
-        shell: bash
+          $date = Get-Date -Format "yyyyMMdd-HHmmss"
+          "isy_versionSuffix=${{ env.preLabel }}-$date" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Replace ADO Nuget feed token in NuGet.Config
+      - name: Create temporary NuGet.Config with ADO feed token
+        shell: pwsh
         run: |
-          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}/nuget-sources${{ inputs.nugetConfigPath }}
+          $sourceConfig = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.nugetConfigPath }}"
+          $content = Get-Content -Path $sourceConfig -Raw
+          $content = $content.Replace('<add key="ClearTextPassword" value="password" />', '<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />')
+          $tempConfig = Join-Path $env:RUNNER_TEMP "NuGet.Config"
+          Set-Content -Path $tempConfig -Value $content
+          "NUGET_CONFIG_TEMP=$tempConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Restore dependencies
+        shell: pwsh
         run: |
-          for csproj in $(find ${{ github.workspace }}/nuget-sources/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet restore $csproj --configfile ${{ github.workspace }}/nuget-sources${{ inputs.nugetConfigPath }}
-          done
+          $projectRoot = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
+            dotnet restore $_.FullName --configfile $env:NUGET_CONFIG_TEMP
+          }
 
       - name: Dotnet Pack (with version suffix)
         if: ${{ env.addVersionSuffix == 'true' }}
+        shell: pwsh
         run: |
-          for csproj in $(find ${{ github.workspace }}/nuget-sources/${{ inputs.projectDir }} -name "*.csproj"); do
-            # Check if the Version element contains '$(VersionSuffix)'
-            if grep -q '<Version>.*$(VersionSuffix)</Version>' "$csproj"; then
-              # If $(VersionSuffix) is found, ensure the isy_versionSuffix starts with a hyphen
-              version_suffix="-${{ env.isy_versionSuffix }}"
-            else
-              # If $(VersionSuffix) is not found, use the version suffix as is
-              version_suffix="${{ env.isy_versionSuffix }}"
-            fi
-
-            # Execute dotnet pack with the conditionally set version suffix
-            dotnet pack "$csproj" --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --version-suffix "$version_suffix" --output "${{ github.workspace }}/nuget"
-          done
+          $projectRoot = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
+            $csproj = $_.FullName
+            $versionSuffix = "${{ env.isy_versionSuffix }}"
+            if (Select-String -Path $csproj -Pattern '<Version>.*\$\((VersionSuffix)\)</Version>' -Quiet) {
+              $versionSuffix = "-$versionSuffix"
+            }
+            dotnet pack $csproj --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --version-suffix "$versionSuffix" --output (Join-Path $env:GITHUB_WORKSPACE "nuget")
+          }
 
       - name: Dotnet Pack (without version suffix)
         if: ${{ env.addVersionSuffix == 'false' }}
+        shell: pwsh
         run: |
-          for csproj in $(find ${{ github.workspace }}/nuget-sources/${{ inputs.projectDir }} -name "*.csproj"); do
-            dotnet pack "$csproj" --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --output "${{ github.workspace }}/nuget"
-          done
+          $projectRoot = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.projectDir }}"
+          Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
+            dotnet pack $_.FullName --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --output (Join-Path $env:GITHUB_WORKSPACE "nuget")
+          }
 
       - name: Dotnet Push to GitHub Packages
+        shell: pwsh
         env:
           CUSTOM_TOKEN: ${{ secrets.NUGET_GITHUB_PAT }}
           DEFAULT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TOKEN=${CUSTOM_TOKEN:-$DEFAULT_TOKEN}
-          dotnet nuget push ${{ github.workspace }}/nuget/*.nupkg \
-            --source "https://nuget.pkg.github.com/norconsult-digital/index.json" \
-            --api-key "$TOKEN" --skip-duplicate
+          $token = if ([string]::IsNullOrWhiteSpace($env:CUSTOM_TOKEN)) { $env:DEFAULT_TOKEN } else { $env:CUSTOM_TOKEN }
+          dotnet nuget push (Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget") "*.nupkg") `
+            --source "https://nuget.pkg.github.com/norconsult-digital/index.json" `
+            --api-key "$token" --skip-duplicate
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -126,5 +161,7 @@ jobs:
         env:
           NUGET_AUTH_TOKEN: ${{ secrets.ADO_NUGET_PAT }}
 
-      - name: "Dotnet Push to Azure Artifacts"
-        run: dotnet nuget push --api-key AzureArtifacts ${{ github.workspace }}/nuget/*.nupkg --skip-duplicate
+      - name: Dotnet Push to Azure Artifacts
+        shell: pwsh
+        run: |
+          dotnet nuget push --api-key AzureArtifacts (Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget") "*.nupkg") --skip-duplicate
