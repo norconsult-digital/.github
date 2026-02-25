@@ -21,7 +21,7 @@ on:
         description: 'Use "publish-artifacts-in-last-commit" (default) or "publish-all-artifacts-in-repo"'
         required: false
         type: string
-        default: 'publish-artifacts-in-last-commit'
+        default: 'publish-all-artifacts-in-repo'
       API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH:
         description: 'Path to the APIM artifacts folder'
         required: false
