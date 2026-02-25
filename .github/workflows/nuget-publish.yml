@@ -89,6 +89,9 @@ jobs:
               "preLabel=" | Out-File -FilePath $env:GITHUB_ENV -Append
               "addVersionSuffix=false" | Out-File -FilePath $env:GITHUB_ENV -Append
             }
+            default {
+              throw "inputs.environmentName must be one of: test, stage, prod."
+            }
           }
 
       - name: Set version suffix
