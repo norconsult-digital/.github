@@ -37,13 +37,24 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
-      - name: Validate nugetConfigPath is workspace-relative
+      - name: Validate nugetConfigPath and projectDir are workspace-relative
         shell: pwsh
         run: |
-          $nugetConfigPath = "${{ inputs.nugetConfigPath }}"
-          if ([System.IO.Path]::IsPathRooted($nugetConfigPath)) {
-            throw "inputs.nugetConfigPath must be workspace-relative (no leading / or \\)."
+          $workspaceRoot = (Resolve-Path $env:GITHUB_WORKSPACE).Path
+          function Get-ValidatedPath([string]$basePath, [string]$relativePath, [string]$inputName) {
+            if ([System.IO.Path]::IsPathRooted($relativePath)) {
+              throw "$inputName must be workspace-relative (no leading / or \\)."
+            }
+            $candidate = Join-Path $basePath $relativePath
+            $resolved = (Resolve-Path $candidate -ErrorAction Stop).Path
+            if (-not $resolved.StartsWith($basePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+              throw "$inputName must resolve within $basePath."
+            }
+            return $resolved
           }
+
+          Get-ValidatedPath $workspaceRoot "${{ inputs.nugetConfigPath }}" "inputs.nugetConfigPath" | Out-Null
+          Get-ValidatedPath $workspaceRoot "${{ inputs.projectDir }}" "inputs.projectDir" | Out-Null
 
       - name: Replace ADO Nuget feed token in NuGet.Config
         shell: pwsh

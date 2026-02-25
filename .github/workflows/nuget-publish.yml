@@ -54,13 +54,24 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
-      - name: Validate nugetConfigPath is workspace-relative
+      - name: Validate nugetConfigPath and projectDir are workspace-relative
         shell: pwsh
         run: |
-          $nugetConfigPath = "${{ inputs.nugetConfigPath }}"
-          if ([System.IO.Path]::IsPathRooted($nugetConfigPath)) {
-            throw "inputs.nugetConfigPath must be workspace-relative (no leading / or \\)."
+          $sourcesRoot = (Resolve-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources")).Path
+          function Get-ValidatedPath([string]$basePath, [string]$relativePath, [string]$inputName) {
+            if ([System.IO.Path]::IsPathRooted($relativePath)) {
+              throw "$inputName must be workspace-relative (no leading / or \\)."
+            }
+            $candidate = Join-Path $basePath $relativePath
+            $resolved = (Resolve-Path $candidate -ErrorAction Stop).Path
+            if (-not $resolved.StartsWith($basePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+              throw "$inputName must resolve within $basePath."
+            }
+            return $resolved
           }
+
+          Get-ValidatedPath $sourcesRoot "${{ inputs.nugetConfigPath }}" "inputs.nugetConfigPath" | Out-Null
+          Get-ValidatedPath $sourcesRoot "${{ inputs.projectDir }}" "inputs.projectDir" | Out-Null
 
       - name: Set environment-specific variables
         shell: pwsh
