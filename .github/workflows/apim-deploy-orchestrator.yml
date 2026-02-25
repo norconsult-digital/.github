@@ -1,0 +1,91 @@
+name: APIM - Deploy API (Orchestrator)
+
+on:
+  workflow_call:
+    inputs:
+      apiProjectPath:
+        description: 'Path to the API project (e.g., src/api/MyApi.csproj)'
+        required: true
+        type: string
+      apiName:
+        description: 'Name of the API in APIM (e.g., my-api)'
+        required: true
+        type: string
+      dotnetVersion:
+        description: '.NET SDK version'
+        required: false
+        type: string
+        default: '10.*'
+      swaggerPath:
+        description: 'Relative swagger endpoint exposed by the API (default: /swagger/v1/swagger.json)'
+        required: false
+        type: string
+        default: '/swagger/v1/swagger.json'
+      runExtractor:
+        description: 'Run the APIM extractor after pushing the API spec'
+        required: false
+        type: boolean
+        default: false
+      CONFIGURATION_YAML_PATH:
+        description: 'Extractor config ("Extract All APIs" or a config yaml filename)'
+        required: false
+        type: string
+        default: 'Extract All APIs'
+      API_SPECIFICATION_FORMAT:
+        description: 'API Specification Format for the extractor'
+        required: false
+        type: string
+        default: 'OpenAPIV3Json'
+      COMMIT_ID_CHOICE:
+        description: 'Use "publish-artifacts-in-last-commit" (default) or "publish-all-artifacts-in-repo"'
+        required: false
+        type: string
+        default: 'publish-artifacts-in-last-commit'
+      API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH:
+        description: 'Path to the APIM artifacts folder'
+        required: false
+        type: string
+        default: 'apimartifacts'
+      CONFIGURATION_PROD_YML_PATH:
+        description: 'Path to the production configuration file'
+        required: false
+        type: string
+        default: 'configuration.prod.yml'
+
+jobs:
+  create-openapi:
+    name: Export OpenAPI Specification
+    uses: norconsult-digital/.github/.github/workflows/apim-create-openapi.yml@apim
+    with:
+      apiProjectPath: ${{ inputs.apiProjectPath }}
+      apiName: ${{ inputs.apiName }}
+      dotnetVersion: ${{ inputs.dotnetVersion }}
+      swaggerPath: ${{ inputs.swaggerPath }}
+
+  push-to-apim:
+    name: Push OpenAPI to APIM
+    needs: create-openapi
+    uses: norconsult-digital/.github/.github/workflows/apim-push-openapi.yml@apim
+    with:
+      API_NAME: ${{ inputs.apiName }}
+    secrets: inherit
+
+  run-extractor:
+    name: Run APIM Extractor
+    needs: push-to-apim
+    if: ${{ inputs.runExtractor == true }}
+    uses: norconsult-digital/.github/.github/workflows/apim-run-extractor.yml@apim
+    with:
+      CONFIGURATION_YAML_PATH: ${{ inputs.CONFIGURATION_YAML_PATH }}
+      API_SPECIFICATION_FORMAT: ${{ inputs.API_SPECIFICATION_FORMAT }}
+    secrets: inherit
+
+  run-publisher:
+    name: Publish APIM Artifacts
+    needs: [push-to-apim, run-extractor]
+    uses: norconsult-digital/.github/.github/workflows/apim-run-publisher.yml@apim
+    with:
+      COMMIT_ID_CHOICE: ${{ inputs.COMMIT_ID_CHOICE }}
+      API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
+      CONFIGURATION_PROD_YML_PATH: ${{ inputs.CONFIGURATION_PROD_YML_PATH }}
+    secrets: inherit
