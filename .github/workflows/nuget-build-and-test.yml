@@ -56,20 +56,22 @@ jobs:
           Get-ValidatedPath $workspaceRoot "${{ inputs.nugetConfigPath }}" "inputs.nugetConfigPath" | Out-Null
           Get-ValidatedPath $workspaceRoot "${{ inputs.projectDir }}" "inputs.projectDir" | Out-Null
 
-      - name: Replace ADO Nuget feed token in NuGet.Config
+      - name: Create temporary NuGet.Config with ADO feed token
         shell: pwsh
         run: |
-          $nugetConfig = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.nugetConfigPath }}"
-          $content = Get-Content -Path $nugetConfig -Raw
+          $sourceConfig = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.nugetConfigPath }}"
+          $content = Get-Content -Path $sourceConfig -Raw
           $content = $content.Replace('<add key="ClearTextPassword" value="password" />', '<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />')
-          Set-Content -Path $nugetConfig -Value $content
+          $tempConfig = Join-Path $env:RUNNER_TEMP "NuGet.Config"
+          Set-Content -Path $tempConfig -Value $content
+          "NUGET_CONFIG_TEMP=$tempConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Restore dependencies
         shell: pwsh
         run: |
           $projectRoot = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.projectDir }}"
           Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
-            dotnet restore $_.FullName --configfile (Join-Path $env:GITHUB_WORKSPACE "${{ inputs.nugetConfigPath }}")
+            dotnet restore $_.FullName --configfile $env:NUGET_CONFIG_TEMP
           }
 
       - name: Build

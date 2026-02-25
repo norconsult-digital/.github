@@ -98,21 +98,22 @@ jobs:
           $date = Get-Date -Format "yyyyMMdd-HHmmss"
           "isy_versionSuffix=${{ env.preLabel }}-$date" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Replace ADO Nuget feed token in NuGet.Config
+      - name: Create temporary NuGet.Config with ADO feed token
         shell: pwsh
         run: |
-          $nugetConfig = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.nugetConfigPath }}"
-          $content = Get-Content -Path $nugetConfig -Raw
+          $sourceConfig = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.nugetConfigPath }}"
+          $content = Get-Content -Path $sourceConfig -Raw
           $content = $content.Replace('<add key="ClearTextPassword" value="password" />', '<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />')
-          Set-Content -Path $nugetConfig -Value $content
+          $tempConfig = Join-Path $env:RUNNER_TEMP "NuGet.Config"
+          Set-Content -Path $tempConfig -Value $content
+          "NUGET_CONFIG_TEMP=$tempConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Restore dependencies
         shell: pwsh
         run: |
           $projectRoot = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.projectDir }}"
-          $nugetConfig = Join-Path (Join-Path $env:GITHUB_WORKSPACE "nuget-sources") "${{ inputs.nugetConfigPath }}"
           Get-ChildItem -Path $projectRoot -Recurse -Filter *.csproj | ForEach-Object {
-            dotnet restore $_.FullName --configfile $nugetConfig
+            dotnet restore $_.FullName --configfile $env:NUGET_CONFIG_TEMP
           }
 
       - name: Dotnet Pack (with version suffix)
