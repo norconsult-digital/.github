@@ -42,7 +42,7 @@ jobs:
         run: |
           $nugetConfig = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.nugetConfigPath }}"
           $content = Get-Content -Path $nugetConfig -Raw
-          $content = $content -replace '<add key="ClearTextPassword" value="password" />', '<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />'
+          $content = $content.Replace('<add key="ClearTextPassword" value="password" />', '<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />')
           Set-Content -Path $nugetConfig -Value $content
 
       - name: Restore dependencies
