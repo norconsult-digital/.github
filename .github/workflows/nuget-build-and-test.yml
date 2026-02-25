@@ -37,6 +37,14 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
+      - name: Validate nugetConfigPath is workspace-relative
+        shell: pwsh
+        run: |
+          $nugetConfigPath = "${{ inputs.nugetConfigPath }}"
+          if ([System.IO.Path]::IsPathRooted($nugetConfigPath)) {
+            throw "inputs.nugetConfigPath must be workspace-relative (no leading / or \\)."
+          }
+
       - name: Replace ADO Nuget feed token in NuGet.Config
         shell: pwsh
         run: |
