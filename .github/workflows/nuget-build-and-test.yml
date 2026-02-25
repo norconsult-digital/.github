@@ -20,7 +20,7 @@ on:
       nugetConfigPath:
         required: false
         type: string
-        default: "/nuget-config/NuGet.Config"
+        default: "nuget-config/NuGet.Config"
     secrets:
       ADO_NUGET_PAT:
         required: true
@@ -37,8 +37,9 @@ jobs:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
       - name: Replace ADO Nuget feed token in NuGet.Config
+        working-directory: ${{ github.workspace }}
         run: |
-          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' ${{ github.workspace }}${{ inputs.nugetConfigPath }}
+          sed -i 's|<add key="ClearTextPassword" value="password" />|<add key="ClearTextPassword" value="${{ secrets.ADO_NUGET_PAT }}" />|' "${{ inputs.nugetConfigPath }}"
         shell: bash
 
       - name: Restore dependencies
