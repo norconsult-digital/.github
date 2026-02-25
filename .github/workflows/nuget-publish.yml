@@ -107,7 +107,7 @@ jobs:
             if (Select-String -Path $csproj -Pattern '<Version>.*\$\((VersionSuffix)\)</Version>' -Quiet) {
               $versionSuffix = "-$versionSuffix"
             }
-            dotnet pack $csproj --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --version-suffix $versionSuffix --output (Join-Path $env:GITHUB_WORKSPACE "nuget")
+            dotnet pack $csproj --configuration "${{ inputs.buildConfiguration }}" --no-restore --no-build --version-suffix "$versionSuffix" --output (Join-Path $env:GITHUB_WORKSPACE "nuget")
           }
 
       - name: Dotnet Pack (without version suffix)
