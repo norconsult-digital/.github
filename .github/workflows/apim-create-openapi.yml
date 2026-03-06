@@ -3,7 +3,7 @@ name: Export OpenAPI Specification
 on:
   workflow_call:
     inputs:
-      apiProject:
+      apiProjectPath:
         description: 'Path to the API project (e.g., admin/src/api/Admin.csproj)'
         required: true
         type: string
@@ -21,11 +21,11 @@ on:
         required: false
         type: string
         default: 'docs/api-specs'
-      nswagVersion:
-        description: 'NSwag.ConsoleCore version (default: 14.6.2)'
+      swaggerPath:
+        description: 'Relative swagger endpoint exposed by the API (default: /swagger/v1/swagger.json)'
         required: false
         type: string
-        default: '14.6.2'
+        default: '/swagger/v1/swagger.json'
 
 jobs:
   export-openapi:
@@ -42,50 +42,122 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
-      - name: Install NSwag CLI
-        run: |
-          # Install specific version to match project's NSwag.Core dependency
-          dotnet tool install -g NSwag.ConsoleCore --version ${{ inputs.nswagVersion }}
-
       - name: Restore and Build
         run: |
-          dotnet restore ${{ inputs.apiProject }}
-          dotnet build ${{ inputs.apiProject }} -c Release --no-restore
+          dotnet restore ${{ inputs.apiProjectPath }}
+          dotnet build ${{ inputs.apiProjectPath }} -c Release --no-restore
 
-      - name: Generate OpenAPI Spec with NSwag
+      - name: Generate OpenAPI Spec by running API
+        shell: pwsh
+        env:
+          API_PROJECT_PATH: ${{ inputs.apiProjectPath }}
+          API_NAME: ${{ inputs.apiName }}
+          OUTPUT_PATH: ${{ inputs.outputPath }}
+          SWAGGER_PATH: ${{ inputs.swaggerPath }}
         run: |
-          # Create output directory
-          mkdir -p ${{ inputs.outputPath }}
-          
-          OUTPUT_FILE="${{ inputs.outputPath }}/${{ inputs.apiName }}-openapi.json"
-          
-          echo "📦 Project: ${{ inputs.apiProject }}"
-          echo "📄 Output: $OUTPUT_FILE"
-          
-          # Generate OpenAPI spec using NSwag aspnetcore2openapi
-          # This uses the project file to locate the assembly and generate spec
-          # /NoBuild:true since we already built above
-          nswag aspnetcore2openapi \
-            /project:${{ inputs.apiProject }} \
-            /output:$OUTPUT_FILE \
-            /NoBuild:true \
-            /configuration:Release
-          
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+
+          Write-Host "📦 Project: $env:API_PROJECT_PATH"
+          Write-Host "📄 Output dir: $env:OUTPUT_PATH"
+          Write-Host "📑 Swagger path: $env:SWAGGER_PATH"
+
+          # Ensure output directory exists
+          New-Item -ItemType Directory -Path $env:OUTPUT_PATH -Force | Out-Null
+          $outputFile = Join-Path $env:OUTPUT_PATH "$($env:API_NAME)-openapi.json"
+
+          $projectPath = $env:API_PROJECT_PATH
+          $projectDir = Split-Path $projectPath -Parent
+          $launchSettingsPath = Join-Path $projectDir "Properties/launchSettings.json"
+
+          # Detect port from launchSettings.json if available
+          $port = 5001
+          if (Test-Path $launchSettingsPath) {
+            try {
+              $launch = Get-Content $launchSettingsPath -Raw | ConvertFrom-Json
+              $profile = $launch.profiles.PSObject.Properties | Where-Object { $_.Value.applicationUrl -match 'http://localhost:(\d+)' } | Select-Object -First 1
+              if ($profile -and $profile.Value.applicationUrl -match 'http://localhost:(\d+)') {
+                $port = [int]$Matches[1]
+                Write-Host "Detected port from launchSettings.json: $port"
+              }
+            }
+            catch {
+              Write-Host "Could not parse launchSettings.json, using default port 5001"
+            }
+          }
+
+          # Run the API with minimal env so it can start without cloud deps
+          $env:ASPNETCORE_ENVIRONMENT = 'Development'
+          $env:SKIP_MIGRATIONS = 'true'
+          $env:SWAGGER_ONLY = 'true'
+          $env:ASPNETCORE_URLS = "http://localhost:$port"
+          $env:BlobStorageName = ''
+          $env:Azure__KeyVault__VaultUri = ''
+          $env:ConnectionStrings__SqlServer = 'Server=localhost;Database=dummy;User Id=dummy;Password=dummy;TrustServerCertificate=True'
+
+          Write-Host "Starting API on http://localhost:$port ..."
+          $process = Start-Process -FilePath 'dotnet' -ArgumentList "run --no-build -c Release --project `"$projectPath`"" -PassThru -NoNewWindow
+
+          try {
+            $maxAttempts = 45
+            $attempt = 0
+            $ready = $false
+            $swaggerUrl = "http://localhost:$port$($env:SWAGGER_PATH)"
+
+            while (-not $ready -and $attempt -lt $maxAttempts) {
+              $attempt++
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -Uri $swaggerUrl -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+                if ($response.StatusCode -eq 200) {
+                  $ready = $true
+                  Write-Host "✅ API is ready (attempt $attempt)"
+                }
+              }
+              catch {
+                Write-Host "Waiting for API... ($attempt/$maxAttempts)" -ForegroundColor Gray
+              }
+            }
+
+            if (-not $ready) {
+              throw "API did not become ready within $maxAttempts seconds"
+            }
+
+            Write-Host "Downloading OpenAPI from $swaggerUrl"
+            $spec = Invoke-RestMethod -Uri $swaggerUrl -TimeoutSec 5
+            $json = $spec | ConvertTo-Json -Depth 100
+
+            # Remove nullable flags to appease APIM import quirks
+            $json = $json -replace '(?m)^\s*"nullable"\s*:\s*(true|false)\s*,?\s*$', ''
+            $json = $json -replace ',\s*,', ','
+            $json = $json -replace ',(\s*[}\]])', '$1'
+
+            $json | Set-Content -Path $outputFile -Encoding utf8
+            Write-Host "✅ Saved OpenAPI to $outputFile"
+
+            # Basic info output
+            try {
+              $info = $spec.info
+              $pathsCount = $spec.paths.PSObject.Properties.Count
+              Write-Host "Info: title=$($info.title) version=$($info.version) paths=$pathsCount"
+            }
+            catch {}
+          }
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Write-Host "Stopping API (PID $($process.Id))"
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
           # Validate JSON
-          if jq empty "$OUTPUT_FILE" 2>/dev/null; then
-            echo "✅ OpenAPI spec is valid JSON"
-            echo ""
-            echo "=== API Info ==="
-            jq '.info' "$OUTPUT_FILE"
-            echo ""
-            echo "=== Endpoints Count ==="
-            jq '.paths | keys | length' "$OUTPUT_FILE"
-          else
-            echo "❌ OpenAPI spec is not valid JSON"
-            echo "=== Response Content ==="
-            cat "$OUTPUT_FILE"
+          jq empty $outputFile
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ OpenAPI spec failed JSON validation" -ForegroundColor Red
+            cat $outputFile
             exit 1
-          fi
+          }
+          Write-Host "✅ OpenAPI spec JSON validated"
 
       - name: Upload OpenAPI Spec as Artifact
         uses: actions/upload-artifact@v4

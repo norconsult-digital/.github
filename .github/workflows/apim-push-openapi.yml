@@ -10,7 +10,7 @@ on:
 
 jobs:
   push-openapi:
-    runs-on: ubuntu-latest
+    runs-on: private-ubuntu-runner
     environment: api-ops-non-prod
     permissions:
       id-token: write
@@ -24,6 +24,8 @@ jobs:
         with:
           name: ${{ inputs.API_NAME }}-openapi
           path: ./artifacts
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -31,6 +33,13 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Check Azure CLI version
+        run: |
+          az  --version
+          az upgrade --yes
+          az  --version
+        shell: bash
 
       - name: Validate OpenAPI file exists
         run: |
@@ -46,61 +55,30 @@ jobs:
           echo "First 500 characters:"
           head -c 500 "$file_path"
         shell: bash
+
+      - name: Validate OpenAPI Syntax
+        continue-on-error: true
+        run: |
+          echo "⚠️ Validation issues should be fixed in the source API code"
+          npx @redocly/cli lint ./artifacts/${{ inputs.API_NAME }}-openapi.json --skip-rule operation-summary --skip-rule no-identical-paths --skip-rule info-license --skip-rule no-server-example.com || true
+          
+      - name: Probe APIM access (fail fast)
+        shell: bash
+        run: |
+          az apim show -g rg-nd-shared-apim-non-prod -n apim-nd-shared-non-prod-01 -o jsonc
           
       - name: Import/Update API in APIM
         run: |
-          $filePath = "./artifacts/${{ inputs.API_NAME }}-openapi.json"
-          
-          Write-Host "Importing API: ${{ inputs.API_NAME }}"
-          Write-Host "From file: $filePath"
-          Write-Host "To APIM: ${{ secrets.API_MANAGEMENT_SERVICE_NAME }}"
-          
-          # Import or update the API
           az apim api import `
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
-            --api-id ${{ inputs.API_NAME }} `
-            --path ${{ inputs.API_NAME }} `
-            --specification-path $filePath `
-            --specification-format OpenApi `
-            --verbose `
-            --debug
-          
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "API import failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
-          
-          Write-Host "✅ API imported successfully"
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} `
+          --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
+          --api-id ${{ inputs.API_NAME }} `
+          --path ${{ inputs.API_NAME }} `
+          --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json" `
+          --specification-format OpenApi `
+          --display-name "${{ inputs.API_NAME }}" `
+          --no-wait
         shell: pwsh    
-      
-      - name: Verify API exists even if import step failed
-        if: always()
-        run: |
-          az apim api show \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            -o json | jq '.id, .properties.provisioningState, .path'
-      
-      - name: Get API details
-        id: api-details
-        run: |
-          api_info=$(az apim api show \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP_NAME }} \
-            --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} \
-            --api-id ${{ inputs.API_NAME }} \
-            --output json)
-          
-          echo "API Details:"
-          echo "$api_info" | jq '.'
-          
-          api_path=$(echo "$api_info" | jq -r '.path')
-          api_revision=$(echo "$api_info" | jq -r '.apiRevision // "1"')
-          
-          echo "api_path=$api_path" >> $GITHUB_OUTPUT
-          echo "api_revision=$api_revision" >> $GITHUB_OUTPUT
-        shell: bash
 
       - name: Summary
         run: |
