@@ -1,0 +1,215 @@
+name: TFLint Scan
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        required: false
+        type: string
+        default: "./terraform"
+        description: "Path to Terraform files"
+      repository:
+        required: false
+        type: string
+        default: "default"
+        description: "Repository identifier for cache isolation"
+      compare-branch:
+        required: false
+        type: string
+        default: "main"
+        description: "Branch to compare changes against"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          # For PRs, fetch both base and head refs
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Cache TFLint plugins
+      - name: Cache TFLint plugins
+        uses: actions/cache@v5
+        with:
+          path: ~/.tflint.d/plugins
+          key: ${{ runner.os }}-tflint-v0.61.0-${{ inputs.repository }}-${{ inputs.path }}-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
+          restore-keys: ${{ runner.os }}-tflint-v0.61.0-${{ inputs.repository }}-
+
+      # Setup TFLint
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.61.0
+
+      - name: Show TFLint version
+        run: tflint --version
+
+      # Install jq for SARIF merging
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # Initialize TFLint plugins
+      - name: Init TFLint plugins
+        run: tflint --init
+        working-directory: ${{ inputs.path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Run TFLint and capture output
+      - name: Run TFLint
+        id: tflint
+        run: |
+          set -e
+          
+          # Determine comparison base based on context
+          if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
+            # For PRs, compare against the base branch (target of the PR)
+            COMPARE_REF="origin/${{ github.event.pull_request.base.ref }}"
+            COMPARE_BRANCH="${{ github.event.pull_request.base.ref }}"
+            echo "Running in PR context - comparing against base branch: ${COMPARE_BRANCH}"
+            
+            # Fetch base branch (handle fork PRs)
+            if ! git fetch origin "${{ github.event.pull_request.base.ref }}" 2>/dev/null; then
+              echo "Warning: Could not fetch base branch, using existing refs"
+            fi
+            
+          elif [ "${{ github.event_name }}" == "merge_group" ]; then
+            # For merge queue, compare against the base
+            COMPARE_REF="${{ github.event.merge_group.base_ref }}"
+            COMPARE_BRANCH="${{ github.event.merge_group.base_ref }}"
+            echo "Running in merge queue context - comparing against: ${COMPARE_BRANCH}"
+            
+          else
+            # For branch pushes
+            CURRENT_BRANCH="${{ github.ref_name }}"
+            COMPARE_BRANCH="${{ inputs.compare-branch }}"
+            
+            # If pushing to the compare branch itself, use the before commit to see changes
+            if [ "${CURRENT_BRANCH}" == "${COMPARE_BRANCH}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.before }}" ]; then
+              COMPARE_REF="${{ github.event.before }}"
+              echo "Pushing to ${COMPARE_BRANCH} - comparing current commit against previous: ${COMPARE_REF}"
+            else
+              COMPARE_REF="origin/${COMPARE_BRANCH}"
+              echo "Running in push context - comparing ${CURRENT_BRANCH} against: ${COMPARE_BRANCH}"
+              
+              # Fetch compare branch if it exists
+              if ! git fetch origin "${COMPARE_BRANCH}" 2>/dev/null; then
+                echo "Warning: Could not fetch compare branch '${COMPARE_BRANCH}', it may not exist"
+                mkdir -p ${{ inputs.path }}
+                echo "Cannot compare - branch '${COMPARE_BRANCH}' not found" > ${{ inputs.path }}/tflint-output.txt
+                # Create empty SARIF file for Code Scanning
+                echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"TFLint","informationUri":"https://github.com/terraform-linters/tflint"}},"results":[]}]}' > ${{ inputs.path }}/tflint-results.sarif
+                exit 0
+              fi
+            fi
+          fi
+          
+          # Get changed .tf files within the target path (repo-root relative)
+          # Normalize path by removing leading ./
+          NORMALIZED_PATH="${{ inputs.path }}"
+          NORMALIZED_PATH="${NORMALIZED_PATH#./}"
+          
+          echo "Debug: Running git diff ${COMPARE_REF}...HEAD"
+          echo "Debug: Input path: ${{ inputs.path }}"
+          echo "Debug: Normalized path: ${NORMALIZED_PATH}"
+          echo "Debug: Current directory: $(pwd)"
+          
+          # First, see all changed files
+          ALL_CHANGED=$(git diff --name-only --diff-filter=d "${COMPARE_REF}...HEAD" || true)
+          echo "Debug: All changed files:"
+          echo "${ALL_CHANGED}"
+          echo "---"
+          
+          # Filter for the path
+          PATH_FILTERED=$(echo "${ALL_CHANGED}" | grep "^${NORMALIZED_PATH}/" || true)
+          echo "Debug: Files matching path filter '${NORMALIZED_PATH}/':"
+          echo "${PATH_FILTERED}"
+          echo "---"
+          
+          # Then filter for .tf extension
+          CHANGED_FILES_FULL=$(echo "${PATH_FILTERED}" | grep '\.tf$' || true)
+          echo "Debug: Files matching .tf extension:"
+          echo "${CHANGED_FILES_FULL}"
+          echo "---"
+          
+          if [ -z "$CHANGED_FILES_FULL" ]; then
+            echo "No .tf files changed in ${{ inputs.path }} compared to ${COMPARE_BRANCH}"
+            mkdir -p ${{ inputs.path }}
+            echo "No Terraform files changed compared to ${COMPARE_BRANCH}" > ${{ inputs.path }}/tflint-output.txt
+            # Create empty SARIF file for Code Scanning
+            echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"TFLint","informationUri":"https://github.com/terraform-linters/tflint"}},"results":[]}]}' > ${{ inputs.path }}/tflint-results.sarif
+          else
+            echo "Changed files in ${{ inputs.path }} compared to ${COMPARE_BRANCH}:"
+            echo "$CHANGED_FILES_FULL"
+            
+            # Strip the path prefix to get working-directory relative paths
+            CHANGED_FILES=$(echo "$CHANGED_FILES_FULL" | sed "s|^${NORMALIZED_PATH}/||")
+            
+            # Change to target directory
+            cd ${{ inputs.path }}
+            
+            # Initialize output
+            echo "Scanning path: ${{ inputs.path }}" > tflint-output.txt
+            echo "Changed files detected:" >> tflint-output.txt
+            echo "$CHANGED_FILES" >> tflint-output.txt
+            echo "" >> tflint-output.txt
+            echo "TFLint Results (recursive scan):" >> tflint-output.txt
+            echo "" >> tflint-output.txt
+            
+            # Run TFLint recursively on entire directory and subdirectories
+            tflint --recursive --format=compact --minimum-failure-severity=notice >> tflint-output.txt 2>&1 || true
+            tflint --recursive --format=sarif --minimum-failure-severity=notice > tflint-results.sarif 2>/dev/null || true
+            
+            # If SARIF is empty or invalid, create empty valid SARIF
+            if [ ! -s tflint-results.sarif ] || ! jq empty tflint-results.sarif 2>/dev/null; then
+              echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"TFLint","informationUri":"https://github.com/terraform-linters/tflint"}},"results":[]}]}' > tflint-results.sarif
+            fi
+          fi
+        continue-on-error: true
+
+      # Upload TFLint SARIF results to GitHub Security
+      - name: Upload TFLint SARIF results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && hashFiles(format('{0}/tflint-results.sarif', inputs.path)) != ''
+        with:
+          sarif_file: ${{ inputs.path }}/tflint-results.sarif
+          category: tflint
+
+      # Upload TFLint output as artifact
+      - name: Upload TFLint output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tflint-output
+          path: ${{ inputs.path }}/tflint-output.txt
+          retention-days: 5
+
+
+      #Publish TFLint results to task summary
+      - name: Publish TFLint Results to Task Summary
+        if: always()
+        run: |
+          if [ -f tflint-output.txt ]; then
+            TFLINT_OUTPUT=$(cat tflint-output.txt)
+            
+            {
+              echo "## TFLint Results"
+              echo "\`${{ inputs.path }}\`"
+              echo "<details><summary>Click to expand</summary>"
+              echo ""
+              echo '```'
+              echo "${TFLINT_OUTPUT}"
+              echo '```'
+              echo "</details>"
+              echo ""
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+        working-directory: ${{ inputs.path }}

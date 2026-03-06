@@ -28,6 +28,10 @@ on:
         type: boolean
         default: false
         description: "Skip state refresh during plan to improve performance when state is known to be current"
+      setupManagedGrafanaAuth:
+        type: boolean
+        default: false
+        description: "Setup Grafana authentication for Azure Managed Grafana by retrieving an access token using the Azure CLI and setting it as an environment variable for use in Terraform"
     secrets:
       APP_PEM_FILE:
         required: false
@@ -52,6 +56,8 @@ permissions:
   id-token: write
   contents: read
   pull-requests: write
+  security-events: write
+  actions: read
 
 env:
   # These environment variables are used by the terraform azure provider to setup OIDD authenticate.
@@ -79,6 +85,23 @@ env:
   TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
 jobs:
+  # tflint:
+  #   uses: ./.github/workflows/tflint-scan.yml
+  #   with:
+  #     path: ${{ inputs.path }}
+  #     compare-branch: main
+  #     repository: ${{ github.repository }}
+
+  # tfsec:
+  #   uses: ./.github/workflows/trivy-scan.yml
+  #   with:
+  #     path: ${{ inputs.path }}
+  #     compare-branch: main
+  #     repository: ${{ github.repository }}
+  #     scan-type: "config"
+  #     severity: "LOW,MEDIUM,HIGH,CRITICAL"
+  #     skip-files: "terraform/alz/import-amba.tf"
+
   terraform-plan:
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentPlan }}
@@ -100,6 +123,13 @@ jobs:
           client-id: ${{ inputs.armClientIdPlan }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
           allow-no-subscriptions: true
+
+      # Set Grafana authentication token for Azure Managed Grafana
+      - name: Set Grafana Auth
+        if: ${{ inputs.setupManagedGrafanaAuth == true }}
+        run: |
+          GRAFANA_TOKEN=$(az account get-access-token --resource ce34e7e5-485f-4d76-964f-b3d2b16d1e4f --query accessToken -o tsv)
+          echo "GRAFANA_AUTH=$GRAFANA_TOKEN" >> $GITHUB_ENV
 
       - name: Find required Terraform version
         id: tf-required-version
@@ -232,6 +262,7 @@ jobs:
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environmentApply }}
     needs: [terraform-plan]
+    # needs: [terraform-plan, tflint, tfsec]
 
     steps:
       # Checkout the repository to the GitHub Actions runner
@@ -249,6 +280,13 @@ jobs:
           client-id: ${{ inputs.armClientIdApply }}
           tenant-id: ${{ env.ARM_TENANT_ID }}
           allow-no-subscriptions: true
+
+      # Set Grafana authentication token for Azure Managed Grafana
+      - name: Set Grafana Auth
+        if: ${{ inputs.setupManagedGrafanaAuth == true }}
+        run: |
+          GRAFANA_TOKEN=$(az account get-access-token --resource ce34e7e5-485f-4d76-964f-b3d2b16d1e4f --query accessToken -o tsv)
+          echo "GRAFANA_AUTH=$GRAFANA_TOKEN" >> $GITHUB_ENV
 
       - name: Install kubelogin
         if: ${{ inputs.installKubelogin == true }}

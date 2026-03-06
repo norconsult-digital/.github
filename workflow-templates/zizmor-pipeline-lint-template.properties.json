@@ -1,0 +1,5 @@
+{
+    "name": "Workflow Security Scan with Zizmor",
+    "description": "Scan GitHub Actions workflows for security vulnerabilities using zizmor",
+    "iconName": "security"
+}
