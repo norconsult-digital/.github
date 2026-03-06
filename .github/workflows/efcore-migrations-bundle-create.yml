@@ -31,10 +31,16 @@ on:
         required: false
         default: "migrations-bundle"
         type: string
+      ostype:
+        description: Operating system type for the migrations bundle runtime
+        required: false
+        type: string
+        default: ubuntu-latest
+
 
 jobs:
   migrations-bundle-create:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ostype }}
     name: Create Migration Bundle
     steps:
       - name: Conditional Checkout
