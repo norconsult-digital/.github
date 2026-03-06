@@ -52,6 +52,11 @@ on:
         required: false
         type: string
         default: ""
+      ostype:
+        description: Operating system type for the migrations bundle runtime
+        required: false
+        type: string
+        default: ubuntu-latest
 
        
 jobs:
@@ -75,7 +80,8 @@ jobs:
       migrationBundleArguments: ${{ inputs.migrationBundleArguments }}
       migrationBundleAppSettingsPath: ${{ inputs.migrationBundleAppSettingsPath }}
       dotnetVersion: ${{ inputs.dotnetVersion }}
-
+      ostype: ${{ inputs.ostype }}
+      
   build_docker_image:
     needs: [test, create_migration_bundle]
     if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
