@@ -31,10 +31,16 @@ on:
         required: false
         default: "migrations-bundle"
         type: string
+      ostype:
+        description: Operating system type for the migrations bundle runtime
+        required: false
+        type: string
+        default: ubuntu-latest
+
 
 jobs:
   migrations-bundle-create:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ostype }}
     name: Create Migration Bundle
     steps:
       - name: Conditional Checkout
@@ -107,16 +113,16 @@ jobs:
 
           if [ -n "$projectPath" ]; then
             echo "Restoring --project path from migrationBundleArguments: $projectPath"
-            dotnet restore "$projectPath" --runtime linux-x64
+            dotnet restore "$projectPath" 
           fi
 
           if [ -n "$startupProjectPath" ] && [ "$startupProjectPath" != "$projectPath" ]; then
             echo "Restoring --startup-project from migrationBundleArguments: $startupProjectPath"
-            dotnet restore "$startupProjectPath" --runtime linux-x64
+            dotnet restore "$startupProjectPath"
           fi
 
       - name: Create dotnet ef migrations bundle
-        run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --runtime linux-x64 --verbose --output migrations-bundle/migrations-bundle.exe
+        run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --verbose --output migrations-bundle/migrations-bundle.exe
 
       - name: Copy appsettings.json to migrations-bundle
         run: cp -v ${{ inputs.migrationBundleAppSettingsPath }}/appsettings.json migrations-bundle/
