@@ -148,7 +148,7 @@ jobs:
 
       # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ steps.tf-required-version.outputs.version }}
 
@@ -177,7 +177,7 @@ jobs:
 
       # Save plan to artifacts
       - name: Publish Terraform Plan
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: tfplan
           path: ${{ inputs.path }}/tfplan
@@ -296,7 +296,7 @@ jobs:
 
       # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ needs.terraform-plan.outputs.terraform-version }}
 
