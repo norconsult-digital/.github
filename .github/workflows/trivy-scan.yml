@@ -251,7 +251,7 @@ jobs:
 
       # Upload Trivy output as artifact
       - name: Upload Trivy output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-output
