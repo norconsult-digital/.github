@@ -85,7 +85,7 @@ jobs:
 
       - name: Download migrations artifact
         if: ${{ inputs.migrationBundleArguments != '' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: migrations-bundle
           path: migrations-bundle
@@ -123,7 +123,7 @@ jobs:
         working-directory: ./migrations-bundle
       
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: ${{ inputs.artifactName }}
 

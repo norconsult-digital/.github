@@ -44,7 +44,7 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Download nuget sources
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: nuget-sources
           path: ${{ github.workspace }}/nuget-sources

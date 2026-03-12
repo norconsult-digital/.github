@@ -68,7 +68,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download Bicep artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: bicep
           path: ./b2c-poc/resources 
