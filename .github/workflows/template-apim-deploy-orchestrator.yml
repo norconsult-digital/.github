@@ -31,7 +31,7 @@ on:
 jobs:
   push-to-apim:
     name: Push OpenAPI to APIM
-    uses: norconsult-digital/.github/.github/workflows/apim-push-openapi.yml@apim
+    uses: norconsult-digital/.github/.github/workflows/apim-push-openapi.yml@main
     with:
       API_NAME: ${{ inputs.API_NAME }}
     secrets: inherit
@@ -39,7 +39,7 @@ jobs:
   run-extractor:
     name: Run APIM Extractor
     needs: push-to-apim
-    uses: norconsult-digital/.github/.github/workflows/apim-run-extractor.yml@apim
+    uses: norconsult-digital/.github/.github/workflows/apim-run-extractor.yml@main
     with:
       CONFIGURATION_YAML_PATH: ${{ inputs.CONFIGURATION_YAML_PATH }}
       API_SPECIFICATION_FORMAT: ${{ inputs.API_SPECIFICATION_FORMAT }}
@@ -48,7 +48,7 @@ jobs:
   run-publisher:
     name: Publish APIM Artifacts
     needs: [push-to-apim, run-extractor]
-    uses: norconsult-digital/.github/.github/workflows/apim-run-publisher.yml@apim
+    uses: norconsult-digital/.github/.github/workflows/apim-run-publisher.yml@main
     with:
       COMMIT_ID_CHOICE: ${{ inputs.COMMIT_ID_CHOICE }}
       API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ inputs.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
