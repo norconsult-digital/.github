@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       CONFIGURATION_YAML_PATH:
-        description: 'Extractor config ("Extract All APIs" or a config yaml filename)'
+        description: 'Extractor config ("Extract All APIs" or a config yaml filename from terraform/settings/apim/ in the platform repo)'
         required: true
         type: string
         default: 'Extract All APIs'
