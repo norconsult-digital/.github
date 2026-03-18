@@ -27,7 +27,7 @@ jobs:
     name: Run Migration Bundle
     steps:
     - name: Download migrations-bundle artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         name: migrations-bundle
         path: migrations-bundle
