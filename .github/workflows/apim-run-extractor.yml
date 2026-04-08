@@ -54,7 +54,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: norconsult-digital/platform
-          ref: apiopsconfig
+          ref: main
           path: platform-repo
           token: ${{ steps.app-token.outputs.token }}
           sparse-checkout: terraform/settings/apim
