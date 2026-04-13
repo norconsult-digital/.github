@@ -57,8 +57,11 @@ on:
         required: false
         type: string
         default: ubuntu-latest
+    secrets:
+      NUGET_CONFIG:
+        required: false
+        description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during Docker restore only)"
 
-       
 jobs:
   test:
     if: ${{ inputs.testProjects != '' }}
@@ -86,6 +89,8 @@ jobs:
     needs: [test, create_migration_bundle]
     if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
     uses: ./.github/workflows/docker-build-and-save.yml
+    secrets:
+      NUGET_CONFIG: ${{ secrets.NUGET_CONFIG }}
     with:
       vmImage: ${{ inputs.vmImage }}
       gitRepo: ${{ inputs.gitRepo }}

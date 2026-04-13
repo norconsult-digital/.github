@@ -29,6 +29,10 @@ on:
         required: false
         default: "container-image"
         type: string
+    secrets:
+      NUGET_CONFIG:
+        required: false
+        description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during restore only)"
 
 jobs:
   docker-build-and-save:
@@ -74,6 +78,8 @@ jobs:
           tags: ${{ inputs.repositoryName }}:tmp
           build-args: ${{ inputs.dockerBuildArguments }}
           load: true
+          secrets: |
+            nuget_config=${{ secrets.NUGET_CONFIG }}
 
       - name: Save Docker Image
         run: |
