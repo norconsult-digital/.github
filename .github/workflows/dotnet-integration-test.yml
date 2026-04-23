@@ -100,6 +100,73 @@
             "use_shards=true" >> $env:GITHUB_OUTPUT
             "shard_plan=$json" >> $env:GITHUB_OUTPUT
 
+    build_once:
+      needs: prepare
+      runs-on: ${{ inputs.vmImage }}
+      environment: ${{ inputs.environment }}
+      name: Build Integration Tests
+
+      steps:
+        - name: Checkout repository
+          if: ${{ inputs.gitRepo != '' }}
+          uses: actions/checkout@v5
+          with:
+            repository: ${{ inputs.gitRepo }}
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Default checkout
+          uses: actions/checkout@v5
+
+        - name: Setup dotnet ${{ inputs.dotnetVersion }}
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: ${{ inputs.dotnetVersion }}
+
+        - name: Azure Login via OIDC
+          if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
+          uses: azure/login@v2
+          with:
+            client-id: ${{ inputs.azureServicePrincipalClientId }}
+            tenant-id: ${{ inputs.azureTenantId }}
+            allow-no-subscriptions: true
+
+        - name: Replace GitHub Packages feed token in NuGet.Config files
+          shell: pwsh
+          run: |
+            $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
+            foreach ($file in $nugetFiles) {
+                $content = Get-Content $file.FullName -Raw
+                if ($content -match '<NorconsultDigital>') {
+                    if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
+                        $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add
+                        key=`"ClearTextPassword`" value=`"${{ secrets.GITHUB_TOKEN }}`" />"
+                    }
+                    Set-Content -Path $file.FullName -Value $content
+                }
+            }
+
+        - name: Build integration test project
+          shell: pwsh
+          run: |
+            $projectPath = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.testProject }}"
+            if (-not (Test-Path -LiteralPath $projectPath)) {
+              throw "Test project not found: $projectPath"
+            }
+
+            dotnet build $projectPath --configuration "${{ inputs.buildConfiguration }}"
+            if ($LASTEXITCODE -ne 0) {
+              exit 1
+            }
+
+        - name: Upload build output
+          uses: actions/upload-artifact@v4
+          with:
+            name: integration-test-build
+            path: |
+              backend/src/apps/user/src/Tests.Integration/bin/${{ inputs.buildConfiguration }}/**
+              backend/src/apps/user/src/Tests.Integration/obj/${{ inputs.buildConfiguration }}/**
+            if-no-files-found: error
+
     test:
       needs: prepare
       if: ${{ needs.prepare.outputs.useShards == 'false' }}
