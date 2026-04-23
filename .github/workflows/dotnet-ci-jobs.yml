@@ -25,6 +25,15 @@ on:
       testProjects:
         required: false
         type: string
+        default: ""
+      integrationTestProject:
+        required: false
+        type: string
+        default: ""
+      integrationShardPlanPath:
+        required: false
+        type: string
+        default: ""
       dockerBuildContext:
         required: false
         default: "."
@@ -61,7 +70,6 @@ on:
       NUGET_CONFIG:
         required: false
         description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during Docker restore only)"
-
 jobs:
   test:
     if: ${{ inputs.testProjects != '' }}
@@ -73,6 +81,58 @@ jobs:
       dotnetVersion: ${{ inputs.dotnetVersion }}
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
+      artifactName: dotnet-test-results
+
+  integration_test:
+    if: ${{ inputs.integrationTestProject != '' }}
+    uses: ./.github/workflows/dotnet-integration-test.yml
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      testProject: ${{ inputs.integrationTestProject }}
+      shardPlanPath: ${{ inputs.integrationShardPlanPath }}
+      gitRepo: ${{ inputs.gitRepo }}
+      dotnetVersion: ${{ inputs.dotnetVersion }}
+      azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
+      azureTenantId: ${{ inputs.azureTenantId }}
+      artifactName: dotnet-integration-test-results
+
+  test_summary:
+    needs: [test, integration_test]
+    if: ${{ always() && (needs.test.result != 'skipped' || needs.integration_test.result != 'skipped') }}
+    runs-on: ubuntu-latest
+    name: Test Summary
+
+    steps:
+      - name: Download test result artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dotnet-*-test-results*
+          path: all-test-results
+          merge-multiple: true
+
+      - name: Check downloaded TRX files
+        id: check_trx
+        shell: pwsh
+        run: |
+          $trxFiles = Get-ChildItem -Path all-test-results -Recurse -Filter *.trx -ErrorAction SilentlyContinue
+          if (-not $trxFiles) {
+            Write-Output "No TRX files found."
+            "present_test_summary=false" >> $env:GITHUB_ENV
+            exit 0
+          }
+
+          Write-Output "Found TRX files:"
+          $trxFiles | ForEach-Object { Write-Output $_.FullName }
+          "present_test_summary=true" >> $env:GITHUB_ENV
+
+      - name: Report test results
+        if: env.present_test_summary == 'true'
+        uses: phoenix-actions/test-reporting@v15
+        with:
+          name: .NET Tests
+          path: all-test-results/**/*.trx
+          reporter: dotnet-trx
+          output-to: "step-summary"
 
   create_migration_bundle:
     if: ${{ inputs.migrationBundleArguments != '' }}
@@ -84,10 +144,12 @@ jobs:
       migrationBundleAppSettingsPath: ${{ inputs.migrationBundleAppSettingsPath }}
       dotnetVersion: ${{ inputs.dotnetVersion }}
       ostype: ${{ inputs.ostype }}
-      
+
   build_docker_image:
-    needs: [test, create_migration_bundle]
-    if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
+    needs: [test, integration_test, create_migration_bundle]
+    if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped')
+        && (needs.integration_test.result == 'success' || needs.integration_test.result == 'skipped') &&
+        (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
     uses: ./.github/workflows/docker-build-and-save.yml
     secrets:
       NUGET_CONFIG: ${{ secrets.NUGET_CONFIG }}
