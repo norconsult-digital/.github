@@ -168,8 +168,8 @@
             if-no-files-found: error
 
     test:
-      needs: prepare
-      if: ${{ needs.prepare.outputs.useShards == 'false' }}
+      needs: build_once
+      if: ${{ needs.build_once.result == 'success' && needs.prepare.outputs.useShards == 'false' }}
       runs-on: ${{ inputs.vmImage }}
       environment: ${{ inputs.environment }}
       name: .NET Integration Test
@@ -203,33 +203,11 @@
             docker image pull testcontainers/ryuk
             docker image pull mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-20.04
 
-        - name: Replace GitHub Packages feed token in NuGet.Config files
-          shell: pwsh
-          run: |
-            $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
-            foreach ($file in $nugetFiles) {
-                $content = Get-Content $file.FullName -Raw
-                if ($content -match '<NorconsultDigital>') {
-                    if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
-                        $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add
-                        key=`"ClearTextPassword`" value=`"${{ secrets.GITHUB_TOKEN }}`" />"
-                    }
-                    Set-Content -Path $file.FullName -Value $content
-                }
-            }
-
-        - name: Build integration test project
-          shell: pwsh
-          run: |
-            $projectPath = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.testProject }}"
-            if (-not (Test-Path -LiteralPath $projectPath)) {
-              throw "Test project not found: $projectPath"
-            }
-
-            dotnet build $projectPath --configuration "${{ inputs.buildConfiguration }}"
-            if ($LASTEXITCODE -ne 0) {
-              exit 1
-            }
+        - name: Download build output
+          uses: actions/download-artifact@v4
+          with:
+            name: integration-test-build
+            path: .
 
         - name: Run integration tests
           shell: pwsh
@@ -251,56 +229,6 @@
               exit 1
             }
 
-        - name: Print failed test details
-          if: always()
-          shell: pwsh
-          run: |
-            $trxFiles = Get-ChildItem -Path test-results -Filter "*.trx" -ErrorAction SilentlyContinue
-
-            if (-not $trxFiles) {
-              Write-Output "No TRX files found."
-              return
-            }
-
-            foreach ($trxFile in $trxFiles) {
-              Write-Output ""
-              Write-Output "==== Failed test details from $($trxFile.FullName) ===="
-
-              [xml]$trx = Get-Content $trxFile.FullName
-              $namespace = New-Object System.Xml.XmlNamespaceManager($trx.NameTable)
-              $namespace.AddNamespace("trx", "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")
-
-              $failedResults = $trx.SelectNodes("//trx:UnitTestResult[@outcome='Failed']", $namespace)
-
-              if (-not $failedResults -or $failedResults.Count -eq 0) {
-                Write-Output "No failed tests in $($trxFile.Name)."
-                continue
-              }
-
-              foreach ($result in $failedResults | Select-Object -First 20) {
-                Write-Output ""
-                Write-Output "---- FAILED: $($result.testName) ----"
-
-                if ($result.Output.ErrorInfo.Message) {
-                  Write-Output ""
-                  Write-Output "Message:"
-                  Write-Output $result.Output.ErrorInfo.Message
-                }
-
-                if ($result.Output.ErrorInfo.StackTrace) {
-                  Write-Output ""
-                  Write-Output "Stack trace:"
-                  Write-Output $result.Output.ErrorInfo.StackTrace
-                }
-
-                if ($result.Output.StdOut) {
-                  Write-Output ""
-                  Write-Output "StdOut:"
-                  Write-Output $result.Output.StdOut
-                }
-              }
-            }
-
         - name: Upload test results
           if: always()
           uses: actions/upload-artifact@v4
@@ -310,8 +238,8 @@
             if-no-files-found: ignore
 
     sharded_test:
-      needs: prepare
-      if: ${{ needs.prepare.outputs.useShards == 'true' }}
+      needs: build_once
+      if: ${{ needs.build_once.result == 'success' && needs.prepare.outputs.useShards == 'true' }}
       runs-on: ${{ inputs.vmImage }}
       environment: ${{ inputs.environment }}
       name: .NET Integration Shard ${{ matrix.shard.name }}
@@ -319,7 +247,7 @@
       strategy:
         fail-fast: false
         matrix:
-          shard: ${{ fromJson(needs.prepare.outputs.shardPlan) }}
+          shard: ${{ fromJSON(needs.prepare.outputs.shardPlan) }}
 
       steps:
         - name: Checkout repository
@@ -350,33 +278,11 @@
             docker image pull testcontainers/ryuk
             docker image pull mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-20.04
 
-        - name: Replace GitHub Packages feed token in NuGet.Config files
-          shell: pwsh
-          run: |
-            $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
-            foreach ($file in $nugetFiles) {
-                $content = Get-Content $file.FullName -Raw
-                if ($content -match '<NorconsultDigital>') {
-                    if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
-                        $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add
-                        key=`"ClearTextPassword`" value=`"${{ secrets.GITHUB_TOKEN }}`" />"
-                    }
-                    Set-Content -Path $file.FullName -Value $content
-                }
-            }
-
-        - name: Build integration test project
-          shell: pwsh
-          run: |
-            $projectPath = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.testProject }}"
-            if (-not (Test-Path -LiteralPath $projectPath)) {
-              throw "Test project not found: $projectPath"
-            }
-
-            dotnet build $projectPath --configuration "${{ inputs.buildConfiguration }}"
-            if ($LASTEXITCODE -ne 0) {
-              exit 1
-            }
+        - name: Download build output
+          uses: actions/download-artifact@v4
+          with:
+            name: integration-test-build
+            path: .
 
         - name: Run integration test shard
           shell: pwsh
@@ -396,56 +302,6 @@
 
             if ($LASTEXITCODE -ne 0) {
               exit 1
-            }
-
-        - name: Print failed test details
-          if: always()
-          shell: pwsh
-          run: |
-            $trxFiles = Get-ChildItem -Path test-results -Filter "*.trx" -ErrorAction SilentlyContinue
-
-            if (-not $trxFiles) {
-              Write-Output "No TRX files found."
-              return
-            }
-
-            foreach ($trxFile in $trxFiles) {
-              Write-Output ""
-              Write-Output "==== Failed test details from $($trxFile.FullName) ===="
-
-              [xml]$trx = Get-Content $trxFile.FullName
-              $namespace = New-Object System.Xml.XmlNamespaceManager($trx.NameTable)
-              $namespace.AddNamespace("trx", "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")
-
-              $failedResults = $trx.SelectNodes("//trx:UnitTestResult[@outcome='Failed']", $namespace)
-
-              if (-not $failedResults -or $failedResults.Count -eq 0) {
-                Write-Output "No failed tests in $($trxFile.Name)."
-                continue
-              }
-
-              foreach ($result in $failedResults | Select-Object -First 20) {
-                Write-Output ""
-                Write-Output "---- FAILED: $($result.testName) ----"
-
-                if ($result.Output.ErrorInfo.Message) {
-                  Write-Output ""
-                  Write-Output "Message:"
-                  Write-Output $result.Output.ErrorInfo.Message
-                }
-
-                if ($result.Output.ErrorInfo.StackTrace) {
-                  Write-Output ""
-                  Write-Output "Stack trace:"
-                  Write-Output $result.Output.ErrorInfo.StackTrace
-                }
-
-                if ($result.Output.StdOut) {
-                  Write-Output ""
-                  Write-Output "StdOut:"
-                  Write-Output $result.Output.StdOut
-                }
-              }
             }
 
         - name: Upload test results
