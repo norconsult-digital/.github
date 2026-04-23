@@ -1,0 +1,390 @@
+  name: .NET Integration Test
+
+  permissions:
+    id-token: write
+    contents: read
+    packages: read
+
+  on:
+    workflow_call:
+      inputs:
+        environment:
+          required: false
+          type: string
+          default: "integration-test"
+        vmImage:
+          type: string
+          default: "ubuntu-latest"
+          required: false
+        buildConfiguration:
+          required: false
+          type: string
+          default: "Release"
+        gitRepo:
+          required: false
+          type: string
+          default: ""
+        testProject:
+          required: true
+          type: string
+        shardPlanPath:
+          required: false
+          type: string
+          default: ""
+        dotnetVersion:
+          required: false
+          default: "7.*"
+          type: string
+        azureServicePrincipalClientId:
+          required: false
+          type: string
+          default: ""
+        azureTenantId:
+          required: false
+          type: string
+          default: ""
+        artifactName:
+          required: false
+          type: string
+          default: "dotnet-integration-test-results"
+
+  jobs:
+    prepare:
+      runs-on: ubuntu-latest
+      outputs:
+        shardPlan: ${{ steps.read-plan.outputs.shard_plan }}
+        useShards: ${{ steps.read-plan.outputs.use_shards }}
+
+      steps:
+        - name: Checkout repository
+          if: ${{ inputs.gitRepo != '' }}
+          uses: actions/checkout@v5
+          with:
+            repository: ${{ inputs.gitRepo }}
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Default checkout
+          uses: actions/checkout@v5
+
+        - name: Read shard plan
+          id: read-plan
+          shell: pwsh
+          run: |
+            if ([string]::IsNullOrWhiteSpace("${{ inputs.shardPlanPath }}")) {
+              "use_shards=false" >> $env:GITHUB_OUTPUT
+              "shard_plan=[]" >> $env:GITHUB_OUTPUT
+              exit 0
+            }
+
+            $path = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.shardPlanPath }}"
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Shard plan file not found: $path"
+            }
+
+            $plan = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+            if (-not $plan -or $plan.Count -eq 0) {
+              throw "Shard plan file is empty: $path"
+            }
+
+            foreach ($entry in $plan) {
+              if ([string]::IsNullOrWhiteSpace($entry.name)) {
+                throw "Shard plan entry is missing 'name'."
+              }
+
+              if ([string]::IsNullOrWhiteSpace($entry.filter)) {
+                throw "Shard plan entry '$($entry.name)' is missing 'filter'."
+              }
+            }
+
+            $json = $plan | ConvertTo-Json -Compress -Depth 10
+            "use_shards=true" >> $env:GITHUB_OUTPUT
+            "shard_plan=$json" >> $env:GITHUB_OUTPUT
+
+    test:
+      needs: prepare
+      if: ${{ needs.prepare.outputs.useShards == 'false' }}
+      runs-on: ${{ inputs.vmImage }}
+      environment: ${{ inputs.environment }}
+      name: .NET Integration Test
+
+      steps:
+        - name: Checkout repository
+          if: ${{ inputs.gitRepo != '' }}
+          uses: actions/checkout@v5
+          with:
+            repository: ${{ inputs.gitRepo }}
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Default checkout
+          uses: actions/checkout@v5
+
+        - name: Setup dotnet ${{ inputs.dotnetVersion }}
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: ${{ inputs.dotnetVersion }}
+
+        - name: Azure Login via OIDC
+          if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
+          uses: azure/login@v2
+          with:
+            client-id: ${{ inputs.azureServicePrincipalClientId }}
+            tenant-id: ${{ inputs.azureTenantId }}
+            allow-no-subscriptions: true
+
+        - name: Pull Docker test images
+          run: |
+            docker image pull testcontainers/ryuk
+            docker image pull mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-20.04
+
+        - name: Replace GitHub Packages feed token in NuGet.Config files
+          shell: pwsh
+          run: |
+            $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
+            foreach ($file in $nugetFiles) {
+                $content = Get-Content $file.FullName -Raw
+                if ($content -match '<NorconsultDigital>') {
+                    if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
+                        $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add
+                        key=`"ClearTextPassword`" value=`"${{ secrets.GITHUB_TOKEN }}`" />"
+                    }
+                    Set-Content -Path $file.FullName -Value $content
+                }
+            }
+
+        - name: Build integration test project
+          shell: pwsh
+          run: |
+            $projectPath = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.testProject }}"
+            if (-not (Test-Path -LiteralPath $projectPath)) {
+              throw "Test project not found: $projectPath"
+            }
+
+            dotnet build $projectPath --configuration "${{ inputs.buildConfiguration }}"
+            if ($LASTEXITCODE -ne 0) {
+              exit 1
+            }
+
+        - name: Run integration tests
+          shell: pwsh
+          run: |
+            New-Item -ItemType Directory -Force -Path test-results | Out-Null
+
+            $projectPath = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.testProject }}"
+            $projectName = [System.IO.Path]::GetFileNameWithoutExtension($projectPath)
+            $trxPath = Join-Path (Join-Path $env:GITHUB_WORKSPACE "test-results") "$projectName.trx"
+
+            dotnet test $projectPath `
+              --configuration "${{ inputs.buildConfiguration }}" `
+              --no-build `
+              --no-restore `
+              --logger "trx;LogFileName=$trxPath" `
+              --verbosity quiet
+
+            if ($LASTEXITCODE -ne 0) {
+              exit 1
+            }
+
+        - name: Print failed test details
+          if: always()
+          shell: pwsh
+          run: |
+            $trxFiles = Get-ChildItem -Path test-results -Filter "*.trx" -ErrorAction SilentlyContinue
+
+            if (-not $trxFiles) {
+              Write-Output "No TRX files found."
+              return
+            }
+
+            foreach ($trxFile in $trxFiles) {
+              Write-Output ""
+              Write-Output "==== Failed test details from $($trxFile.FullName) ===="
+
+              [xml]$trx = Get-Content $trxFile.FullName
+              $namespace = New-Object System.Xml.XmlNamespaceManager($trx.NameTable)
+              $namespace.AddNamespace("trx", "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")
+
+              $failedResults = $trx.SelectNodes("//trx:UnitTestResult[@outcome='Failed']", $namespace)
+
+              if (-not $failedResults -or $failedResults.Count -eq 0) {
+                Write-Output "No failed tests in $($trxFile.Name)."
+                continue
+              }
+
+              foreach ($result in $failedResults | Select-Object -First 20) {
+                Write-Output ""
+                Write-Output "---- FAILED: $($result.testName) ----"
+
+                if ($result.Output.ErrorInfo.Message) {
+                  Write-Output ""
+                  Write-Output "Message:"
+                  Write-Output $result.Output.ErrorInfo.Message
+                }
+
+                if ($result.Output.ErrorInfo.StackTrace) {
+                  Write-Output ""
+                  Write-Output "Stack trace:"
+                  Write-Output $result.Output.ErrorInfo.StackTrace
+                }
+
+                if ($result.Output.StdOut) {
+                  Write-Output ""
+                  Write-Output "StdOut:"
+                  Write-Output $result.Output.StdOut
+                }
+              }
+            }
+
+        - name: Upload test results
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: ${{ inputs.artifactName }}
+            path: test-results/*.trx
+            if-no-files-found: ignore
+
+    sharded_test:
+      needs: prepare
+      if: ${{ needs.prepare.outputs.useShards == 'true' }}
+      runs-on: ${{ inputs.vmImage }}
+      environment: ${{ inputs.environment }}
+      name: .NET Integration Shard ${{ matrix.shard.name }}
+
+      strategy:
+        fail-fast: false
+        matrix:
+          shard: ${{ fromJson(needs.prepare.outputs.shardPlan) }}
+
+      steps:
+        - name: Checkout repository
+          if: ${{ inputs.gitRepo != '' }}
+          uses: actions/checkout@v5
+          with:
+            repository: ${{ inputs.gitRepo }}
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Default checkout
+          uses: actions/checkout@v5
+
+        - name: Setup dotnet ${{ inputs.dotnetVersion }}
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: ${{ inputs.dotnetVersion }}
+
+        - name: Azure Login via OIDC
+          if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
+          uses: azure/login@v2
+          with:
+            client-id: ${{ inputs.azureServicePrincipalClientId }}
+            tenant-id: ${{ inputs.azureTenantId }}
+            allow-no-subscriptions: true
+
+        - name: Pull Docker test images
+          run: |
+            docker image pull testcontainers/ryuk
+            docker image pull mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-20.04
+
+        - name: Replace GitHub Packages feed token in NuGet.Config files
+          shell: pwsh
+          run: |
+            $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
+            foreach ($file in $nugetFiles) {
+                $content = Get-Content $file.FullName -Raw
+                if ($content -match '<NorconsultDigital>') {
+                    if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
+                        $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add
+                        key=`"ClearTextPassword`" value=`"${{ secrets.GITHUB_TOKEN }}`" />"
+                    }
+                    Set-Content -Path $file.FullName -Value $content
+                }
+            }
+
+        - name: Build integration test project
+          shell: pwsh
+          run: |
+            $projectPath = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.testProject }}"
+            if (-not (Test-Path -LiteralPath $projectPath)) {
+              throw "Test project not found: $projectPath"
+            }
+
+            dotnet build $projectPath --configuration "${{ inputs.buildConfiguration }}"
+            if ($LASTEXITCODE -ne 0) {
+              exit 1
+            }
+
+        - name: Run integration test shard
+          shell: pwsh
+          run: |
+            New-Item -ItemType Directory -Force -Path test-results | Out-Null
+
+            $projectPath = Join-Path $env:GITHUB_WORKSPACE "${{ inputs.testProject }}"
+            $trxPath = Join-Path (Join-Path $env:GITHUB_WORKSPACE "test-results") "shard-${{ matrix.shard.name }}.trx"
+
+            dotnet test $projectPath `
+              --configuration "${{ inputs.buildConfiguration }}" `
+              --no-build `
+              --no-restore `
+              --filter "${{ matrix.shard.filter }}" `
+              --logger "trx;LogFileName=$trxPath" `
+              --verbosity quiet
+
+            if ($LASTEXITCODE -ne 0) {
+              exit 1
+            }
+
+        - name: Print failed test details
+          if: always()
+          shell: pwsh
+          run: |
+            $trxFiles = Get-ChildItem -Path test-results -Filter "*.trx" -ErrorAction SilentlyContinue
+
+            if (-not $trxFiles) {
+              Write-Output "No TRX files found."
+              return
+            }
+
+            foreach ($trxFile in $trxFiles) {
+              Write-Output ""
+              Write-Output "==== Failed test details from $($trxFile.FullName) ===="
+
+              [xml]$trx = Get-Content $trxFile.FullName
+              $namespace = New-Object System.Xml.XmlNamespaceManager($trx.NameTable)
+              $namespace.AddNamespace("trx", "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")
+
+              $failedResults = $trx.SelectNodes("//trx:UnitTestResult[@outcome='Failed']", $namespace)
+
+              if (-not $failedResults -or $failedResults.Count -eq 0) {
+                Write-Output "No failed tests in $($trxFile.Name)."
+                continue
+              }
+
+              foreach ($result in $failedResults | Select-Object -First 20) {
+                Write-Output ""
+                Write-Output "---- FAILED: $($result.testName) ----"
+
+                if ($result.Output.ErrorInfo.Message) {
+                  Write-Output ""
+                  Write-Output "Message:"
+                  Write-Output $result.Output.ErrorInfo.Message
+                }
+
+                if ($result.Output.ErrorInfo.StackTrace) {
+                  Write-Output ""
+                  Write-Output "Stack trace:"
+                  Write-Output $result.Output.ErrorInfo.StackTrace
+                }
+
+                if ($result.Output.StdOut) {
+                  Write-Output ""
+                  Write-Output "StdOut:"
+                  Write-Output $result.Output.StdOut
+                }
+              }
+            }
+
+        - name: Upload test results
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: ${{ inputs.artifactName }}-${{ matrix.shard.name }}
+            path: test-results/*.trx
+            if-no-files-found: ignore
