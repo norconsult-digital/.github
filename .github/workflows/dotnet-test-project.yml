@@ -24,6 +24,10 @@
           required: false
           type: string
           default: ""
+        jobName:
+          required: false
+          type: string
+          default: ".NET Test Project"
         testProjects:
           required: true
           type: string
@@ -48,7 +52,7 @@
     test:
       runs-on: ${{ inputs.vmImage }}
       environment: ${{ inputs.environment }}
-      name: .NET Test Project
+      name: ${{ inputs.jobName }}
 
       steps:
         - name: Checkout repository
