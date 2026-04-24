@@ -51,6 +51,7 @@
   jobs:
     prepare:
       runs-on: ubuntu-latest
+      name: Prepare Integration Test Execution
       outputs:
         shardPlan: ${{ steps.read-plan.outputs.shard_plan }}
         useShards: ${{ steps.read-plan.outputs.use_shards }}
@@ -105,7 +106,7 @@
       if: ${{ needs.prepare.outputs.useShards == 'false' }}
       runs-on: ${{ inputs.vmImage }}
       environment: ${{ inputs.environment }}
-      name: .NET Integration Test
+      name: .NET Integration Test Wihtout Shards
 
       steps:
         - name: Checkout repository
