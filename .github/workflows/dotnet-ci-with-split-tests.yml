@@ -105,7 +105,7 @@ jobs:
   integration_tests:
     if: ${{ inputs.integrationTestProject != '' }}
     name: Integration Tests
-    uses: ./.github/workflows/dotnet-integration-test-shards.yml
+    uses: ./.github/workflows/dotnet-integration-test.yml
     with:
       vmImage: ${{ inputs.vmImage }}
       gitRepo: ${{ inputs.gitRepo }}
