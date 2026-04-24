@@ -1,0 +1,195 @@
+name: .NET CI Workflow
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+on:
+  workflow_call:
+    inputs:
+      vmImage:
+        type: string
+        default: "ubuntu-latest"
+        required: false
+      gitRepo:
+        required: false
+        type: string
+      nugetConfigPath:
+        required: false
+        type: string
+      dotnetVersion:
+        required: false
+        default: "7.*"
+        type: string
+      unitTestProjects:
+        required: false
+        type: string
+        default: ""
+      architectureTestProjects:
+        required: false
+        type: string
+        default: ""
+      integrationTestProject:
+        description: "Single integration test project to run, optionally sharded by integrationShardPlanPath"
+        required: false
+        type: string
+        default: ""
+      integrationShardPlanPath:
+        required: false
+        type: string
+        default: ""
+      dockerBuildContext:
+        required: false
+        default: "."
+        type: string
+      dockerFile:
+        required: false
+        type: string
+      dockerBuildArguments:
+        required: false
+        type: string
+      repositoryName:
+        required: false
+        type: string
+      migrationBundleArguments:
+        required: false
+        type: string
+      migrationBundleAppSettingsPath:
+        required: false
+        type: string
+      azureServicePrincipalClientId:
+        required: false
+        type: string
+        default: ""
+      azureTenantId:
+        required: false
+        type: string
+        default: ""
+      ostype:
+        description: Operating system type for the migrations bundle runtime
+        required: false
+        type: string
+        default: ubuntu-latest
+    secrets:
+      NUGET_CONFIG:
+        required: false
+        description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during Docker restore only)"
+jobs:
+  unit_tests:
+    if: ${{ inputs.unitTestProjects != '' }}
+    name: Unit Tests
+    uses: ./.github/workflows/dotnet-test-project.yml
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      gitRepo: ${{ inputs.gitRepo }}
+      dotnetVersion: ${{ inputs.dotnetVersion }}
+      testProjects: ${{ inputs.unitTestProjects }}
+      azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
+      azureTenantId: ${{ inputs.azureTenantId }}
+      artifactName: dotnet-unit-test-results
+
+  architecture_tests:
+    if: ${{ inputs.architectureTestProjects != '' }}
+    name: Architecture Tests
+    uses: ./.github/workflows/dotnet-test-project.yml
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      gitRepo: ${{ inputs.gitRepo }}
+      dotnetVersion: ${{ inputs.dotnetVersion }}
+      testProjects: ${{ inputs.architectureTestProjects }}
+      azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
+      azureTenantId: ${{ inputs.azureTenantId }}
+      artifactName: dotnet-architecture-test-results
+
+  integration_tests:
+    if: ${{ inputs.integrationTestProject != '' }}
+    name: Integration Tests
+    uses: ./.github/workflows/dotnet-integration-test-shards.yml
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      gitRepo: ${{ inputs.gitRepo }}
+      dotnetVersion: ${{ inputs.dotnetVersion }}
+      testProject: ${{ inputs.integrationTestProject }}
+      shardPlanPath: ${{ inputs.integrationShardPlanPath }}
+      azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
+      azureTenantId: ${{ inputs.azureTenantId }}
+      artifactName: dotnet-integration-test-results
+
+  test_summary:
+    needs: [unit_tests, integration_tests, architecture_tests]
+    if: ${{ always() && (needs.unit_tests.result != 'skipped' || needs.integration_tests.result != 'skipped' || needs.architecture_tests.result != 'skipped') }}
+    runs-on: ubuntu-latest
+    name: Test Summary
+
+    steps:
+      - name: Checkout repository
+        if: ${{ inputs.gitRepo != '' }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ inputs.gitRepo }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Default checkout
+        if: ${{ inputs.gitRepo == '' }}
+        uses: actions/checkout@v5
+        
+      - name: Download test result artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dotnet-*-test-results*
+          path: all-test-results
+          merge-multiple: true
+
+      - name: Check downloaded TRX files
+        id: check_trx
+        shell: pwsh
+        run: |
+          $trxFiles = Get-ChildItem -Path all-test-results -Recurse -Filter *.trx -ErrorAction SilentlyContinue
+          if (-not $trxFiles) {
+            Write-Output "No TRX files found."
+            "present_test_summary=false" >> $env:GITHUB_ENV
+            exit 0
+          }
+
+          Write-Output "Found TRX files:"
+          $trxFiles | ForEach-Object { Write-Output $_.FullName }
+          "present_test_summary=true" >> $env:GITHUB_ENV
+
+      - name: Report test results
+        if: env.present_test_summary == 'true'
+        uses: phoenix-actions/test-reporting@v15
+        with:
+          name: .NET Tests
+          path: all-test-results/**/*.trx
+          reporter: dotnet-trx
+          output-to: "step-summary"
+
+  create_migration_bundle:
+    if: ${{ inputs.migrationBundleArguments != '' }}
+    uses: ./.github/workflows/efcore-migrations-bundle-create.yml
+    with:
+      gitRepo: ${{ inputs.gitRepo }}
+      nugetConfigPath: ${{ inputs.nugetConfigPath }}
+      migrationBundleArguments: ${{ inputs.migrationBundleArguments }}
+      migrationBundleAppSettingsPath: ${{ inputs.migrationBundleAppSettingsPath }}
+      dotnetVersion: ${{ inputs.dotnetVersion }}
+      ostype: ${{ inputs.ostype }}
+
+  build_docker_image:
+    needs: [unit_tests, architecture_tests, integration_tests, create_migration_bundle]
+    if: ${{ always() && inputs.dockerFile != ''
+        && (needs.unit_tests.result == 'success' || needs.unit_tests.result == 'skipped')
+        && (needs.architecture_tests.result == 'success' || needs.architecture_tests.result == 'skipped')
+        && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')
+        && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
+    uses: ./.github/workflows/docker-build-and-save.yml
+    secrets:
+      NUGET_CONFIG: ${{ secrets.NUGET_CONFIG }}
+    with:
+      vmImage: ${{ inputs.vmImage }}
+      gitRepo: ${{ inputs.gitRepo }}
+      dockerBuildContext: ${{ inputs.dockerBuildContext }}
+      dockerFile: ${{ inputs.dockerFile }}
+      repositoryName: ${{ inputs.repositoryName }}
+      dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
