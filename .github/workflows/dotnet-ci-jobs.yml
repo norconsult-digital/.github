@@ -103,6 +103,17 @@ jobs:
     name: Test Summary
 
     steps:
+      - name: Checkout repository
+        if: ${{ inputs.gitRepo != '' }}
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ inputs.gitRepo }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Default checkout
+        if: ${{ inputs.gitRepo == '' }}
+        uses: actions/checkout@v5
+        
       - name: Download test result artifacts
         uses: actions/download-artifact@v4
         with:
