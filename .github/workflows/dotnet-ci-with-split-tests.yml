@@ -84,6 +84,7 @@ jobs:
       vmImage: ${{ inputs.vmImage }}
       gitRepo: ${{ inputs.gitRepo }}
       dotnetVersion: ${{ inputs.dotnetVersion }}
+      jobName: Unit Tests
       testProjects: ${{ inputs.unitTestProjects }}
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
@@ -97,6 +98,7 @@ jobs:
       vmImage: ${{ inputs.vmImage }}
       gitRepo: ${{ inputs.gitRepo }}
       dotnetVersion: ${{ inputs.dotnetVersion }}
+      jobName: Architecture Tests
       testProjects: ${{ inputs.architectureTestProjects }}
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
