@@ -1,0 +1,155 @@
+  name: .NET Test Project
+
+  permissions:
+    id-token: write
+    contents: read
+    packages: read
+
+  on:
+    workflow_call:
+      inputs:
+        environment:
+          required: false
+          type: string
+          default: "integration-test"
+        vmImage:
+          type: string
+          default: "ubuntu-latest"
+          required: false
+        buildConfiguration:
+          required: false
+          type: string
+          default: "Release"
+        gitRepo:
+          required: false
+          type: string
+          default: ""
+        testProjects:
+          required: true
+          type: string
+        dotnetVersion:
+          required: false
+          default: "7.*"
+          type: string
+        azureServicePrincipalClientId:
+          required: false
+          type: string
+          default: ""
+        azureTenantId:
+          required: false
+          type: string
+          default: ""
+        artifactName:
+          required: false
+          type: string
+          default: "dotnet-test-results"
+
+  jobs:
+    test:
+      runs-on: ${{ inputs.vmImage }}
+      environment: ${{ inputs.environment }}
+      name: .NET Test Project
+
+      steps:
+        - name: Checkout repository
+          if: ${{ inputs.gitRepo != '' }}
+          uses: actions/checkout@v5
+          with:
+            repository: ${{ inputs.gitRepo }}
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Default checkout
+          if: ${{ inputs.gitRepo == '' }}
+          uses: actions/checkout@v5
+
+        - name: Setup dotnet ${{ inputs.dotnetVersion }}
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: ${{ inputs.dotnetVersion }}
+
+        - name: Azure Login via OIDC
+          if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
+          uses: azure/login@v2
+          with:
+            client-id: ${{ inputs.azureServicePrincipalClientId }}
+            tenant-id: ${{ inputs.azureTenantId }}
+            allow-no-subscriptions: true
+
+        - name: Replace GitHub Packages feed token in NuGet.Config files
+          shell: pwsh
+          run: |
+            $nugetFiles = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "NuGet.Config" -Recurse
+            foreach ($file in $nugetFiles) {
+                $content = Get-Content $file.FullName -Raw
+                if ($content -match '<NorconsultDigital>') {
+                    if ($content -match '<add key="ClearTextPassword" value="[^"]*"') {
+                        $content = $content -replace '<add key="ClearTextPassword" value="[^"]*" />', "<add key=`"ClearTextPassword`"
+                        value=`"${{ secrets.GITHUB_TOKEN }}`" />"
+                    }
+                    Set-Content -Path $file.FullName -Value $content
+                }
+            }
+
+        - name: Run tests with build verification
+          shell: pwsh
+          run: |
+            New-Item -ItemType Directory -Force -Path test-results | Out-Null
+
+            $projectList = @'
+            ${{ inputs.testProjects }}
+            '@
+
+            $projectPaths = $projectList `
+              -split "`r?`n" `
+              | ForEach-Object { $_.Trim() } `
+              | Where-Object { $_ -ne "" }
+
+            if (-not $projectPaths -or $projectPaths.Count -eq 0) {
+              throw "No test projects were provided."
+            }
+
+            $failedProjects = @()
+
+            foreach ($projectPath in $projectPaths) {
+              $fullPath = Join-Path $env:GITHUB_WORKSPACE $projectPath
+              if (-not (Test-Path -LiteralPath $fullPath)) {
+                throw "Test project not found: $projectPath"
+              }
+
+              $project = Get-Item -LiteralPath $fullPath
+              $projectName = [System.IO.Path]::GetFileNameWithoutExtension($project.FullName)
+              $trxPath = Join-Path (Join-Path $env:GITHUB_WORKSPACE "test-results") "$projectName.trx"
+
+              dotnet build $project.FullName --configuration "${{ inputs.buildConfiguration }}"
+              if ($LASTEXITCODE -ne 0) {
+                Write-Output "Build failed: $projectName"
+                exit 1
+              }
+
+              dotnet test $project.FullName `
+                --configuration "${{ inputs.buildConfiguration }}" `
+                --no-build `
+                --no-restore `
+                --logger "trx;LogFileName=$trxPath" `
+                --verbosity quiet
+
+              if ($LASTEXITCODE -ne 0) {
+                Write-Output "Tests failed: $projectName"
+                $failedProjects += $projectName
+              }
+            }
+
+            if ($failedProjects.Count -gt 0) {
+              Write-Output ""
+              Write-Output "Failed test projects:"
+              $failedProjects | ForEach-Object { Write-Output "- $_" }
+              exit 1
+            }
+
+        - name: Upload test results
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: ${{ inputs.artifactName }}
+            path: test-results/*.trx
+            if-no-files-found: ignore
