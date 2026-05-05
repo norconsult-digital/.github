@@ -70,7 +70,6 @@ jobs:
           else
             echo "packageManager=${{ inputs.packageManager }}" >> $GITHUB_ENV
           fi
-          echo "Using package manager: ${{ env.packageManager }}"
 
       - name: Setup pnpm
         if: ${{ env.packageManager == 'pnpm' }}
@@ -135,7 +134,7 @@ jobs:
           file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
           if [ -f "$file" ] && ! git diff --quiet -- "$file"; then
             echo "Changes found in $file"
-            git config --global user.email "$GITHUB_ACTOR_EMAIL"
+            git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
             git config --global user.name "$GITHUB_ACTOR - automatic"
             git add "$file"
             # Skip push for protected main branch

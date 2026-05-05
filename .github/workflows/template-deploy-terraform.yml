@@ -67,22 +67,6 @@ env:
   # USED FOR tf authentication to github app
   GITHUB_APP_ID: ${{ vars.APP_ID }}
   GITHUB_APP_INSTALLATION_ID: ${{ vars.APP_INSTALLATION_ID }}
-  GITHUB_APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
-
-  # USED for betterstack
-  BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
-
-  # Argo-cd GitHub application credentials, used by argo-cd in nd-management, nd-shared-non-prod and nd-shared-prod to sync with the GitHub repository
-  TF_VAR_argo_cd_github_app_id: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
-  TF_VAR_argo_cd_github_app_installation_id: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
-  TF_VAR_argo_cd_github_app_private_key: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
-
-  # ACR cache docker credentials
-  TF_VAR_acr_cache_docker_username: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
-  TF_VAR_acr_cache_docker_password: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
-
-  # secret for copilot-usage-dashboard application
-  TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
 jobs:
   # tflint:
@@ -156,6 +140,15 @@ jobs:
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ inputs.path }}
+        env:
+          GITHUB_APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          TF_VAR_argo_cd_github_app_id: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
+          TF_VAR_argo_cd_github_app_installation_id: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
+          TF_VAR_argo_cd_github_app_private_key: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
+          TF_VAR_acr_cache_docker_username: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
+          TF_VAR_acr_cache_docker_password: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
+          TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
       # Validate terraform files
       - name: Terraform Validate
@@ -174,6 +167,15 @@ jobs:
             terraform plan -detailed-exitcode -no-color -out tfplan
           fi
         working-directory: ${{ inputs.path }}
+        env:
+          GITHUB_APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          TF_VAR_argo_cd_github_app_id: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
+          TF_VAR_argo_cd_github_app_installation_id: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
+          TF_VAR_argo_cd_github_app_private_key: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
+          TF_VAR_acr_cache_docker_username: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
+          TF_VAR_acr_cache_docker_password: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
+          TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
       # Save plan to artifacts
       - name: Publish Terraform Plan
@@ -304,6 +306,15 @@ jobs:
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ inputs.path }}
+        env:
+          GITHUB_APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          TF_VAR_argo_cd_github_app_id: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
+          TF_VAR_argo_cd_github_app_installation_id: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
+          TF_VAR_argo_cd_github_app_private_key: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
+          TF_VAR_acr_cache_docker_username: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
+          TF_VAR_acr_cache_docker_password: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
+          TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
 
       # Download saved plan from artifacts
       - name: Download Terraform Plan
@@ -316,3 +327,12 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
         working-directory: ${{ inputs.path }}
+        env:
+          GITHUB_APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+          TF_VAR_argo_cd_github_app_id: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
+          TF_VAR_argo_cd_github_app_installation_id: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
+          TF_VAR_argo_cd_github_app_private_key: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
+          TF_VAR_acr_cache_docker_username: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
+          TF_VAR_acr_cache_docker_password: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
+          TF_VAR_gh_app_nd_copilot_usage_dashboard_private_key: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}

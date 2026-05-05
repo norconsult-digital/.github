@@ -24,5 +24,3 @@ jobs:
     with:
       bicepFolder: ${{ github.event.inputs.bicepFolder }}
       vmImage: ${{ github.event.inputs.vmImage }}
-      environmentName: ${{ github.event.inputs.environmentName }}
-      allowedBranches: ${{ github.event.inputs.allowedBranches }}

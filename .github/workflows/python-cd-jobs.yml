@@ -39,15 +39,16 @@ jobs:
   delay_deployment:
     runs-on: ubuntu-latest    
     name: Delay deployment to ${{ inputs.environmentName }} for ${{ inputs.deploymentDelayInMinutes }} minutes 
-    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
     steps:
       - name: Delay
         run: sleep ${{ inputs.deploymentDelayInMinutes }}m
   
   deploy:
+    needs: [delay_deployment]
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environment }}
-    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    if: ${{ always() && (contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release'))) }}
     steps:      
       - name: Determine ACR name and ACR subscription based on environment
         run: |
