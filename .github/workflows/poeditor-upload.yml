@@ -68,14 +68,15 @@ jobs:
         run: |
           if [[ -z "${{ inputs.packageManager }}" ]]; then
             if [[ -f "${{ inputs.path }}/pnpm-lock.yaml" ]]; then
-              echo "packageManager=pnpm" >> $GITHUB_ENV
+              package_manager="pnpm"
             else
-              echo "packageManager=npm" >> $GITHUB_ENV
+              package_manager="npm"
             fi
           else
-            echo "packageManager=${{ inputs.packageManager }}" >> $GITHUB_ENV
+            package_manager="${{ inputs.packageManager }}"
           fi
-          echo "Using package manager: $(grep '^packageManager=' "$GITHUB_ENV" | tail -n 1 | cut -d= -f2-)"
+          echo "packageManager=$package_manager" >> $GITHUB_ENV
+          echo "Using package manager: $package_manager"
 
       - name: Setup pnpm
         if: ${{ env.packageManager == 'pnpm' }}
