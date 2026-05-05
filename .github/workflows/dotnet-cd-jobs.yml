@@ -57,7 +57,7 @@ jobs:
     needs: [delay_deployment]
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environment }}
-    if: ${{ always() && needs.delay_deployment.result == 'success' }}
+    if: ${{ !cancelled() && needs.delay_deployment.result == 'success' }}
     steps:      
       - name: Determine ACR name and ACR subscription based on environment
         run: |

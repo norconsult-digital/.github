@@ -11,7 +11,7 @@ on:
         default: "ubuntu-latest"
         type: string
       workspaceDir:
-        required: true
+        required: false
         default: "."
         type: string
       disableNxCloud:
@@ -28,4 +28,3 @@ jobs:
       disableNxCloud: ${{ inputs.disableNxCloud || false }}
     secrets:
       NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}
-

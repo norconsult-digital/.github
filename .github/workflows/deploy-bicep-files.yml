@@ -108,7 +108,6 @@ jobs:
           deploymentName: ${{ env.DEPLOYMENT_NAME }}
 
       - name: Deploy Bicep file
-        if: ${{ success() }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
