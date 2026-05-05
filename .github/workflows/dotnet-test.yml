@@ -54,7 +54,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Default checkout
-        if: ${{ !inputs.gitRepo }}
         uses: actions/checkout@v5
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
