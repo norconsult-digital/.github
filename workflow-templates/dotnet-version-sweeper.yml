@@ -12,7 +12,7 @@ on:
 
 
 jobs:
-  donet-version-sweeper:
+  dotnet-version-sweeper:
     uses: norconsult-digital/.github/.github/workflows/dotnet-version-sweeper.yml@main
     with:
       support: ${{ inputs.support || 'STS' }}
