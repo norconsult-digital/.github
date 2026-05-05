@@ -20,6 +20,11 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      bicepFolder:
+        description: "Folder containing bicep files"
+        required: false
+        default: "b2c-poc/resources"
+        type: string
 
 jobs:
   deploy-bicep:
@@ -34,4 +39,5 @@ jobs:
       resourceGroupName: "rg-b2c-poc"
       bicepFile: "b2c-poc.bicep"
       bicepParameterFile: "b2cpoc.parameters.test.json"
+      bicepFolder: ${{ github.event.inputs.bicepFolder || 'b2c-poc/resources' }}
       azureServicePrincipalId: ${{ vars.PLATFORM_SERVICE_PRINCIPAL_ID }}

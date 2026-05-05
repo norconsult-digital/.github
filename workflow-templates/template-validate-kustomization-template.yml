@@ -29,5 +29,3 @@ jobs:
       environment: ${{ github.event.inputs.environment }}
       subscription_id: ${{ github.event.inputs.subscription_id }}
       acr_name: ${{ github.event.inputs.acr_name }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

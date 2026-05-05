@@ -17,12 +17,22 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      environmentName:
+        description: "Optional environment name"
+        required: false
+        default: ""
+        type: string
+      allowedBranches:
+        description: "Optional allowed branches"
+        required: false
+        default: '["main"]'
+        type: string
 
 jobs:
   publish-bicep-file:
     uses: norconsult-digital/.github/.github/workflows/publish-bicep-files.yml@main
     with:
-      bicepFolder: ${{ github.event.inputs.bicepFolder }}
-      vmImage: ${{ github.event.inputs.vmImage }}
-      environmentName: ${{ github.event.inputs.environmentName }}
-      allowedBranches: ${{ github.event.inputs.allowedBranches }}
+      bicepFolder: ${{ github.event.inputs.bicepFolder || 'infra/bicep' }}
+      vmImage: ${{ github.event.inputs.vmImage || 'ubuntu-latest' }}
+      environmentName: ${{ github.event.inputs.environmentName || '' }}
+      allowedBranches: ${{ github.event.inputs.allowedBranches || '["main"]' }}

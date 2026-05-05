@@ -47,6 +47,11 @@ on:
       projectId:
         required: true
         type: string
+      language:
+        description: "POEditor language code to upload"
+        required: false
+        default: "en"
+        type: string
     secrets:
       API_KEY:
         required: true
@@ -70,7 +75,7 @@ jobs:
           else
             echo "packageManager=${{ inputs.packageManager }}" >> $GITHUB_ENV
           fi
-          echo "Using package manager: ${{ env.packageManager }}"
+          echo "Using package manager: $(grep '^packageManager=' "$GITHUB_ENV" | tail -n 1 | cut -d= -f2-)"
 
       - name: Setup pnpm
         if: ${{ env.packageManager == 'pnpm' }}
@@ -118,7 +123,7 @@ jobs:
               -F api_token="${{ secrets.API_KEY }}" \
               -F id="${{ inputs.projectId }}" \
               -F updating="terms_translations" \
-              -F language="en" \
+              -F language="${{ inputs.language }}" \
               -F overwrite="$overwriteValue" \
               -F read_from_source="1" \
               -F fuzzy_trigger="1" \
@@ -135,7 +140,7 @@ jobs:
           file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
           if [ -f "$file" ] && ! git diff --quiet -- "$file"; then
             echo "Changes found in $file"
-            git config --global user.email "$GITHUB_ACTOR_EMAIL"
+            git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
             git config --global user.name "$GITHUB_ACTOR - automatic"
             git add "$file"
             # Skip push for protected main branch

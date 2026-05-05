@@ -39,14 +39,6 @@ on:
         required: false
         default: "[]"
         type: string
-      optionalDbConnection1: 
-        required: false
-        type: string
-        description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
-      optionalDbConnection2:
-        required: false
-        type: string
-        description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
 
 permissions:
   id-token: write
@@ -56,12 +48,13 @@ jobs:
   delay_deployment:
     runs-on: ubuntu-latest    
     name: Delay deployment to ${{ inputs.environmentName }} for ${{ inputs.deploymentDelayInMinutes }} minutes 
-    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
     steps:
       - name: Delay
         run: sleep ${{ inputs.deploymentDelayInMinutes }}m
   
   deploy:
+    needs: [delay_deployment]
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environment }}
     if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
@@ -106,22 +99,6 @@ jobs:
           done
         working-directory: ./migrations-bundle
 
-      # TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
-      - name: Run migrations for optionalDbConnection1 if provided
-        if: ${{ inputs.migrationBundleArguments != '' && inputs.optionalDbConnection1 != '' }}
-        run: |
-          chmod +x ./migrations-bundle.exe
-          ./migrations-bundle.exe --connection '${{ inputs.optionalDbConnection1 }}' --verbose
-        working-directory: ./migrations-bundle
-        
-      # TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
-      - name: Run migrations for optionalDbConnection2 if provided
-        if: ${{ inputs.migrationBundleArguments != '' && inputs.optionalDbConnection2 != '' }}
-        run: |
-          chmod +x ./migrations-bundle.exe
-          ./migrations-bundle.exe --connection '${{ inputs.optionalDbConnection2 }}' --verbose
-        working-directory: ./migrations-bundle
-      
       - name: Download Docker image artifact
         uses: actions/download-artifact@v7
         with:

@@ -46,6 +46,10 @@ on:
       projectId:
         required: true
         type: string
+      language:
+        required: false
+        default: "en"
+        type: string
 
 jobs:
   call-poeditor-upload:
@@ -61,6 +65,6 @@ jobs:
       pnpmVersion: ${{ github.event.inputs.pnpmVersion }}
       overwrite: ${{ github.event.inputs.overwrite }}
       projectId: ${{ github.event.inputs.projectId }}
+      language: ${{ github.event.inputs.language || 'en' }}
     secrets:
       API_KEY: ${{ secrets.API_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

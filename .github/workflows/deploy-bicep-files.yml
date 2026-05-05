@@ -42,6 +42,11 @@ on:
         description: "Bicep parameter file"
         required: true
         type: string
+      bicepFolder:
+        description: "Folder containing the downloaded Bicep artifact"
+        required: false
+        type: string
+        default: "b2c-poc/resources"
       azureServicePrincipalId:
         description: "Azure Service Principal ID"
         required: true
@@ -71,10 +76,10 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: bicep
-          path: ./b2c-poc/resources 
+          path: ${{ inputs.bicepFolder }}
 
       - name: Set artifact path
-        run: echo "ARTIFACT_PATH=./b2c-poc/resources" >> $GITHUB_ENV 
+        run: echo "ARTIFACT_PATH=${{ inputs.bicepFolder }}" >> $GITHUB_ENV
 
       - name: Set deployment name
         run: |
@@ -103,7 +108,7 @@ jobs:
           deploymentName: ${{ env.DEPLOYMENT_NAME }}
 
       - name: Deploy Bicep file
-        if: ${{ always() && inputs.runWhatIf == false || inputs.runWhatIf == true }}
+        if: ${{ success() }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
