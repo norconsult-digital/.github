@@ -7,12 +7,12 @@ on:
     inputs:
       support:
         description: "The support level to target (STS, LTS, or Preview)."
-        required: true
+        required: false
         default: "STS"
 
 
 jobs:
-  donet-version-sweeper:
+  dotnet-version-sweeper:
     uses: norconsult-digital/.github/.github/workflows/dotnet-version-sweeper.yml@main
     with:
-      support: ${{ inputs.support }}
+      support: ${{ inputs.support || 'STS' }}

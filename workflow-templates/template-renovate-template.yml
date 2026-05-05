@@ -45,4 +45,3 @@ jobs:
     secrets:
       RENOVATE_APP_ID: ${{ secrets.RENOVATE_APP_ID }}
       RENOVATE_PRIVATE_KEY: ${{ secrets.RENOVATE_PRIVATE_KEY }}
-      RENOVATE_WEBHOOK_SECRET: ${{ secrets.RENOVATE_WEBHOOK_SECRET }}

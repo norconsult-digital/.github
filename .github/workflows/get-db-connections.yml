@@ -88,9 +88,7 @@ jobs:
         env:
           CONNECTION_TEMPLATE: ${{ inputs.connectionStringTemplate }}
         run: |
-          # Parse database names from API response
           INSTANCES=$(echo '${{ steps.call_api.outputs.response }}' | jq -c '[.databaseInstances[].name]')
-          echo "instances=$INSTANCES" >> $GITHUB_OUTPUT
           
           # Build connection strings from template
           CONNECTION_STRINGS=$(echo "$INSTANCES" | jq -c --arg template "$CONNECTION_TEMPLATE" '

@@ -27,9 +27,6 @@ on:
         required: false
         default: 0
         type: number
-      dbConnection:
-        required: false
-        type: string
 
 jobs:
   python-cd-jobs:
@@ -41,4 +38,3 @@ jobs:
       azureServicePrincipalId: ${{ github.event.inputs.azureServicePrincipalId }}
       artifactName: ${{ github.event.inputs.artifactName }}
       deploymentDelayInMinutes: ${{ github.event.inputs.deploymentDelayInMinutes }}
-      dbConnection: ${{ github.event.inputs.dbConnection }}

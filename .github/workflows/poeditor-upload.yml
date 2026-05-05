@@ -47,6 +47,11 @@ on:
       projectId:
         required: true
         type: string
+      language:
+        description: "POEditor language code to upload"
+        required: false
+        default: "en"
+        type: string
     secrets:
       API_KEY:
         required: true
@@ -63,14 +68,15 @@ jobs:
         run: |
           if [[ -z "${{ inputs.packageManager }}" ]]; then
             if [[ -f "${{ inputs.path }}/pnpm-lock.yaml" ]]; then
-              echo "packageManager=pnpm" >> $GITHUB_ENV
+              package_manager="pnpm"
             else
-              echo "packageManager=npm" >> $GITHUB_ENV
+              package_manager="npm"
             fi
           else
-            echo "packageManager=${{ inputs.packageManager }}" >> $GITHUB_ENV
+            package_manager="${{ inputs.packageManager }}"
           fi
-          echo "Using package manager: ${{ env.packageManager }}"
+          echo "packageManager=$package_manager" >> $GITHUB_ENV
+          echo "Using package manager: $package_manager"
 
       - name: Setup pnpm
         if: ${{ env.packageManager == 'pnpm' }}
@@ -118,7 +124,7 @@ jobs:
               -F api_token="${{ secrets.API_KEY }}" \
               -F id="${{ inputs.projectId }}" \
               -F updating="terms_translations" \
-              -F language="en" \
+              -F language="${{ inputs.language }}" \
               -F overwrite="$overwriteValue" \
               -F read_from_source="1" \
               -F fuzzy_trigger="1" \
@@ -135,7 +141,7 @@ jobs:
           file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
           if [ -f "$file" ] && ! git diff --quiet -- "$file"; then
             echo "Changes found in $file"
-            git config --global user.email "$GITHUB_ACTOR_EMAIL"
+            git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
             git config --global user.name "$GITHUB_ACTOR - automatic"
             git add "$file"
             # Skip push for protected main branch
