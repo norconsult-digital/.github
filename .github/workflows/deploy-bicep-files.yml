@@ -71,10 +71,10 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: bicep
-          path: ./b2c-poc/resources 
+          path: ./bicep-artifact
 
       - name: Set artifact path
-        run: echo "ARTIFACT_PATH=./b2c-poc/resources" >> $GITHUB_ENV 
+        run: echo "ARTIFACT_PATH=./bicep-artifact" >> $GITHUB_ENV
 
       - name: Set deployment name
         run: |
@@ -103,7 +103,7 @@ jobs:
           deploymentName: ${{ env.DEPLOYMENT_NAME }}
 
       - name: Deploy Bicep file
-        if: ${{ always() && inputs.runWhatIf == false || inputs.runWhatIf == true }}
+        if: ${{ inputs.runWhatIf == false }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}

@@ -5,6 +5,18 @@ on:
   schedule:
     - cron: "0 9 * * 3" # Changed from monthly to Wednesday 9 AM UTC
   workflow_dispatch:
+    inputs:
+      vmImage:
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      workspaceDir:
+        required: true
+        type: string
+      disableNxCloud:
+        required: false
+        type: boolean
+        default: false
    
 jobs:
   angular-build-and-test:
@@ -13,6 +25,5 @@ jobs:
       vmImage: ${{ inputs.vmImage }}
       workspaceDir: ${{ inputs.workspaceDir }} 
       disableNxCloud: ${{ inputs.disableNxCloud }}
+    secrets:
       NX_CLOUD_CICD: ${{ secrets.NX_CLOUD_CICD }}
-
-

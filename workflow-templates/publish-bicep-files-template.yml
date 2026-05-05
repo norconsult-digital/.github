@@ -17,6 +17,15 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      environmentName:
+        description: "Environment name for GitHub environment protection"
+        required: false
+        type: string
+      allowedBranches:
+        description: "Branches allowed to run deployment"
+        required: false
+        default: '["main"]'
+        type: string
 
 jobs:
   publish-bicep-file:

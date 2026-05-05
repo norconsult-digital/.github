@@ -29,4 +29,3 @@ jobs:
       projectId: ${{ github.event.inputs.projectId }}
     secrets:
       API_KEY: ${{ secrets.API_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
