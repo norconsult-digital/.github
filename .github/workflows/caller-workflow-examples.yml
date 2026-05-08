@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Example caller workflows — one per repo, ~10-15 lines each
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Option A: Full auto-detect (zero config, recommended for most repos)  ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+# The workflow detects .cs → backend agents, .ts/.html → frontend agent.
+# Just drop this file into any repo and it works.
+
+# File: .github/workflows/security-review.yml
+
+name: "Security & Safety Review"
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.cs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.html"
+jobs:
+  review:
+    uses: norconsult-digital/.github/.github/workflows/copilot-agent-review.yml@main
+    secrets:
+      COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Option B: Explicit agent selection (backend-only repo)                ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+# Use when you want to control exactly which agents run.
+
+# name: "Security & Safety Review"
+# on:
+#   pull_request:
+#     branches: [main]
+#     paths: ["**/*.cs"]
+# jobs:
+#   review:
+#     uses: norconsult-digital/.github/.github/workflows/copilot-agent-review.yml@main
+#     with:
+#       agents: '["dotnet-security-reviewer", "dotnet-runtime-safety-reviewer"]'
+#     secrets:
+#       COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Option C: Frontend-only repo (Angular or React)                       ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+# name: "Frontend Security Review"
+# on:
+#   pull_request:
+#     branches: [main]
+#     paths: ["**/*.ts", "**/*.tsx", "**/*.html"]
+# jobs:
+#   review:
+#     uses: norconsult-digital/.github/.github/workflows/copilot-agent-review.yml@main
+#     with:
+#       agents: '["frontend-security-reviewer"]'
+#     secrets:
+#       COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Option D: Security only, no runtime-safety (simpler projects)         ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+# name: "Security Review"
+# on:
+#   pull_request:
+#     branches: [main]
+#     paths: ["**/*.cs"]
+# jobs:
+#   review:
+#     uses: norconsult-digital/.github/.github/workflows/copilot-agent-review.yml@main
+#     with:
+#       agents: '["dotnet-security-reviewer"]'
+#     secrets:
+#       COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  Option E: BIM migration (fullstack monorepo)                          ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+# BIM currently has 2 × 230-line workflows. After migration: 1 × 15 lines.
+
+# name: "Security & Safety Review"
+# on:
+#   pull_request:
+#     branches: [main]
+#     paths:
+#       - "*/src/api/**/*.cs"
+#       - "*/src/app-host/**/*.cs"
+#       - "common-library/src/**/*.cs"
+#       - "*/src/app/src/**/*.ts"
+#       - "*/src/app/src/**/*.html"
+# jobs:
+#   review:
+#     uses: norconsult-digital/.github/.github/workflows/copilot-agent-review.yml@main
+#     # auto-detect: .cs → both backend agents, .ts/.html → frontend agent
+#     secrets:
+#       COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
