@@ -1,0 +1,531 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Unified Copilot Agent Review Workflow (Organization-Level)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Place this file in: norconsult-digital/.github/.github/workflows/copilot-agent-review.yml
+#
+# Auto-detects which agents to run based on changed files in the PR:
+#   - *.cs files        → dotnet-security-reviewer + dotnet-runtime-safety-reviewer
+#   - *.ts/tsx/html     → frontend-security-reviewer
+#
+# Repos opt in by creating a thin caller workflow (~10 lines).
+# Repos can override agent selection and config via .github/agent-review.yml
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Copilot Agent Review"
+
+on:
+  workflow_call:
+    inputs:
+      agents:
+        description: >
+          Optional JSON array of agent names to run. If omitted, the workflow
+          auto-detects based on changed file extensions.
+          Example: '["dotnet-security-reviewer", "frontend-security-reviewer"]'
+          Valid values: "dotnet-security-reviewer", "dotnet-runtime-safety-reviewer", "frontend-security-reviewer"
+        required: false
+        type: string
+        default: "auto"
+    secrets:
+      COPILOT_CLI_TOKEN:
+        description: "GitHub token with Copilot CLI access"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # Phase 1: Detect which agents should run
+  # ──────────────────────────────────────────────────────────────────────
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+      has-agents: ${{ steps.build-matrix.outputs.has-agents }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Detect agents to run
+        id: build-matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          git fetch --no-tags --depth=1 origin "$base" || true
+
+          changed_files=$(git diff --name-only "$base" "$head")
+
+          # Count file types
+          cs_count=$(echo "$changed_files" | grep -cE '\.cs$' || true)
+          ts_count=$(echo "$changed_files" | grep -cE '\.(ts|tsx|html)$' || true)
+          # Exclude test/spec files from frontend count
+          ts_test_count=$(echo "$changed_files" | grep -cE '\.(spec|test)\.(ts|tsx)$' || true)
+          ts_src_count=$((ts_count - ts_test_count))
+
+          echo "Changed files: cs=$cs_count, ts/html=$ts_src_count (tests excluded: $ts_test_count)"
+
+          agents_input='${{ inputs.agents }}'
+
+          if [ "$agents_input" != "auto" ] && [ -n "$agents_input" ]; then
+              # Explicit agent list provided — use it directly
+              echo "Using explicit agent list: $agents_input"
+              matrix="$agents_input"
+          else
+              # Auto-detect based on changed files
+              agents=()
+
+              if [ "$cs_count" -gt 0 ]; then
+                  agents+=("dotnet-security-reviewer")
+                  agents+=("dotnet-runtime-safety-reviewer")
+                  echo "Auto-detected: C# files → dotnet-security + runtime-safety"
+              fi
+
+              if [ "$ts_src_count" -gt 0 ]; then
+                  agents+=("frontend-security-reviewer")
+                  echo "Auto-detected: TS/HTML files → frontend-security"
+              fi
+
+              # Check for repo-level override config
+              if [ -f ".github/agent-review.yml" ]; then
+                  echo "Found .github/agent-review.yml — checking for disabled agents"
+                  # Simple YAML parsing: look for "disabled:" lines
+                  for agent in "${agents[@]}"; do
+                      if grep -qE "^\s*-\s*${agent}\s*$" .github/agent-review.yml 2>/dev/null; then
+                          echo "  Skipping disabled agent: $agent"
+                          agents=("${agents[@]/$agent/}")
+                      fi
+                  done
+              fi
+
+              # Remove empty entries
+              filtered=()
+              for a in "${agents[@]}"; do
+                  [ -n "$a" ] && filtered+=("$a")
+              done
+              agents=("${filtered[@]}")
+
+              if [ ${#agents[@]} -eq 0 ]; then
+                  echo "No agents to run — no matching file changes."
+                  echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+                  echo 'has-agents=false' >> "$GITHUB_OUTPUT"
+                  exit 0
+              fi
+
+              # Build JSON array
+              matrix=$(printf '%s\n' "${agents[@]}" | jq -R . | jq -sc .)
+          fi
+
+          echo "Agent matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "has-agents=true" >> "$GITHUB_OUTPUT"
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Phase 2: Run each agent in parallel
+  # ──────────────────────────────────────────────────────────────────────
+  review:
+    needs: detect
+    if: needs.detect.outputs.has-agents == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: ${{ fromJson(needs.detect.outputs.matrix) }}
+
+    concurrency:
+      group: ${{ matrix.agent }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Checkout org-level agents
+        uses: actions/checkout@v4
+        with:
+          repository: norconsult-digital/.github-private
+          path: .org-agents-repo
+          sparse-checkout: agents
+          token: ${{ secrets.COPILOT_CLI_TOKEN }}
+        continue-on-error: true
+
+      - name: Flatten org agents directory
+        shell: bash
+        run: |
+          # Move org agents to a predictable path, handle missing gracefully
+          if [ -d ".org-agents-repo/agents" ]; then
+              mv .org-agents-repo/agents .org-agents
+              echo "✅ Org-level agents available in .org-agents/"
+              ls -la .org-agents/
+          else
+              mkdir -p .org-agents
+              echo "⚠️ No org-level agents found — using repo-level only."
+          fi
+          rm -rf .org-agents-repo
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve agent configuration
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          agent="${{ matrix.agent }}"
+
+          # ── Agent-specific defaults ──
+          case "$agent" in
+            dotnet-security-reviewer)
+              echo "file-filter=\.cs$"                                            >> "$GITHUB_OUTPUT"
+              echo "title=Backend Security Review"                                >> "$GITHUB_OUTPUT"
+              echo "emoji=🛡️"                                                    >> "$GITHUB_OUTPUT"
+              echo "subtitle=Attacker perspective — injection, tenant isolation, authorization, secrets." >> "$GITHUB_OUTPUT"
+              echo "task=Review the changes for security issues. Perspective: think like an **attacker** — what can be exploited?" >> "$GITHUB_OUTPUT"
+              cat > /tmp/reporting-rules.txt <<'RULES'
+          - Only report REAL security issues (input validation, authorization, injection, tenant isolation, secret/PII exposure, error handling, deserialization). Skip stylistic remarks.
+          - Do NOT report runtime/scaling issues (covered by dotnet-runtime-safety-reviewer).
+          - Use severity values: "critical" | "high" | "medium" | "low" | "info".
+          RULES
+              ;;
+            dotnet-runtime-safety-reviewer)
+              echo "file-filter=\.cs$"                                            >> "$GITHUB_OUTPUT"
+              echo "title=Runtime Safety Review"                                  >> "$GITHUB_OUTPUT"
+              echo "emoji=🧭"                                                    >> "$GITHUB_OUTPUT"
+              echo "subtitle=Production-load perspective — statelessness, idempotency, retry storms, health probes." >> "$GITHUB_OUTPUT"
+              echo "task=Review the changes for distributed-system / Kubernetes runtime hazards. Perspective: think like **production under load** — N replicas, at-least-once messaging." >> "$GITHUB_OUTPUT"
+              cat > /tmp/reporting-rules.txt <<'RULES'
+          - Only report issues matching the runtime-safety categories (statelessness, idempotency, outbox, retry, health probes, fire-and-forget, data protection, config validation).
+          - Skip security/authz/IDOR (covered by dotnet-security-reviewer).
+          - Be conservative: if unsure, do NOT report. False positives erode trust.
+          RULES
+              ;;
+            frontend-security-reviewer)
+              echo "file-filter=\.(ts|tsx|html)$"                                 >> "$GITHUB_OUTPUT"
+              echo "title=Frontend Security Review"                               >> "$GITHUB_OUTPUT"
+              echo "emoji=🔒"                                                    >> "$GITHUB_OUTPUT"
+              echo "subtitle=XSS, injection, sanitization, auth guards, sensitive data handling." >> "$GITHUB_OUTPUT"
+              echo "task=Review the changes for frontend security issues. Perspective: think like an **attacker** — what can be exploited in the browser?" >> "$GITHUB_OUTPUT"
+              cat > /tmp/reporting-rules.txt <<'RULES'
+          - Only report REAL security issues (XSS, injection, auth bypass, sensitive data exposure).
+          - Skip framework conventions, styling, performance without security impact.
+          - Skip npm package vulnerabilities (covered by Dependabot).
+          RULES
+              ;;
+            *)
+              echo "::error::Unknown agent: $agent"
+              exit 1
+              ;;
+          esac
+
+          # ── Resolve agent definition files (LAYERED: org + repo) ──
+          #
+          # The workflow supports a merge model where BOTH the org-level agent
+          # AND a repo-level agent are included in the prompt:
+          #
+          #   1. Org-level agent  → universal rules (from .github-private/agents/)
+          #      Checked out in a previous step from norconsult-digital/.github-private
+          #   2. Repo-level agent → project-specific rules (from .github/agents/)
+          #
+          # If both exist, they are concatenated (org first, repo second).
+          # Repo-level rules take priority when they conflict with org-level rules.
+          # If only one exists, that one is used alone.
+          #
+          org_agent_file=".org-agents/${agent}.agent.md"
+          repo_agent_file=".github/agents/${agent}.agent.md"
+
+          has_org="false"
+          has_repo="false"
+
+          if [ -f "$org_agent_file" ]; then
+              has_org="true"
+              echo "✅ Found org-level agent: $org_agent_file"
+          fi
+
+          if [ -f "$repo_agent_file" ]; then
+              has_repo="true"
+              echo "✅ Found repo-level agent: $repo_agent_file"
+          fi
+
+          echo "has-org-agent=$has_org"   >> "$GITHUB_OUTPUT"
+          echo "has-repo-agent=$has_repo" >> "$GITHUB_OUTPUT"
+          echo "org-agent-file=$org_agent_file"   >> "$GITHUB_OUTPUT"
+          echo "repo-agent-file=$repo_agent_file" >> "$GITHUB_OUTPUT"
+
+          if [ "$has_org" = "false" ] && [ "$has_repo" = "false" ]; then
+              echo "::warning::No agent file found for ${agent} — will rely on built-in prompt only."
+          fi
+
+      - name: Compute changed files
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          git fetch --no-tags --depth=1 origin "$base" || true
+
+          file_filter='${{ steps.config.outputs.file-filter }}'
+          mapfile -t files < <(git diff --name-only "$base" "$head" \
+              | grep -E "$file_filter" || true)
+
+          printf 'Changed files for %s (%s):\n' "${{ matrix.agent }}" "${#files[@]}"
+          printf ' - %s\n' "${files[@]:-<none>}"
+
+          {
+              echo "count=${#files[@]}"
+              echo "files<<EOF"
+              printf '%s\n' "${files[@]:-}"
+              echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "${#files[@]}" -gt 0 ]; then
+              git diff "$base" "$head" -- "${files[@]}" > pr.diff
+          else
+              : > pr.diff
+          fi
+
+      - name: Skip if no matching changes
+        if: steps.changes.outputs.count == '0'
+        run: echo "No matching file changes for ${{ matrix.agent }} — skipping."
+
+      - name: Check Copilot CLI token
+        id: token-check
+        if: steps.changes.outputs.count != '0'
+        env:
+          COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
+        run: |
+          if [ -n "${COPILOT_CLI_TOKEN}" ]; then
+              echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+              echo "available=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::COPILOT_CLI_TOKEN not set — skipping ${{ matrix.agent }}."
+          fi
+
+      - name: Install GitHub Copilot CLI
+        if: steps.changes.outputs.count != '0' && steps.token-check.outputs.available == 'true'
+        run: npm install -g @github/copilot
+
+      - name: "Run agent: ${{ matrix.agent }}"
+        if: steps.changes.outputs.count != '0' && steps.token-check.outputs.available == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
+          CHANGED_FILES: ${{ steps.changes.outputs.files }}
+        run: |
+          set -euo pipefail
+          mkdir -p .agent-review
+
+          agent="${{ matrix.agent }}"
+          org_agent_file="${{ steps.config.outputs.org-agent-file }}"
+          repo_agent_file="${{ steps.config.outputs.repo-agent-file }}"
+          has_org="${{ steps.config.outputs.has-org-agent }}"
+          has_repo="${{ steps.config.outputs.has-repo-agent }}"
+
+          # ── Build the agent definition section ──
+          # Layered: org rules first (foundation), repo rules second (overrides)
+          agent_section=""
+
+          if [ "$has_org" = "true" ]; then
+              org_md=$(cat "$org_agent_file")
+              agent_section+="
+          --- ORG-LEVEL RULES (universal — from .github-private/agents/) ---
+          ${org_md}
+          --- END ORG-LEVEL RULES ---
+          "
+          fi
+
+          if [ "$has_repo" = "true" ]; then
+              repo_md=$(cat "$repo_agent_file")
+              agent_section+="
+          --- REPO-LEVEL RULES (project-specific — from .github/agents/) ---
+          These rules are specific to this repository. They EXTEND and may OVERRIDE
+          the org-level rules above. When there is a conflict, repo-level rules win.
+          ${repo_md}
+          --- END REPO-LEVEL RULES ---
+          "
+          fi
+
+          if [ -z "$agent_section" ]; then
+              agent_section="No agent definition file found. Use built-in knowledge only."
+          fi
+
+          reporting_rules=$(cat /tmp/reporting-rules.txt)
+
+          cat > .agent-review/prompt.md <<PROMPT
+          You are operating as the **${agent}** agent. Follow these instructions:
+
+          ${agent_section}
+
+          ## Task
+          ${{ steps.config.outputs.task }}
+
+          Inputs:
+          - The unified diff of changed files is in \`pr.diff\` at the repo root.
+          - Changed files (newline-separated): see CHANGED_FILES env var.
+          - You may read any file in the repo for context using your read/grep/glob tools.
+
+          Reporting rules:
+          ${reporting_rules}
+          - Each finding must reference a file path and line number that is part of an
+            added or modified RIGHT-side line in pr.diff.
+          - When both org-level and repo-level rules are present, repo-level rules
+            take priority in case of conflict.
+
+          ## Output contract
+          Emit ONLY a JSON document on stdout, wrapped between these EXACT marker lines
+          (each on its own line, no other text on those lines):
+
+          <<<FINDINGS_JSON>>>
+          {
+            "summary": "<short markdown summary, max ~10 lines>",
+            "findings": [
+              {
+                "file": "path/from/repo/root",
+                "line": 123,
+                "severity": "high",
+                "title": "Short title",
+                "message": "Detailed explanation including a concrete fix recommendation.",
+                "fixPlan": [
+                  "Step 1: short, imperative action",
+                  "Step 2: ...",
+                  "Step 3: 'Add or update the matching test'"
+                ]
+              }
+            ],
+            "remediationPlan": "<markdown block — copy-paste-ready prompt to fix ALL findings>"
+          }
+          <<<END_FINDINGS_JSON>>>
+
+          If there are no findings, emit:
+          <<<FINDINGS_JSON>>>
+          {"summary":"No issues found.","findings":[],"remediationPlan":""}
+          <<<END_FINDINGS_JSON>>>
+
+          The markers and the JSON between them are the only contract.
+          PROMPT
+
+          set +e
+          copilot \
+              --allow-all-tools \
+              --no-color \
+              -p "$(cat .agent-review/prompt.md)" \
+              | tee .agent-review/agent-output.txt
+          copilot_rc=$?
+          set -e
+          echo "copilot exit code: ${copilot_rc}"
+
+          python3 - <<'PY'
+          import json, re, pathlib, sys
+          raw = pathlib.Path(".agent-review/agent-output.txt").read_text(encoding="utf-8", errors="replace")
+          m = re.search(r"<<<FINDINGS_JSON>>>\s*(.*?)\s*<<<END_FINDINGS_JSON>>>", raw, re.DOTALL)
+          out_path = pathlib.Path(".agent-review/findings.json")
+          if not m:
+              print("No JSON markers found — writing empty result.", file=sys.stderr)
+              out_path.write_text(json.dumps({"summary": "Agent did not produce structured output.", "findings": []}))
+              sys.exit(0)
+          payload = m.group(1).strip()
+          try:
+              parsed = json.loads(payload)
+          except json.JSONDecodeError as e:
+              print(f"JSON parse error: {e}.", file=sys.stderr)
+              out_path.write_text(json.dumps({"summary": f"Agent produced invalid JSON: {e}", "findings": []}))
+              sys.exit(0)
+          out_path.write_text(json.dumps(parsed, indent=2))
+          print(f"Wrote {len(parsed.get('findings', []))} findings to {out_path}")
+          PY
+
+          echo "--- findings.json ---"
+          cat .agent-review/findings.json
+
+      - name: Post review to pull request
+        if: steps.changes.outputs.count != '0' && steps.token-check.outputs.available == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Inline post-review script — self-contained, no repo dependency needed
+          cat > .agent-review/post-review.mjs <<'SCRIPT'
+          import { readFileSync, existsSync } from "node:fs";
+          const { GITHUB_TOKEN, PR_NUMBER, REPO, COMMIT_SHA } = process.env;
+          const title = process.argv[2] || "Agent Review";
+          const emoji = process.argv[3] || "⚠️";
+          const subtitle = process.argv[4] || "";
+          const userAgent = process.argv[5] || "automated-reviewer";
+          if (!GITHUB_TOKEN || !PR_NUMBER || !REPO || !COMMIT_SHA) { console.error("Missing env vars"); process.exit(1); }
+          const findingsPath = ".agent-review/findings.json";
+          if (!existsSync(findingsPath)) { console.log("No findings.json."); process.exit(0); }
+          let payload;
+          try { payload = JSON.parse(readFileSync(findingsPath, "utf8")); } catch (e) { console.error(e.message); process.exit(1); }
+          const summary = payload.summary?.trim() || `${title} complete.`;
+          const findings = Array.isArray(payload.findings) ? payload.findings : [];
+          const remediationPlan = (payload.remediationPlan || "").trim();
+          const SEV = { critical: "🔴", high: "🟠", medium: "🟡", low: "🔵", info: "ℹ️" };
+          const inlineComments = [], fallbackBullets = [];
+          for (const f of findings) {
+              if (!f?.file || !f?.line) { fallbackBullets.push(fmtBullet(f)); continue; }
+              const s = SEV[f.severity?.toLowerCase()] ?? "⚠️";
+              let body = `${s} **${(f.severity||"info").toUpperCase()}: ${f.title||"Finding"}**\n\n${f.message||""}`;
+              if (Array.isArray(f.fixPlan) && f.fixPlan.length)
+                  body += "\n\n<details><summary>🛠️ Fix plan</summary>\n\n" + f.fixPlan.map((s,i)=>`${i+1}. ${s}`).join("\n") + "\n\n</details>";
+              inlineComments.push({ path: f.file, line: Number(f.line), side: "RIGHT", body });
+          }
+          function fmtBullet(f) {
+              const s = SEV[f?.severity?.toLowerCase()] ?? "⚠️";
+              const loc = f?.file ? ` \`${f.file}${f.line?":"+f.line:""}\`` : "";
+              return `- ${s} **${(f?.severity||"info").toUpperCase()}**${loc}: ${f?.title||""} — ${f?.message||""}`;
+          }
+          const hdr = [`## ${emoji} ${title}`,""];
+          if (subtitle) hdr.push(`_${subtitle}_`,"");
+          hdr.push(summary,"",`**Findings:** ${findings.length}`);
+          const header = hdr.join("\n");
+          function remedSection() {
+              if (!remediationPlan || !findings.length) return "";
+              return "\n---\n\n<details><summary>📋 <strong>Remediation plan</strong></summary>\n\n````markdown\n" + remediationPlan + "\n````\n\n</details>";
+          }
+          const api = `https://api.github.com/repos/${REPO}`;
+          const hdrs = { Accept:"application/vnd.github+json", Authorization:`Bearer ${GITHUB_TOKEN}`,
+              "X-GitHub-Api-Version":"2022-11-28", "Content-Type":"application/json", "User-Agent":userAgent };
+          async function ghPost(url,b) { const r=await fetch(url,{method:"POST",headers:hdrs,body:JSON.stringify(b)}); const t=await r.text(); if(!r.ok) throw new Error(`${r.status}: ${t}`); return t?JSON.parse(t):{}; }
+          async function postReview(body,comments) { return ghPost(`${api}/pulls/${PR_NUMBER}/reviews`,{commit_id:COMMIT_SHA,event:"COMMENT",body,comments}); }
+          try {
+              if (!inlineComments.length && !fallbackBullets.length) { await postReview(`${header}\n\n_No issues found._`,[]); console.log("Clean review."); process.exit(0); }
+              let body = header;
+              if (fallbackBullets.length) body += "\n\n### Additional findings\n" + fallbackBullets.join("\n");
+              body += remedSection();
+              try { await postReview(body,inlineComments); console.log(`Posted ${inlineComments.length} inline comments.`); }
+              catch(e) {
+                  console.warn(`Inline failed: ${e.message}. Falling back.`);
+                  const all = [...inlineComments.map(c=>`- \`${c.path}:${c.line}\` — ${c.body.split("\n")[0]}`),...fallbackBullets];
+                  await postReview(`${body}\n\n### All findings\n${all.join("\n")}`, []);
+              }
+          } catch(e) { console.error(e.message); process.exit(1); }
+          SCRIPT
+
+          node .agent-review/post-review.mjs \
+              "${{ steps.config.outputs.title }}" \
+              "${{ steps.config.outputs.emoji }}" \
+              "${{ steps.config.outputs.subtitle }}" \
+              "${{ matrix.agent }}"
+
+      - name: Upload findings artifact
+        if: always() && steps.changes.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: "${{ matrix.agent }}-findings"
+          path: .agent-review/findings.json
+          if-no-files-found: ignore
