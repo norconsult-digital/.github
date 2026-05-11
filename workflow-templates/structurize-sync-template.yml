@@ -21,6 +21,6 @@ jobs:
     with:
       sourceFolder: ${{ github.event.inputs.sourceFolder }}
       targetFolder: ${{ github.event.inputs.targetFolder }}
-      githubAppId: ${{ secrets.STRUCTURIZE_SYNC_APP_ID }}
+      githubAppId: ${{ vars.STRUCTURIZE_SYNC_APP_ID }}
     secrets:
       STRUCTURIZE_SYNC_APP_PRIVATE_KEY: ${{ secrets.STRUCTURIZE_SYNC_APP_PRIVATE_KEY }}
