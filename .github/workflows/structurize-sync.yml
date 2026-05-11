@@ -11,10 +11,6 @@ on:
         description: "Target sub-folder inside norconsult-digital/software-architecture (e.g. 'my-project')"
         required: true
         type: string
-    secrets:
-      GITHUB_TOKEN:
-        required: true
-
 jobs:
   structurize-sync:
     name: Sync files to software-architecture

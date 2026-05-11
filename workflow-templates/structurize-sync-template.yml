@@ -21,5 +21,4 @@ jobs:
     with:
       sourceFolder: ${{ github.event.inputs.sourceFolder }}
       targetFolder: ${{ github.event.inputs.targetFolder }}
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit
