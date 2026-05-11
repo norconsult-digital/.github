@@ -11,26 +11,46 @@ on:
         description: "Target sub-folder inside norconsult-digital/software-architecture (e.g. 'my-project')"
         required: true
         type: string
+      githubAppId:
+        description: "GitHub App ID used to create a repository-scoped installation token"
+        required: true
+        type: string
+    secrets:
+      STRUCTURIZE_SYNC_APP_PRIVATE_KEY:
+        required: true
 jobs:
   structurize-sync:
     name: Sync files to software-architecture
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: read
 
     steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ inputs.githubAppId }}
+          private-key: ${{ secrets.STRUCTURIZE_SYNC_APP_PRIVATE_KEY }}
+          owner: norconsult-digital
+          repositories: |
+            ${{ github.event.repository.name }}
+            software-architecture
+          permission-contents: write
+
       - name: Checkout source repository
         uses: actions/checkout@v4
         with:
           path: source-repo
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout target repository
         uses: actions/checkout@v4
         with:
           repository: norconsult-digital/software-architecture
           path: target-repo
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Sync files to target folder
         shell: bash
