@@ -1,0 +1,67 @@
+name: Structurize Sync
+
+on:
+  workflow_call:
+    inputs:
+      sourceFolder:
+        description: "Source folder path to sync (e.g. 'docs/architecture')"
+        required: true
+        type: string
+      targetFolder:
+        description: "Target sub-folder inside norconsult-digital/software-architecture (e.g. 'my-project')"
+        required: true
+        type: string
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+
+jobs:
+  structurize-sync:
+    name: Sync files to software-architecture
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          path: source-repo
+
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: norconsult-digital/software-architecture
+          path: target-repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync files to target folder
+        shell: bash
+        run: |
+          SOURCE_PATH="source-repo/${{ inputs.sourceFolder }}"
+          TARGET_PATH="target-repo/${{ inputs.targetFolder }}"
+
+          if [ ! -d "$SOURCE_PATH" ]; then
+            echo "::error::Source folder '$SOURCE_PATH' does not exist."
+            exit 1
+          fi
+
+          mkdir -p "$TARGET_PATH"
+          rsync -av --delete "$SOURCE_PATH/" "$TARGET_PATH/"
+
+      - name: Commit and push changes
+        shell: bash
+        working-directory: target-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: sync structurize files from ${{ github.repository }}/${{ inputs.sourceFolder }} into ${{ inputs.targetFolder }}"
+            git push
+          fi
