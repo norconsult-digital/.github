@@ -1,7 +1,7 @@
 name: "[Platform] Structurize Sync Workflow"
 
 permissions:
-  contents: read
+  contents: write
 
 on:
   workflow_dispatch:
@@ -21,4 +21,3 @@ jobs:
     with:
       sourceFolder: ${{ github.event.inputs.sourceFolder }}
       targetFolder: ${{ github.event.inputs.targetFolder }}
-    secrets: inherit
