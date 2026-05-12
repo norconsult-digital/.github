@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       targetFolder:
-        description: "Target sub-folder inside norconsult-digital/software-architecture (e.g. 'my-project')"
+        description: "Dedicated target sub-folder inside norconsult-digital/software-architecture. This folder is mirrored and unmanaged files inside it may be deleted."
         required: true
         type: string
       githubAppId:
@@ -60,6 +60,7 @@ jobs:
           TARGET_FOLDER: ${{ inputs.targetFolder }}
           SOURCE_REPOSITORY: ${{ github.repository }}
           IGNORE_FILE_NAME: .structurize-syncignore
+          SYNC_MARKER_FILE_NAME: .structurize-sync-source
         run: |
           set -euo pipefail
 
@@ -81,6 +82,9 @@ jobs:
           validate_relative_path "$SOURCE_FOLDER" "sourceFolder"
           validate_relative_path "$TARGET_FOLDER" "targetFolder"
 
+          SOURCE_FOLDER="${SOURCE_FOLDER%/}"
+          TARGET_FOLDER="${TARGET_FOLDER%/}"
+
           SOURCE_ROOT="$(realpath source-repo)"
           TARGET_ROOT="$(realpath target-repo)"
           SOURCE_PATH="$(realpath -m "$SOURCE_ROOT/$SOURCE_FOLDER")"
@@ -101,6 +105,27 @@ jobs:
             exit 1
           fi
 
+          if [ -e "$TARGET_PATH" ] && [ ! -d "$TARGET_PATH" ]; then
+            echo "::error::Target path '$TARGET_PATH' exists but is not a directory."
+            exit 1
+          fi
+
+          marker_file="$TARGET_PATH/$SYNC_MARKER_FILE_NAME"
+          expected_source_repository="sourceRepository=${SOURCE_REPOSITORY}"
+          expected_source_folder="sourceFolder=${SOURCE_FOLDER}"
+
+          if [ -f "$marker_file" ]; then
+            if ! grep -Fxq "$expected_source_repository" "$marker_file" || ! grep -Fxq "$expected_source_folder" "$marker_file"; then
+              echo "::error::Target folder '$TARGET_FOLDER' is marked as managed by a different Structurize sync source."
+              echo "::error::Expected marker entries: '$expected_source_repository' and '$expected_source_folder'."
+              exit 1
+            fi
+          elif [ -d "$TARGET_PATH" ] && [ -n "$(find "$TARGET_PATH" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+            echo "::error::Refusing to mirror into existing non-empty target folder '$TARGET_FOLDER' without $SYNC_MARKER_FILE_NAME."
+            echo "::error::Choose a dedicated targetFolder. If this folder is already owned by this sync, add $SYNC_MARKER_FILE_NAME after reviewing the existing contents."
+            exit 1
+          fi
+
           mkdir -p "$TARGET_PATH"
 
           rsync_args=(
@@ -109,6 +134,7 @@ jobs:
             --delete-excluded
             --itemize-changes
             --out-format='%i %n%L'
+            --filter="P /${SYNC_MARKER_FILE_NAME}"
             --exclude='.git/'
             --exclude="/${IGNORE_FILE_NAME}"
           )
@@ -139,6 +165,7 @@ jobs:
             echo
             echo "- Source: \`${SOURCE_REPOSITORY}/${SOURCE_FOLDER}\`"
             echo "- Target: \`norconsult-digital/software-architecture/${TARGET_FOLDER}\`"
+            echo "- Target marker: \`${TARGET_FOLDER}/${SYNC_MARKER_FILE_NAME}\`"
             echo "- Ignore file: ${ignore_file_summary}"
             echo "- Copied or updated files: ${copied_file_count}"
             echo "- Deleted paths: ${deleted_path_count}"
@@ -167,6 +194,12 @@ jobs:
           fi
 
           rsync "${rsync_args[@]}" "$SOURCE_PATH/" "$TARGET_PATH/"
+
+          {
+            echo "# Managed by Structurize Sync. Files in this folder may be overwritten or deleted."
+            echo "$expected_source_repository"
+            echo "$expected_source_folder"
+          } > "$marker_file"
 
       - name: Commit and push changes
         shell: bash

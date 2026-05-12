@@ -1,4 +1,4 @@
-name: "[Platform] Structurize Sync Workflow"
+name: "[Sample category] Structurize Sync Workflow"
 
 permissions:
   contents: read
@@ -19,6 +19,8 @@ jobs:
       # The ignore file uses rsync exclude syntax, which is similar to but not the same as .gitignore syntax.
       # Patterns are evaluated relative to sourceFolder.
       sourceFolder: docs/sample-source-folder
+      # Use a dedicated target folder. The workflow mirrors this folder and may delete files inside it.
+      # Existing non-empty target folders must contain a matching .structurize-sync-source marker.
       targetFolder: c4/sample-target-folder
       githubAppId: ${{ vars.STRUCTURIZE_SYNC_APP_ID }}
     secrets:
