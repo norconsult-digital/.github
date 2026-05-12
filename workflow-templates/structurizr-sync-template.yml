@@ -1,4 +1,5 @@
-name: "[Sample category] Structurize Sync Workflow"
+name: "[Sample category] Structurizr File Sync Workflow"
+# Structurizr: https://structurizr.com/
 
 permissions:
   contents: read
@@ -12,16 +13,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  structurize-sync:
-    uses: norconsult-digital/.github/.github/workflows/structurize-sync.yml@main
+  structurizr-sync:
+    uses: norconsult-digital/.github/.github/workflows/structurizr-sync.yml@main
     with:
-      # Optional: add a .structurize-syncignore file in this folder to exclude files from sync.
+      # Optional: add a .structurizr-syncignore file in this folder to exclude files from sync.
       # The ignore file uses rsync exclude syntax, which is similar to but not the same as .gitignore syntax.
       # Patterns are evaluated relative to sourceFolder.
       sourceFolder: docs/sample-source-folder
       # Use a dedicated target folder. The workflow mirrors this folder and may delete files inside it.
-      # Existing non-empty target folders must contain a matching .structurize-sync-source marker.
+      # Existing non-empty target folders must contain a matching .structurizr-sync-source marker.
       targetFolder: c4/sample-target-folder
-      githubAppId: ${{ vars.STRUCTURIZE_SYNC_APP_ID }}
+      githubAppId: ${{ vars.STRUCTURIZR_SYNC_APP_ID }}
     secrets:
-      STRUCTURIZE_SYNC_APP_PRIVATE_KEY: ${{ secrets.STRUCTURIZE_SYNC_APP_PRIVATE_KEY }}
+      STRUCTURIZR_SYNC_APP_PRIVATE_KEY: ${{ secrets.STRUCTURIZR_SYNC_APP_PRIVATE_KEY }}

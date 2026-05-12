@@ -1,0 +1,12 @@
+{
+  "name": "Norconsult Digital Workflow for Structurizr File Sync",
+  "description": "⭐ Norconsult Digital Workflow to synchronize files for Structurizr (https://structurizr.com/) from a source repository folder into norconsult-digital/software-architecture.",
+  "iconName": "isy-logo-dark",
+  "categories": [
+    "Architecture",
+    "Automation"
+  ],
+  "filePatterns": [
+    ".github/workflows/structurizr-sync.yml"
+  ]
+}

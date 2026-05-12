@@ -1,4 +1,5 @@
-name: Structurize Sync
+name: Structurizr File Sync
+# Structurizr: https://structurizr.com/
 
 on:
   workflow_call:
@@ -16,10 +17,10 @@ on:
         required: true
         type: string
     secrets:
-      STRUCTURIZE_SYNC_APP_PRIVATE_KEY:
+      STRUCTURIZR_SYNC_APP_PRIVATE_KEY:
         required: true
 jobs:
-  structurize-sync:
+  structurizr-sync:
     name: Sync files to software-architecture
     runs-on: ubuntu-latest
 
@@ -32,7 +33,7 @@ jobs:
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ inputs.githubAppId }}
-          private-key: ${{ secrets.STRUCTURIZE_SYNC_APP_PRIVATE_KEY }}
+          private-key: ${{ secrets.STRUCTURIZR_SYNC_APP_PRIVATE_KEY }}
           owner: norconsult-digital
           repositories: |
             ${{ github.event.repository.name }}
@@ -59,8 +60,8 @@ jobs:
           SOURCE_FOLDER: ${{ inputs.sourceFolder }}
           TARGET_FOLDER: ${{ inputs.targetFolder }}
           SOURCE_REPOSITORY: ${{ github.repository }}
-          IGNORE_FILE_NAME: .structurize-syncignore
-          SYNC_MARKER_FILE_NAME: .structurize-sync-source
+          IGNORE_FILE_NAME: .structurizr-syncignore
+          SYNC_MARKER_FILE_NAME: .structurizr-sync-source
         run: |
           set -euo pipefail
 
@@ -116,7 +117,7 @@ jobs:
 
           if [ -f "$marker_file" ]; then
             if ! grep -Fxq "$expected_source_repository" "$marker_file" || ! grep -Fxq "$expected_source_folder" "$marker_file"; then
-              echo "::error::Target folder '$TARGET_FOLDER' is marked as managed by a different Structurize sync source."
+              echo "::error::Target folder '$TARGET_FOLDER' is marked as managed by a different Structurizr file sync source."
               echo "::error::Expected marker entries: '$expected_source_repository' and '$expected_source_folder'."
               exit 1
             fi
@@ -161,7 +162,7 @@ jobs:
           echo "changed_path_count=$changed_path_count" >> "$GITHUB_OUTPUT"
 
           {
-            echo "## Structurize sync"
+            echo "## Structurizr file sync"
             echo
             echo "- Source: \`${SOURCE_REPOSITORY}/${SOURCE_FOLDER}\`"
             echo "- Target: \`norconsult-digital/software-architecture/${TARGET_FOLDER}\`"
@@ -196,7 +197,7 @@ jobs:
           rsync "${rsync_args[@]}" "$SOURCE_PATH/" "$TARGET_PATH/"
 
           {
-            echo "# Managed by Structurize Sync. Files in this folder may be overwritten or deleted."
+            echo "# Managed by Structurizr File Sync. Files in this folder may be overwritten or deleted."
             echo "$expected_source_repository"
             echo "$expected_source_folder"
           } > "$marker_file"
@@ -213,6 +214,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "chore: sync structurize files from ${{ github.repository }}/${{ inputs.sourceFolder }} into ${{ inputs.targetFolder }}"
+            git commit -m "chore: sync Structurizr files from ${{ github.repository }}/${{ inputs.sourceFolder }} into ${{ inputs.targetFolder }}"
             git push
           fi
