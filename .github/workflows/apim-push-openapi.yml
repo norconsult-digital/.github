@@ -7,6 +7,10 @@ on:
         required: true
         type: string
         description: "Name of the API in APIM"
+      SERVICE_URL:
+        required: true
+        type: string
+        description: "Backend service URL for the API in APIM"
 
 jobs:
   push-openapi:
@@ -34,12 +38,12 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Check Azure CLI version
-        run: |
-          az  --version
-          az upgrade --yes
-          az  --version
-        shell: bash
+      # - name: Check Azure CLI version
+      #   run: |
+      #     az  --version
+      #     az upgrade --yes
+      #     az  --version
+      #   shell: bash
 
       - name: Validate OpenAPI file exists
         run: |
@@ -62,10 +66,10 @@ jobs:
           echo "⚠️ Validation issues should be fixed in the source API code"
           npx @redocly/cli lint ./artifacts/${{ inputs.API_NAME }}-openapi.json --skip-rule operation-summary --skip-rule no-identical-paths --skip-rule info-license --skip-rule no-server-example.com || true
           
-      - name: Probe APIM access (fail fast)
-        shell: bash
-        run: |
-          az apim show -g rg-nd-shared-apim-non-prod -n apim-nd-shared-non-prod-01 -o jsonc
+      # - name: Probe APIM access (fail fast)
+      #   shell: bash
+      #   run: |
+      #     az apim show -g rg-nd-shared-apim-non-prod -n apim-nd-shared-non-prod-01 -o jsonc
           
       - name: Import/Update API in APIM
         run: |
@@ -74,6 +78,7 @@ jobs:
           --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
           --api-id ${{ inputs.API_NAME }} `
           --path ${{ inputs.API_NAME }} `
+          --service-url ${{ inputs.SERVICE_URL }} `
           --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json" `
           --specification-format OpenApi `
           --display-name "${{ inputs.API_NAME }}" `
