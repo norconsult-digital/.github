@@ -41,13 +41,13 @@ jobs:
           permission-contents: write
 
       - name: Checkout source repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: source-repo
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout target repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: norconsult-digital/software-architecture
           path: target-repo
