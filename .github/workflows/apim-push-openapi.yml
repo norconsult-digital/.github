@@ -7,10 +7,10 @@ on:
         required: true
         type: string
         description: "Name of the API in APIM"
-      SERVICE_URL:
+      SERVICE_URL_NON_PROD:
         required: true
         type: string
-        description: "Backend service URL for the API in APIM"
+        description: "Backend service URL for the API in APIM (Non-Prod)"
 
 jobs:
   push-openapi:
@@ -78,7 +78,7 @@ jobs:
           --service-name ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} `
           --api-id ${{ inputs.API_NAME }} `
           --path ${{ inputs.API_NAME }} `
-          --service-url ${{ inputs.SERVICE_URL }} `
+          --service-url ${{ inputs.SERVICE_URL_NON_PROD }} `
           --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json" `
           --specification-format OpenApi `
           --display-name "${{ inputs.API_NAME }}" `

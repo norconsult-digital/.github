@@ -27,8 +27,8 @@ on:
         required: false
         type: string
         default: 'apimartifacts'
-      SERVICE_URL:
-        description: 'Backend service URL for the API in APIM'
+      SERVICE_URL_NON_PROD:
+        description: 'Backend service URL for the API in APIM (Non-Prod)'
         required: true
         type: string
 
@@ -38,7 +38,7 @@ jobs:
     uses: norconsult-digital/.github/.github/workflows/apim-push-openapi.yml@main
     with:
       API_NAME: ${{ inputs.API_NAME }}
-      SERVICE_URL: ${{ inputs.SERVICE_URL }}
+      SERVICE_URL_NON_PROD: ${{ inputs.SERVICE_URL_NON_PROD }}
     secrets: inherit
 
   run-extractor:
