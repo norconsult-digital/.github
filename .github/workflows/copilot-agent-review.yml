@@ -155,10 +155,9 @@ jobs:
       - name: Checkout org-level agents
         uses: actions/checkout@v4
         with:
-          repository: norconsult-digital/.github-private
+          repository: norconsult-digital/.github
           path: .org-agents-repo
           sparse-checkout: agents
-          token: ${{ secrets.COPILOT_CLI_TOKEN }}
         continue-on-error: true
 
       - name: Flatten org agents directory
@@ -236,8 +235,8 @@ jobs:
           # The workflow supports a merge model where BOTH the org-level agent
           # AND a repo-level agent are included in the prompt:
           #
-          #   1. Org-level agent  → universal rules (from .github-private/agents/)
-          #      Checked out in a previous step from norconsult-digital/.github-private
+          #   1. Org-level agent  → universal rules (from .github/agents/)
+          #      Checked out in a previous step from norconsult-digital/.github
           #   2. Repo-level agent → project-specific rules (from .github/agents/)
           #
           # If both exist, they are concatenated (org first, repo second).
@@ -341,7 +340,7 @@ jobs:
           if [ "$has_org" = "true" ]; then
               org_md=$(cat "$org_agent_file")
               agent_section+="
-          --- ORG-LEVEL RULES (universal — from .github-private/agents/) ---
+          --- ORG-LEVEL RULES (universal — from .github/agents/) ---
           ${org_md}
           --- END ORG-LEVEL RULES ---
           "
