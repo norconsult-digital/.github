@@ -6,7 +6,7 @@ on:
       support:
         description: "The support level to target (STS, LTS, or Preview)."
         type: string
-        required: true
+        required: false
         default: "STS"
 
 jobs:
@@ -21,6 +21,7 @@ jobs:
 
       # Debug: verify config file exists
       - name: Verify config file
+        if: ${{ runner.debug == '1' }}
         run: |
           echo "Root directory: $GITHUB_WORKSPACE"
           ls -la $GITHUB_WORKSPACE

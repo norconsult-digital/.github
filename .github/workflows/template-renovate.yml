@@ -88,15 +88,7 @@ jobs:
           LOG_LEVEL: debug
           RENOVATE_AUTODISCOVER: true
           RENOVATE_PLATFORM: 'github'
-          RENOVATE_HOST_RULES: |
-            [
-              {
-                "hostType": "docker",
-                "matchHost": "${{ inputs.acr_name }}.azurecr.io",
-                "username": "00000000-0000-0000-0000-000000000000",
-                "password": "${{ steps.acr_token.outputs.AZURE_ACCESS_TOKEN }}"
-              }
-            ]
+          RENOVATE_HOST_RULES: ${{ inputs.acr_name != '' && format('[{{"hostType":"docker","matchHost":"{0}.azurecr.io","username":"00000000-0000-0000-0000-000000000000","password":"{1}"}}]', inputs.acr_name, steps.acr_token.outputs.AZURE_ACCESS_TOKEN) || '[]' }}
           RENOVATE_INCLUDE_PATHS: ${{ inputs.include_paths }}
           RENOVATE_ADDITIONAL_BRANCH_PREFIX: "${{ inputs.regex_pattern }}/"
           RENOVATE_COMMIT_MESSAGE_SUFFIX: "${{ inputs.regex_pattern }}"

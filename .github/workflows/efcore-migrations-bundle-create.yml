@@ -23,7 +23,7 @@ on:
         type: string
       dotnetVersion:
         description: .NET SDK version to use
-        required: true
+        required: false
         type: string
         default: "7.*"
       projectName:

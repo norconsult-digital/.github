@@ -43,6 +43,10 @@ on:
         type: boolean
         default: false
         description: "Setup Grafana authentication for Azure Managed Grafana by retrieving an access token using the Azure CLI and setting it as an environment variable for use in Terraform"
+      subscription_id:
+        required: false
+        type: string
+        default: "fda77453-b07b-4860-b1cc-dd8365592842"
 
 jobs:
   call-terraform:
@@ -57,6 +61,7 @@ jobs:
       environmentApply: ${{ github.event.inputs.environmentApply }}
       skipStateRefresh: ${{ github.event.inputs.skipStateRefresh }}
       setupManagedGrafanaAuth: ${{ github.event.inputs.setupManagedGrafanaAuth }}
+      subscription_id: ${{ github.event.inputs.subscription_id || 'fda77453-b07b-4860-b1cc-dd8365592842' }}
     secrets:
       APP_PEM_FILE: ${{ secrets.APP_PEM_FILE }}
       BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
@@ -66,4 +71,3 @@ jobs:
       ACR_CACHE_DOCKER_USERNAME: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
       ACR_CACHE_DOCKER_PASSWORD: ${{ secrets.ACR_CACHE_DOCKER_PASSWORD }}
       GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY: ${{ secrets.GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -51,7 +51,7 @@ jobs:
           set -e  # Exit on any non-zero exit code from commands within this step
 
           # Configure Git user information
-          git config --global user.email "$GITHUB_ACTOR_EMAIL"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
           git config --global user.name "$GITHUB_ACTOR - automatic"
 
           # Loop through xlf files and add changed files
