@@ -1,6 +1,6 @@
 {
   "name": "Norconsult Digital Workflow for Structurizr File Sync",
-  "description": "⭐ Norconsult Digital Workflow to synchronize files for Structurizr (https://structurizr.com/) from a source repository folder into norconsult-digital/software-architecture.",
+  "description": "⭐ Norconsult Digital Workflow to synchronize files for Structurizr (https://structurizr.com/) from a source repository folder into norconsult-digital/software-architecture. Make sure the GitHub App installation has access to this repository and norconsult-digital/software-architecture: https://github.com/organizations/norconsult-digital/settings/installations/131444624",
   "iconName": "isy-logo-dark",
   "categories": [
     "Architecture",

@@ -23,6 +23,8 @@ jobs:
       # Use a dedicated target folder. The workflow mirrors this folder and may delete files inside it.
       # Existing non-empty target folders must contain a matching .structurizr-sync-source marker.
       targetFolder: c4/sample-target-folder
+      # Make sure the GitHub App installation has access to this repository and norconsult-digital/software-architecture:
+      # https://github.com/organizations/norconsult-digital/settings/installations/131444624
       githubAppId: ${{ vars.STRUCTURIZR_SYNC_APP_ID }}
     secrets:
       STRUCTURIZR_SYNC_APP_PRIVATE_KEY: ${{ secrets.STRUCTURIZR_SYNC_APP_PRIVATE_KEY }}

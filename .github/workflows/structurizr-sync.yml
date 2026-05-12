@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       githubAppId:
-        description: "GitHub App ID used to create a repository-scoped installation token"
+        description: "GitHub App ID used to create a repository-scoped installation token. The app installation must have access to the source repository and norconsult-digital/software-architecture."
         required: true
         type: string
     secrets:
