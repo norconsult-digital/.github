@@ -1,10 +1,10 @@
 {
   "name": "Norconsult Digital Workflow for Structurize Sync",
-  "description": "⭐ Norconsult Digital Workflow to sync/structurize files from a source repository folder into norconsult-digital/software-architecture",
+  "description": "⭐ Norconsult Digital Workflow to sync structurize files from a source repository folder into norconsult-digital/software-architecture.",
   "iconName": "isy-logo-dark",
   "categories": [
-    "Automation",
-    "DevOps"
+    "Architecture",
+    "Automation"
   ],
   "filePatterns": [
     ".github/workflows/structurize-sync.yml"

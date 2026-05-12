@@ -53,10 +53,48 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Sync files to target folder
+        id: sync
         shell: bash
+        env:
+          SOURCE_FOLDER: ${{ inputs.sourceFolder }}
+          TARGET_FOLDER: ${{ inputs.targetFolder }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          IGNORE_FILE_NAME: .structurize-syncignore
         run: |
-          SOURCE_PATH="source-repo/${{ inputs.sourceFolder }}"
-          TARGET_PATH="target-repo/${{ inputs.targetFolder }}"
+          set -euo pipefail
+
+          validate_relative_path() {
+            local path="$1"
+            local input_name="$2"
+
+            if [ -z "$path" ] || [[ "$path" = /* ]]; then
+              echo "::error::${input_name} must be a non-empty relative path."
+              exit 1
+            fi
+
+            if [[ "/${path}/" == *"/../"* ]] || [[ "/${path}/" == *"/.git/"* ]]; then
+              echo "::error::${input_name} cannot contain '..' or '.git' path segments."
+              exit 1
+            fi
+          }
+
+          validate_relative_path "$SOURCE_FOLDER" "sourceFolder"
+          validate_relative_path "$TARGET_FOLDER" "targetFolder"
+
+          SOURCE_ROOT="$(realpath source-repo)"
+          TARGET_ROOT="$(realpath target-repo)"
+          SOURCE_PATH="$(realpath -m "$SOURCE_ROOT/$SOURCE_FOLDER")"
+          TARGET_PATH="$(realpath -m "$TARGET_ROOT/$TARGET_FOLDER")"
+
+          if [[ "$SOURCE_PATH/" != "$SOURCE_ROOT/"* ]] || [[ "$TARGET_PATH/" != "$TARGET_ROOT/"* ]]; then
+            echo "::error::Resolved source or target path is outside the checked-out repositories."
+            exit 1
+          fi
+
+          if [ "$TARGET_PATH" = "$TARGET_ROOT" ]; then
+            echo "::error::targetFolder must point to a sub-folder, not the target repository root."
+            exit 1
+          fi
 
           if [ ! -d "$SOURCE_PATH" ]; then
             echo "::error::Source folder '$SOURCE_PATH' does not exist."
@@ -64,7 +102,71 @@ jobs:
           fi
 
           mkdir -p "$TARGET_PATH"
-          rsync -av --delete "$SOURCE_PATH/" "$TARGET_PATH/"
+
+          rsync_args=(
+            -a
+            --delete
+            --delete-excluded
+            --itemize-changes
+            --out-format='%i %n%L'
+            --exclude='.git/'
+            --exclude="/${IGNORE_FILE_NAME}"
+          )
+
+          ignore_file="$SOURCE_PATH/$IGNORE_FILE_NAME"
+          if [ -f "$ignore_file" ]; then
+            rsync_args+=(--exclude-from="$ignore_file")
+            ignore_file_summary="Using ignore file: \`${SOURCE_FOLDER}/${IGNORE_FILE_NAME}\`"
+            echo "Using ignore file: ${SOURCE_FOLDER}/${IGNORE_FILE_NAME}"
+          else
+            ignore_file_summary="No \`${IGNORE_FILE_NAME}\` file found in source folder."
+            echo "No ${IGNORE_FILE_NAME} file found in source folder."
+          fi
+
+          change_list="$(mktemp)"
+          rsync "${rsync_args[@]}" --dry-run "$SOURCE_PATH/" "$TARGET_PATH/" | tee "$change_list"
+
+          copied_file_count="$(grep -Ec '^>f' "$change_list" || true)"
+          deleted_path_count="$(grep -Ec '^\*deleting' "$change_list" || true)"
+          changed_path_count="$(grep -Ec '^(>f|c[dL]|\*deleting)' "$change_list" || true)"
+
+          echo "copied_file_count=$copied_file_count" >> "$GITHUB_OUTPUT"
+          echo "deleted_path_count=$deleted_path_count" >> "$GITHUB_OUTPUT"
+          echo "changed_path_count=$changed_path_count" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Structurize sync"
+            echo
+            echo "- Source: \`${SOURCE_REPOSITORY}/${SOURCE_FOLDER}\`"
+            echo "- Target: \`norconsult-digital/software-architecture/${TARGET_FOLDER}\`"
+            echo "- Ignore file: ${ignore_file_summary}"
+            echo "- Copied or updated files: ${copied_file_count}"
+            echo "- Deleted paths: ${deleted_path_count}"
+            echo
+
+            if [ "$changed_path_count" -eq 0 ]; then
+              echo "No file changes detected."
+            else
+              echo "<details>"
+              echo "<summary>Changed paths (${changed_path_count})</summary>"
+              echo
+              echo '```text'
+              head -n 200 "$change_list"
+              if [ "$changed_path_count" -gt 200 ]; then
+                echo "... truncated $((changed_path_count - 200)) additional paths"
+              fi
+              echo '```'
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$changed_path_count" -eq 0 ]; then
+            echo "No file changes detected."
+          else
+            echo "Syncing changed paths listed above."
+          fi
+
+          rsync "${rsync_args[@]}" "$SOURCE_PATH/" "$TARGET_PATH/"
 
       - name: Commit and push changes
         shell: bash

@@ -4,23 +4,22 @@ permissions:
   contents: read
 
 on:
+  push:
+    branches: ["main"]
+    paths:
+      # Keep this path in sync with the sourceFolder value below.
+      - "docs/sample-source-folder/**"
   workflow_dispatch:
-    inputs:
-      sourceFolder:
-        description: "Source folder path to sync (e.g. 'docs/architecture')"
-        required: true
-        type: string
-      targetFolder:
-        description: "Target sub-folder inside norconsult-digital/software-architecture (e.g. 'my-project')"
-        required: true
-        type: string
 
 jobs:
   structurize-sync:
     uses: norconsult-digital/.github/.github/workflows/structurize-sync.yml@main
     with:
-      sourceFolder: ${{ github.event.inputs.sourceFolder }}
-      targetFolder: ${{ github.event.inputs.targetFolder }}
+      # Optional: add a .structurize-syncignore file in this folder to exclude files from sync.
+      # The ignore file uses rsync exclude syntax, which is similar to but not the same as .gitignore syntax.
+      # Patterns are evaluated relative to sourceFolder.
+      sourceFolder: docs/sample-source-folder
+      targetFolder: c4/sample-target-folder
       githubAppId: ${{ vars.STRUCTURIZE_SYNC_APP_ID }}
     secrets:
       STRUCTURIZE_SYNC_APP_PRIVATE_KEY: ${{ secrets.STRUCTURIZE_SYNC_APP_PRIVATE_KEY }}
