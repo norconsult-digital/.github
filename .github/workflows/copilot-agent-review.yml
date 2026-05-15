@@ -474,9 +474,13 @@ jobs:
           const findings = Array.isArray(payload.findings) ? payload.findings : [];
           const remediationPlan = (payload.remediationPlan || "").trim();
           const SEV = { critical: "🔴", high: "🟠", medium: "🟡", low: "🔵", info: "ℹ️" };
+          const existingKeys = await fetchExistingThreadKeys();
+          if (existingKeys.size > 0) console.log(`Dedup: found ${existingKeys.size} existing review comment locations.`);
+          let skippedDupes = 0;
           const inlineComments = [], fallbackBullets = [];
           for (const f of findings) {
               if (!f?.file || !f?.line) { fallbackBullets.push(fmtBullet(f)); continue; }
+              if (existingKeys.has(`${f.file}:${f.line}`)) { skippedDupes++; continue; }
               const s = SEV[f.severity?.toLowerCase()] ?? "⚠️";
               let body = `${s} **${(f.severity||"info").toUpperCase()}: ${f.title||"Finding"}**\n\n${f.message||""}`;
               if (Array.isArray(f.fixPlan) && f.fixPlan.length)
@@ -490,7 +494,7 @@ jobs:
           }
           const hdr = [`## ${emoji} ${title}`,""];
           if (subtitle) hdr.push(`_${subtitle}_`,"");
-          hdr.push(summary,"",`**Findings:** ${findings.length}`);
+          hdr.push(summary,"",`**Findings:** ${findings.length}${skippedDupes ? ` (${skippedDupes} duplicate${skippedDupes>1?"s":""} skipped)` : ""}`);
           const header = hdr.join("\n");
           function remedSection() {
               if (!remediationPlan || !findings.length) return "";
@@ -500,6 +504,26 @@ jobs:
           const hdrs = { Accept:"application/vnd.github+json", Authorization:`Bearer ${GITHUB_TOKEN}`,
               "X-GitHub-Api-Version":"2022-11-28", "Content-Type":"application/json", "User-Agent":userAgent };
           async function ghPost(url,b) { const r=await fetch(url,{method:"POST",headers:hdrs,body:JSON.stringify(b)}); const t=await r.text(); if(!r.ok) throw new Error(`${r.status}: ${t}`); return t?JSON.parse(t):{}; }
+          async function ghGet(url) { const r=await fetch(url,{headers:hdrs}); const t=await r.text(); if(!r.ok) throw new Error(`${r.status}: ${t}`); return t?JSON.parse(t):{}; }
+          async function fetchExistingThreadKeys() {
+              // Fetch existing review comments to deduplicate — avoids re-posting
+              // findings that have already been reported (resolved or not).
+              const keys = new Set();
+              try {
+                  let page = 1;
+                  while (true) {
+                      const comments = await ghGet(`${api}/pulls/${PR_NUMBER}/comments?per_page=100&page=${page}`);
+                      if (!Array.isArray(comments) || comments.length === 0) break;
+                      for (const c of comments) {
+                          if (c.path && c.line) keys.add(`${c.path}:${c.line}`);
+                          if (c.path && c.original_line) keys.add(`${c.path}:${c.original_line}`);
+                      }
+                      if (comments.length < 100) break;
+                      page++;
+                  }
+              } catch (e) { console.warn(`Could not fetch existing threads: ${e.message}. Skipping dedup.`); }
+              return keys;
+          }
           async function postReview(body,comments) { return ghPost(`${api}/pulls/${PR_NUMBER}/reviews`,{commit_id:COMMIT_SHA,event:"COMMENT",body,comments}); }
           try {
               if (!inlineComments.length && !fallbackBullets.length) { await postReview(`${header}\n\n_No issues found._`,[]); console.log("Clean review."); process.exit(0); }
