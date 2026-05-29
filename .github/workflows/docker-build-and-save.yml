@@ -33,6 +33,9 @@ on:
       NUGET_CONFIG:
         required: false
         description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during restore only)"
+      NPMRC_CONFIG:
+        required: false
+        description: "Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)"
 
 jobs:
   docker-build-and-save:
@@ -80,6 +83,7 @@ jobs:
           load: true
           secrets: |
             nuget_config=${{ secrets.NUGET_CONFIG }}
+            npmrc_config=${{ secrets.NPMRC_CONFIG }}
 
       - name: Save Docker Image
         run: |
