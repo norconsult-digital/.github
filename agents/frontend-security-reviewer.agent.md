@@ -145,36 +145,15 @@ For **all code you review**, identify assumptions:
 | **Routing** | "Route guards are UX helpers, not security controls" |
 | **Logging** | "console.log statements are removed in production builds" |
 
-**Format:**
-```
-📋 ASSUMPTION: [Short description]
-Location: [file:line]
-Verified: ✅ Yes / ❌ No / ⚠️ Partially
-Risk if wrong: [What happens]
-Recommendation: [Action to verify/secure]
-```
+Surface assumptions inside the `message` field of the relevant finding, or in the `summary`.
 
 ---
 
 ## 4. Threat modeling
 
-For **each new feature**, identify the **three most likely attack vectors**:
+For **each new feature**, identify the **three most likely attack vectors** and fold them into
+the `summary`. Common frontend attack vectors:
 
-```
-🎯 THREAT MODEL for [feature-name]
-
-1. [Attack vector #1]
-   Attack method: [How an attacker can exploit this]
-   Likelihood: High / Medium / Low
-   Impact: Critical / High / Medium / Low
-   Existing protection: [What is already in place]
-   Gaps: [What is potentially missing]
-
-2. [Attack vector #2] ...
-3. [Attack vector #3] ...
-```
-
-**Common frontend attack vectors:**
 - **XSS via innerHTML / bypassSecurity / dangerouslySetInnerHTML** — injected script in
   user-generated content
 - **Open redirect** — manipulated URL parameter redirects to malicious site
@@ -197,33 +176,110 @@ For **each new feature**, identify the **three most likely attack vectors**:
 
 ---
 
-## Report format
+## 5. Closed rule catalogue (REQUIRED `ruleId` for every finding)
 
-For each finding:
+Every finding MUST carry exactly one `ruleId` from this closed list. The `ruleId` is part of a
+finding's stable identity across pushes, so never invent new IDs — pick the closest match.
+
+| ruleId | Covers |
+|--------|--------|
+| `FE-XSS-DANGEROUS-HTML` | `innerHTML`, `bypassSecurityTrust*`, `dangerouslySetInnerHTML`, `ref.innerHTML`, `document.write` |
+| `FE-XSS-EVAL`           | `eval()`, `new Function()`, template-literal code injection |
+| `FE-XSS-URL`            | `javascript:` URLs, unvalidated `[href]`/`[src]`/`href={}`, `window.open` |
+| `FE-POSTMESSAGE`        | `postMessage` listener without `event.origin` check |
+| `FE-PROTOTYPE-POLLUTION`| Unsafe merge/assign of untrusted JSON into objects |
+| `FE-INPUT-VALIDATION`   | Missing API-response schema validation, form validation, file-type check |
+| `FE-URL-ENCODING`       | Missing `encodeURIComponent`, string interpolation into API URLs, raw URL params |
+| `FE-AUTHZ-CLIENT-ONLY`  | Client-only authorization, route guard as sole control, hardcoded role checks |
+| `FE-SENSITIVE-LOGIC`    | Security-relevant business logic implemented in the frontend |
+| `FE-TOKEN-STORAGE`      | Tokens/credentials in `localStorage`/`sessionStorage` |
+| `FE-SENSITIVE-LOG`      | Tokens/passwords/PII written to `console.*` |
+| `FE-SENSITIVE-URL`      | Tokens/PII placed in URL/query string |
+| `FE-COOKIE-FLAGS`       | Cookies set from JS without `httpOnly`/`secure`/`sameSite` |
+| `FE-SENSITIVE-CACHE`    | Sensitive data cached without TTL, or not cleared on logout |
+| `FE-PII-EXPOSURE`       | PII shown in error messages to other users |
+| `FE-ERROR-LEAK`         | Raw API error / stack trace surfaced in the UI |
+| `FE-SRI`                | CDN `<script>`/`<link>` without Subresource Integrity |
+| `FE-IFRAME-SANDBOX`     | Iframe without `sandbox`, clickjacking exposure |
+| `FE-THIRDPARTY-TOKEN`   | Third-party viewer/widget token with overly broad permissions |
+| `FE-STATE-LEAK`         | Cross-store leakage, missing logout cleanup, security-relevant races |
+
+---
+
+## 6. Stable identity & re-validation (convergence contract)
+
+The workflow tracks findings across pushes so each issue is reported **once** and auto-resolved
+when fixed. Your output is what makes this converge — follow it exactly.
+
+### 6.1 Three identity fields (REQUIRED on every finding)
+
+- `ruleId` — from the catalogue in §5.
+- `symbol` — the enclosing component / class / function / template element. **Never a line number.**
+  For HTML templates, use the component class name plus the binding/control involved.
+- `evidenceAnchor` — a short, stable anchor for the *specific* risky construct, so two distinct
+  issues of the same rule in the same symbol stay distinct. Use the binding, sink, API method,
+  route, store/action, or property. Examples:
+  - `ProjectCardComponent:[innerHTML]=description` (XSS)
+  - `AuthService:localStorage.setItem('token')` (token storage)
+  - `ApiClient:getProject->`+template-URL (URL encoding)
+
+Keep these three fields **deterministic**: the same issue must produce the same three values on
+every run, even after unrelated lines shift.
+
+### 6.2 Re-validate existing findings FIRST
+
+The prompt gives you `OPEN_FINDINGS_JSON` — findings already reported on this PR. Before looking
+for new issues, read the current code for each and emit a `revalidations` entry with the same
+`fingerprint` and a `status`:
+
+- `still-present` — the issue still exists.
+- `fixed` — you **confirmed by reading the code** that it is gone.
+- `uncertain` — you cannot tell from the current code.
+
+Only use `fixed` when you have actually verified the fix. If unsure, use `uncertain` — never
+guess `fixed`, because that wrongly closes a real vulnerability.
+
+---
+
+## 7. Output contract
+
+Emit ONLY a JSON document between the EXACT marker lines (each on its own line):
 
 ```
-🔴 CRITICAL: [Short description]
-File: [filename:line number]
-Category: [XSS / Input validation / Authorization / Sensitive data / Error handling]
-Attack scenario: [How this can be exploited in practice]
-Suggestion: [Concrete code fix]
-
-🟠 HIGH: [Short description]
-File: [filename:line number]
-Category: [...]
-Risk: [What can go wrong]
-Suggestion: [Concrete code fix]
-
-🟡 MEDIUM: [Short description]
-File: [filename:line number]
-Category: [...]
-Suggestion: [Concrete code fix]
+<<<FINDINGS_JSON>>>
+{
+  "summary": "<short markdown summary incl. top assumptions/threats, max ~10 lines>",
+  "revalidations": [
+    { "fingerprint": "<from OPEN_FINDINGS_JSON>", "status": "still-present|fixed|uncertain", "reason": "<one line>" }
+  ],
+  "findings": [
+    {
+      "file": "path/from/repo/root.ts",
+      "line": 123,
+      "ruleId": "FE-XSS-DANGEROUS-HTML",
+      "symbol": "ProjectCardComponent",
+      "evidenceAnchor": "[innerHTML]=description",
+      "severity": "critical|high|medium|low|info",
+      "title": "Short title",
+      "message": "Attack scenario + concrete fix recommendation.",
+      "fixPlan": ["Step 1: ...", "Step 2: ...", "Step 3: 'Add or update the matching test'"]
+    }
+  ],
+  "remediationPlan": "<markdown block — copy-paste-ready prompt to fix ALL findings>"
+}
+<<<END_FINDINGS_JSON>>>
 ```
 
-Sort findings by severity: 🔴 first, then 🟠, then 🟡.
+If there are no existing and no new findings:
 
-Always conclude with:
-1. **Security findings summary** — count per category and severity
-2. **Security assumptions** — all identified assumptions
-3. **Threat model** — top 3 attack vectors
-4. **Overall assessment** — approved / needs changes / critical stop
+```
+<<<FINDINGS_JSON>>>
+{"summary":"No frontend security issues found.","revalidations":[],"findings":[],"remediationPlan":""}
+<<<END_FINDINGS_JSON>>>
+```
+
+**Notes:**
+- Each finding's `file` + `line` MUST point at an added or modified RIGHT-side line in `pr.diff`.
+- `ruleId`, `symbol`, `evidenceAnchor` are mandatory and define stable identity.
+- Sort findings by severity: critical first.
+- Markers and the JSON between them are the only contract.

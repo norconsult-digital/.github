@@ -44,9 +44,10 @@ HPA-scaled services but info-level for explicitly single-instance services.
 ## Finding categories
 
 Run through this list against every diff. Report only **actual** problems where you can point
-at a specific changed line.
+at a specific changed line. The category number maps directly to the `ruleId` (see §"Closed rule
+catalogue").
 
-### 1. Message/event contracts (typically high)
+### 1. Message/event contracts (typically high) → `RUN-01-CONTRACT`
 
 - 🔴 **Breaking shape change** to a message/event record (renamed/removed/type-changed field)
   when subscribers exist, without a V2 type or compatibility shim
@@ -55,7 +56,7 @@ at a specific changed line.
   payloads in flight
 - 🟠 Topic / subscription / queue name changed without migration plan
 
-### 2. Idempotency (typically high)
+### 2. Idempotency (typically high) → `RUN-02-IDEMPOTENCY`
 
 - 🔴 New message handler that **writes to the database without an exists-check** or unique
   constraint guard (at-least-once delivery → duplicates / FK errors)
@@ -63,14 +64,14 @@ at a specific changed line.
 - 🟠 Handler that throws on duplicates instead of treating them as no-ops (causes infinite
   retry / poison-message loop)
 
-### 3. Outbox / event ordering (typically critical)
+### 3. Outbox / event ordering (typically critical) → `RUN-03-OUTBOX`
 
 - 🔴 Domain event raised **after** `SaveChangesAsync` — event is lost on commit failure
 - 🔴 Message published outside a transaction / outside the ORM save flow — bypasses outbox
   guarantees (if outbox is used)
 - 🟠 Multiple events raised in one transaction with implicit ordering assumptions
 
-### 4. Retry / resilience storms (typically high)
+### 4. Retry / resilience storms (typically high) → `RUN-04-RETRY`
 
 - 🔴 New Polly retry policy without **jitter** and without a **max attempt cap** — slow callee
   will be hammered into outage
@@ -78,7 +79,7 @@ at a specific changed line.
 - 🟠 No circuit breaker on a hot inter-service call path
 - 🟡 New external HTTP call without a `Timeout` smaller than the request timeout
 
-### 5. Replica-divergent state (typically critical)
+### 5. Replica-divergent state (typically critical) → `RUN-05-STATE`
 
 These break under horizontal scaling (HPA). Exception: services documented as single-instance.
 
@@ -91,7 +92,7 @@ These break under horizontal scaling (HPA). Exception: services documented as si
 - 🔴 New in-process `Timer` / `BackgroundService` that does scheduled writes
 - 🟠 New `AsyncLocal<T>` outside of OpenTelemetry/diagnostic scope
 
-### 6. Database hazards (typically high)
+### 6. Database hazards (typically high) → `RUN-06-DATABASE`
 
 - 🔴 New cross-schema or cross-service SQL (joins, FKs, or raw SQL against another service's
   tables when services are expected to own their data independently)
@@ -103,7 +104,7 @@ These break under horizontal scaling (HPA). Exception: services documented as si
 - 🟠 Missing `AsNoTracking()` on a clearly read-only query
 - 🟡 New non-indexed `WHERE` clause on high-cardinality table
 
-### 7. Inter-service HTTP wiring (typically high)
+### 7. Inter-service HTTP wiring (typically high) → `RUN-07-HTTP-WIRING`
 
 - 🔴 New `IHttpClientFactory` / typed client registration for another service that bypasses
   the project's standard auth handler (callee will return 401)
@@ -115,21 +116,21 @@ These break under horizontal scaling (HPA). Exception: services documented as si
   subscription), remind the developer that the deployment config (NetworkPolicy, env vars)
   must be updated in all environments.
 
-### 8. Health probes (typically critical)
+### 8. Health probes (typically critical) → `RUN-08-HEALTH`
 
 - 🔴 External dependency added to `/health/liveness` or liveness probe (DB, message bus,
   external API) — causes cascade restarts under partial outage
 - 🟠 Readiness probe without timeout / cancellation token
 - 🟡 New health check with no name (hard to debug in K8s)
 
-### 9. Fire-and-forget background work (typically high)
+### 9. Fire-and-forget background work (typically high) → `RUN-09-FIRE-FORGET`
 
 - 🔴 `Task.Run(...)` or `_ = SomeAsync()` inside an HTTP handler/endpoint — pod can be
   terminated mid-flight, work is silently lost
 - 🟠 Long `await Task.Delay(...)` in a request path
 - 🟠 New `Channel<T>` / in-process queue for inter-request work without persistence
 
-### 10. Data protection / session state (typically critical)
+### 10. Data protection / session state (typically critical) → `RUN-10-DATAPROTECTION`
 
 - 🔴 `services.AddDataProtection()` configuration changed without persisting keys to shared
   storage — will break login/cookies on any restart or across replicas
@@ -137,7 +138,7 @@ These break under horizontal scaling (HPA). Exception: services documented as si
   key store
 - 🟠 New cookie / antiforgery configuration that depends on per-instance state
 
-### 11. Configuration without validation (typically medium)
+### 11. Configuration without validation (typically medium) → `RUN-11-CONFIG`
 
 - 🟠 New `Options` class registered without `.ValidateDataAnnotations().ValidateOnStart()` —
   pod starts then fails on first request
@@ -157,6 +158,56 @@ These break under horizontal scaling (HPA). Exception: services documented as si
 
 ---
 
+## Closed rule catalogue (REQUIRED `ruleId` for every finding)
+
+Every finding MUST carry exactly one `ruleId` from this closed list (one per numbered category
+above). Never invent new IDs.
+
+| ruleId | Category |
+|--------|----------|
+| `RUN-01-CONTRACT`        | Message/event contract changes |
+| `RUN-02-IDEMPOTENCY`     | Handler idempotency |
+| `RUN-03-OUTBOX`          | Outbox / event ordering |
+| `RUN-04-RETRY`           | Retry / resilience storms |
+| `RUN-05-STATE`           | Replica-divergent state |
+| `RUN-06-DATABASE`        | Shared-DB hazards |
+| `RUN-07-HTTP-WIRING`     | Inter-service HTTP wiring |
+| `RUN-08-HEALTH`          | Health probes |
+| `RUN-09-FIRE-FORGET`     | Fire-and-forget background work |
+| `RUN-10-DATAPROTECTION`  | Data protection / session state |
+| `RUN-11-CONFIG`          | Configuration without validation |
+
+---
+
+## Stable identity & re-validation (convergence contract)
+
+The workflow tracks findings across pushes so each issue is reported **once** and auto-resolved
+when fixed. Follow this exactly so the comment set converges.
+
+### Three identity fields (REQUIRED on every finding)
+
+- `ruleId` — from the catalogue above.
+- `symbol` — the enclosing method / class / handler / hosted service / type. **Never a line number.**
+- `evidenceAnchor` — a short, stable anchor for the *specific* construct, so two distinct issues
+  of the same rule in the same symbol stay distinct. Use the message/event type, callee, config
+  key, client name, or field. Examples:
+  - `ProjectCreatedSubscriber:Insert-without-exists-check` (idempotency)
+  - `Startup:AddSingleton<PriceCache>` (replica-divergent state)
+  - `TakeoffClient:hardcoded-url` (HTTP wiring)
+
+Keep these three values **deterministic** across runs, even after unrelated lines shift.
+
+### Re-validate existing findings FIRST
+
+The prompt provides `OPEN_FINDINGS_JSON` (findings already reported on this PR). Before searching
+for new issues, read the current code for each and emit a `revalidations` entry with the same
+`fingerprint` and a `status`: `still-present` | `fixed` | `uncertain`.
+
+Only use `fixed` when you have **confirmed by reading the code** that the hazard is gone. If
+unsure, use `uncertain` — never guess `fixed`.
+
+---
+
 ## Report format
 
 Produce a single JSON document on stdout between EXACT marker lines:
@@ -165,18 +216,20 @@ Produce a single JSON document on stdout between EXACT marker lines:
 <<<FINDINGS_JSON>>>
 {
   "summary": "<short markdown summary, max ~10 lines>",
+  "revalidations": [
+    { "fingerprint": "<from OPEN_FINDINGS_JSON>", "status": "still-present|fixed|uncertain", "reason": "<one line>" }
+  ],
   "findings": [
     {
       "file": "path/from/repo/root.cs",
       "line": 123,
+      "ruleId": "RUN-02-IDEMPOTENCY",
+      "symbol": "ProjectCreatedSubscriber",
+      "evidenceAnchor": "Insert-without-exists-check",
       "severity": "high",
       "title": "Short title",
       "message": "Detailed explanation including a concrete fix recommendation.",
-      "fixPlan": [
-        "Step 1: short, imperative action",
-        "Step 2: ...",
-        "Step 3: 'Add or update the matching test in ...'"
-      ]
+      "fixPlan": ["Step 1: ...", "Step 2: ...", "Step 3: 'Add or update the matching test in ...'"]
     }
   ],
   "remediationPlan": "<markdown block — copy-paste-ready prompt to fix ALL findings>"
@@ -188,13 +241,15 @@ If there are no findings:
 
 ```
 <<<FINDINGS_JSON>>>
-{"summary":"No runtime-safety issues found.","findings":[],"remediationPlan":""}
+{"summary":"No runtime-safety issues found.","revalidations":[],"findings":[],"remediationPlan":""}
 <<<END_FINDINGS_JSON>>>
 ```
 
 **Notes:**
 - Each finding's `file` + `line` MUST point at an added or modified line in the diff.
-- The cross-service dependency reminder (§7) is a single `info` finding, not one per key.
+- `ruleId`, `symbol`, `evidenceAnchor` are mandatory and define stable identity.
+- The cross-service dependency reminder (§7) is a single `info` finding with `ruleId`
+  `RUN-07-HTTP-WIRING`, not one per key.
 - Markers and JSON between them are the only contract.
 
 ---
@@ -206,4 +261,5 @@ Be conservative. A false positive on this agent is more expensive than a false n
 - Findings here often ask the developer to **change architecture**, not fix a typo
 
 If unsure, do NOT report. The security reviewer covers other ground; you do not need to be
-exhaustive on issues outside the 11 categories above.
+exhaustive on issues outside the 11 categories above. The same conservatism applies to
+re-validation: prefer `uncertain` over a wrong `fixed`.

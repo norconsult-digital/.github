@@ -12,6 +12,25 @@
 # Repos can override agent selection and config via .github/agent-review.yml
 #
 # ─────────────────────────────────────────────────────────────────────────────
+# CONVERGENCE MODEL ("ledger + revalidation-first")
+# ─────────────────────────────────────────────────────────────────────────────
+# The bot's PRIMARY job is CONTINUITY, not re-discovery. On every push it:
+#   1. Loads the per-agent finding ledger (a hidden sticky PR comment).
+#   2. Asks the model to RE-VALIDATE each existing open finding against the
+#      current code (still-present | fixed | uncertain) BEFORE looking for new
+#      issues. This is what stops the "new random subset every push" swing-door.
+#   3. Posts ONLY genuinely-new findings (stable fingerprint, not line number).
+#   4. Resolves a finding's thread ONLY when the model explicitly classifies it
+#      as `fixed` — never merely because it was not emitted this run.
+#
+# Identity is owned by the workflow, not the model:
+#   fingerprint = sha256(agent | ruleId | file | symbol | evidenceAnchor)
+# Each inline comment carries a hidden `<!-- agent-fp:HASH -->` marker so the
+# ledger is self-healing and dedup survives line shifts and reruns.
+#
+# Each agent writes its OWN ledger comment (namespaced by agent name), so the
+# parallel matrix jobs never race on the same document.
+# ─────────────────────────────────────────────────────────────────────────────
 
 name: "Copilot Agent Review"
 
@@ -314,6 +333,135 @@ jobs:
               echo "::warning::COPILOT_CLI_TOKEN not set — skipping ${{ matrix.agent }}."
           fi
 
+      # ──────────────────────────────────────────────────────────────────
+      # Convergence step 1/3: load this agent's ledger of OPEN findings
+      # from its hidden sticky PR comment, so the model can re-validate them
+      # BEFORE searching for new issues.
+      # ──────────────────────────────────────────────────────────────────
+      - name: Load open findings from ledger
+        id: ledger
+        if: steps.changes.outputs.count != '0' && steps.token-check.outputs.available == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          AGENT: ${{ matrix.agent }}
+        run: |
+          set -euo pipefail
+          mkdir -p .agent-review
+
+          cat > .agent-review/ledger-lib.mjs <<'LIB'
+          // ── Shared ledger library (sticky-comment backed, per-agent) ──
+          import { createHash } from "node:crypto";
+
+          export const LEDGER_VERSION = 1;
+
+          export function marker(agent) {
+              return `<!-- agent-review-ledger:v${LEDGER_VERSION}:${agent} -->`;
+          }
+          export function fpMarker(hash) { return `<!-- agent-fp:${hash} -->`; }
+
+          export function norm(s) {
+              return String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+          }
+          // Identity is owned by the workflow, never the line number.
+          export function fingerprint(agent, f) {
+              const key = [agent, norm(f.ruleId), norm(f.file), norm(f.symbol), norm(f.evidenceAnchor)].join("|");
+              return createHash("sha256").update(key).digest("hex").slice(0, 16);
+          }
+
+          export function api(repo) { return `https://api.github.com/repos/${repo}`; }
+          export function headers(token, ua) {
+              return {
+                  Accept: "application/vnd.github+json",
+                  Authorization: `Bearer ${token}`,
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "Content-Type": "application/json",
+                  "User-Agent": ua || "agent-review-bot",
+              };
+          }
+          export async function ghGet(url, h) {
+              const r = await fetch(url, { headers: h });
+              const t = await r.text();
+              if (!r.ok) throw new Error(`GET ${url} -> ${r.status}: ${t}`);
+              return t ? JSON.parse(t) : {};
+          }
+          export async function ghSend(method, url, h, body) {
+              const r = await fetch(url, { method, headers: h, body: JSON.stringify(body) });
+              const t = await r.text();
+              if (!r.ok) throw new Error(`${method} ${url} -> ${r.status}: ${t}`);
+              return t ? JSON.parse(t) : {};
+          }
+          export async function gql(token, ua, query, variables) {
+              const r = await fetch("https://api.github.com/graphql", {
+                  method: "POST",
+                  headers: headers(token, ua),
+                  body: JSON.stringify({ query, variables }),
+              });
+              const t = await r.text();
+              if (!r.ok) throw new Error(`GraphQL ${r.status}: ${t}`);
+              const j = JSON.parse(t);
+              if (j.errors) throw new Error(`GraphQL errors: ${JSON.stringify(j.errors)}`);
+              return j.data;
+          }
+
+          // Locate (and parse) this agent's ledger sticky comment.
+          // Returns { commentId, ledger }. ledger.findings is a map fp -> entry.
+          export async function loadLedger({ repo, pr, agent, token, ua }) {
+              const h = headers(token, ua);
+              const mk = marker(agent);
+              const empty = { version: 0, headSha: null, updatedAt: null, agent, findings: {} };
+              let page = 1, found = null;
+              while (true) {
+                  const comments = await ghGet(`${api(repo)}/issues/${pr}/comments?per_page=100&page=${page}`, h);
+                  if (!Array.isArray(comments) || comments.length === 0) break;
+                  for (const c of comments) {
+                      if (typeof c.body === "string" && c.body.includes(mk)) found = c;
+                  }
+                  if (comments.length < 100) break;
+                  page++;
+              }
+              if (!found) return { commentId: null, ledger: empty };
+              const m = found.body.match(/<!-- ledger-data\s+([A-Za-z0-9+/=]+)\s+-->/);
+              if (!m) return { commentId: found.id, ledger: empty };
+              try {
+                  const json = Buffer.from(m[1], "base64").toString("utf8");
+                  const parsed = JSON.parse(json);
+                  parsed.findings = parsed.findings || {};
+                  return { commentId: found.id, ledger: parsed };
+              } catch {
+                  return { commentId: found.id, ledger: empty };
+              }
+          }
+          LIB
+
+          cat > .agent-review/load-open.mjs <<'JS'
+          import { writeFileSync } from "node:fs";
+          import { loadLedger } from "./ledger-lib.mjs";
+          const { GITHUB_TOKEN, PR_NUMBER, REPO, AGENT } = process.env;
+          const { ledger } = await loadLedger({
+              repo: REPO, pr: PR_NUMBER, agent: AGENT, token: GITHUB_TOKEN, ua: AGENT,
+          });
+          // Expose only OPEN findings to the model for re-validation.
+          const open = Object.entries(ledger.findings || {})
+              .filter(([, e]) => e.state === "open")
+              .map(([fp, e]) => ({
+                  fingerprint: fp,
+                  ruleId: e.ruleId,
+                  file: e.file,
+                  symbol: e.symbol,
+                  evidenceAnchor: e.evidenceAnchor,
+                  severity: e.severity,
+                  title: e.title,
+              }));
+          writeFileSync(".agent-review/open-findings.json", JSON.stringify(open, null, 2));
+          console.log(`Loaded ${open.length} open finding(s) from ledger for ${AGENT}.`);
+          JS
+
+          node .agent-review/load-open.mjs || echo "[]" > .agent-review/open-findings.json
+          test -f .agent-review/open-findings.json || echo "[]" > .agent-review/open-findings.json
+          echo "open-count=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(".agent-review/open-findings.json","utf8")).length)')" >> "$GITHUB_OUTPUT"
+
       - name: Install GitHub Copilot CLI
         if: steps.changes.outputs.count != '0' && steps.token-check.outputs.available == 'true'
         run: npm install -g @github/copilot
@@ -362,6 +510,7 @@ jobs:
           fi
 
           reporting_rules=$(cat /tmp/reporting-rules.txt)
+          open_findings=$(cat .agent-review/open-findings.json 2>/dev/null || echo "[]")
 
           cat > .agent-review/prompt.md <<PROMPT
           You are operating as the **${agent}** agent. Follow these instructions:
@@ -376,10 +525,38 @@ jobs:
           - Changed files (newline-separated): see CHANGED_FILES env var.
           - You may read any file in the repo for context using your read/grep/glob tools.
 
+          ## STEP 1 — Re-validate existing open findings FIRST (most important)
+          Below is the ledger of findings already reported on this PR by a previous run.
+          Your FIRST job is continuity, not re-discovery. For EACH entry, read the
+          current code at that location and classify it:
+
+          OPEN_FINDINGS_JSON:
+          ${open_findings}
+
+          For every entry above, emit one object in the \`revalidations\` array with the
+          SAME \`fingerprint\` and a \`status\`:
+          - "still-present" — the issue still exists in the current code.
+          - "fixed"         — you verified the code no longer has this issue.
+          - "uncertain"     — you cannot determine it from the current code.
+          Be conservative: only use "fixed" when you have actually confirmed the fix by
+          reading the code. If you are not sure, use "uncertain" — NEVER guess "fixed".
+
+          ## STEP 2 — Find NEW issues
+          After re-validation, look for additional issues in pr.diff that are NOT already
+          in OPEN_FINDINGS_JSON. Report ALL of them in a single pass — do not defer issues
+          to a future review. Evaluate the full rule catalogue from your agent rules above
+          on every changed hunk.
+
           Reporting rules:
           ${reporting_rules}
-          - Each finding must reference a file path and line number that is part of an
+          - Each NEW finding must reference a file path and line number that is part of an
             added or modified RIGHT-side line in pr.diff.
+          - Every finding MUST carry a \`ruleId\` from your agent's closed rule catalogue,
+            a \`symbol\` (the enclosing method/class/endpoint/type — NOT the line number),
+            and an \`evidenceAnchor\` (a short, stable semantic anchor for the specific
+            risky construct, e.g. the sink/callee, route, command/event type, or parameter,
+            such as "Upload:formFile->BlobClient.UploadAsync"). These three fields define
+            the finding's stable identity across pushes — keep them deterministic.
           - When both org-level and repo-level rules are present, repo-level rules
             take priority in case of conflict.
 
@@ -390,11 +567,17 @@ jobs:
           <<<FINDINGS_JSON>>>
           {
             "summary": "<short markdown summary, max ~10 lines>",
+            "revalidations": [
+              { "fingerprint": "<from OPEN_FINDINGS_JSON>", "status": "still-present|fixed|uncertain", "reason": "<one line>" }
+            ],
             "findings": [
               {
                 "file": "path/from/repo/root",
                 "line": 123,
-                "severity": "high",
+                "ruleId": "<from your rule catalogue, e.g. SEC-IDOR or RUN-02-IDEMPOTENCY>",
+                "symbol": "<enclosing method/class/endpoint/type>",
+                "evidenceAnchor": "<short stable anchor for the specific risky construct>",
+                "severity": "critical|high|medium|low|info",
                 "title": "Short title",
                 "message": "Detailed explanation including a concrete fix recommendation.",
                 "fixPlan": [
@@ -408,9 +591,9 @@ jobs:
           }
           <<<END_FINDINGS_JSON>>>
 
-          If there are no findings, emit:
+          If there are no existing findings and no new findings, emit:
           <<<FINDINGS_JSON>>>
-          {"summary":"No issues found.","findings":[],"remediationPlan":""}
+          {"summary":"No issues found.","revalidations":[],"findings":[],"remediationPlan":""}
           <<<END_FINDINGS_JSON>>>
 
           The markers and the JSON between them are the only contract.
@@ -433,22 +616,29 @@ jobs:
           out_path = pathlib.Path(".agent-review/findings.json")
           if not m:
               print("No JSON markers found — writing empty result.", file=sys.stderr)
-              out_path.write_text(json.dumps({"summary": "Agent did not produce structured output.", "findings": []}))
+              out_path.write_text(json.dumps({"summary": "Agent did not produce structured output.", "revalidations": [], "findings": []}))
               sys.exit(0)
           payload = m.group(1).strip()
           try:
               parsed = json.loads(payload)
           except json.JSONDecodeError as e:
               print(f"JSON parse error: {e}.", file=sys.stderr)
-              out_path.write_text(json.dumps({"summary": f"Agent produced invalid JSON: {e}", "findings": []}))
+              out_path.write_text(json.dumps({"summary": f"Agent produced invalid JSON: {e}", "revalidations": [], "findings": []}))
               sys.exit(0)
+          parsed.setdefault("revalidations", [])
+          parsed.setdefault("findings", [])
           out_path.write_text(json.dumps(parsed, indent=2))
-          print(f"Wrote {len(parsed.get('findings', []))} findings to {out_path}")
+          print(f"Wrote {len(parsed.get('findings', []))} new finding(s), {len(parsed.get('revalidations', []))} revalidation(s) to {out_path}")
           PY
 
           echo "--- findings.json ---"
           cat .agent-review/findings.json
 
+      # ──────────────────────────────────────────────────────────────────
+      # Convergence step 2/3 + 3/3: post ONLY new findings, resolve threads
+      # the model confirmed as fixed, and write the merged ledger back with
+      # optimistic concurrency.
+      # ──────────────────────────────────────────────────────────────────
       - name: Post review to pull request
         if: steps.changes.outputs.count != '0' && steps.token-check.outputs.available == 'true'
         env:
@@ -456,87 +646,246 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
           COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          AGENT: ${{ matrix.agent }}
         run: |
-          # Inline post-review script — self-contained, no repo dependency needed
+          set -euo pipefail
           cat > .agent-review/post-review.mjs <<'SCRIPT'
           import { readFileSync, existsSync } from "node:fs";
-          const { GITHUB_TOKEN, PR_NUMBER, REPO, COMMIT_SHA } = process.env;
+          import {
+              marker, fpMarker, fingerprint, api, headers, ghGet, ghSend, gql, loadLedger,
+          } from "./ledger-lib.mjs";
+
+          const { GITHUB_TOKEN, PR_NUMBER, REPO, COMMIT_SHA, AGENT } = process.env;
           const title = process.argv[2] || "Agent Review";
           const emoji = process.argv[3] || "⚠️";
           const subtitle = process.argv[4] || "";
-          const userAgent = process.argv[5] || "automated-reviewer";
-          if (!GITHUB_TOKEN || !PR_NUMBER || !REPO || !COMMIT_SHA) { console.error("Missing env vars"); process.exit(1); }
+          const agent = AGENT || process.argv[5] || "automated-reviewer";
+          const ua = agent;
+
+          if (!GITHUB_TOKEN || !PR_NUMBER || !REPO || !COMMIT_SHA) {
+              console.error("Missing env vars"); process.exit(1);
+          }
+
           const findingsPath = ".agent-review/findings.json";
           if (!existsSync(findingsPath)) { console.log("No findings.json."); process.exit(0); }
           let payload;
-          try { payload = JSON.parse(readFileSync(findingsPath, "utf8")); } catch (e) { console.error(e.message); process.exit(1); }
+          try { payload = JSON.parse(readFileSync(findingsPath, "utf8")); }
+          catch (e) { console.error(e.message); process.exit(1); }
+
           const summary = payload.summary?.trim() || `${title} complete.`;
-          const findings = Array.isArray(payload.findings) ? payload.findings : [];
+          const newFindings = Array.isArray(payload.findings) ? payload.findings : [];
+          const revalidations = Array.isArray(payload.revalidations) ? payload.revalidations : [];
           const remediationPlan = (payload.remediationPlan || "").trim();
           const SEV = { critical: "🔴", high: "🟠", medium: "🟡", low: "🔵", info: "ℹ️" };
-          const existingKeys = await fetchExistingThreadKeys();
-          if (existingKeys.size > 0) console.log(`Dedup: found ${existingKeys.size} existing review comment locations.`);
+          const h = headers(GITHUB_TOKEN, ua);
+
+          // ── 1. Load ledger (authoritative state from previous runs) ──
+          let { commentId: ledgerCommentId, ledger } = await loadLedger({
+              repo: REPO, pr: PR_NUMBER, agent, token: GITHUB_TOKEN, ua,
+          });
+          ledger.findings = ledger.findings || {};
+          console.log(`Ledger: ${Object.keys(ledger.findings).length} known finding(s), version ${ledger.version || 0}.`);
+
+          // ── 2. Index existing inline comments by their hidden fp marker ──
+          // This makes dedup self-healing even if the ledger comment was lost.
+          const postedFps = new Set();
+          try {
+              let page = 1;
+              while (true) {
+                  const comments = await ghGet(`${api(REPO)}/pulls/${PR_NUMBER}/comments?per_page=100&page=${page}`, h);
+                  if (!Array.isArray(comments) || comments.length === 0) break;
+                  for (const c of comments) {
+                      const m = typeof c.body === "string" && c.body.match(/<!-- agent-fp:([0-9a-f]+) -->/);
+                      if (m) postedFps.add(m[1]);
+                  }
+                  if (comments.length < 100) break;
+                  page++;
+              }
+          } catch (e) { console.warn(`Could not list review comments: ${e.message}`); }
+
+          // ── 3. Apply revalidations to ledger (conservative resolution) ──
+          const revById = new Map();
+          for (const r of revalidations) if (r?.fingerprint) revById.set(r.fingerprint, r);
+
+          let resolvedCount = 0;
+          for (const [fp, entry] of Object.entries(ledger.findings)) {
+              if (entry.state !== "open") continue;
+              const r = revById.get(fp);
+              if (r && r.status === "fixed") {
+                  entry.state = "resolved";
+                  entry.resolvedAtSha = COMMIT_SHA;
+                  entry.missingRuns = 0;
+                  resolvedCount++;
+                  if (entry.threadId) {
+                      try {
+                          await gql(GITHUB_TOKEN, ua,
+                              `mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread { isResolved } } }`,
+                              { id: entry.threadId });
+                      } catch (e) { console.warn(`resolveReviewThread failed for ${fp}: ${e.message}`); }
+                  }
+              } else if (r && r.status === "still-present") {
+                  entry.lastSeenSha = COMMIT_SHA; entry.lastCheckedSha = COMMIT_SHA; entry.missingRuns = 0;
+              } else if (r && r.status === "uncertain") {
+                  entry.lastCheckedSha = COMMIT_SHA; entry.missingRuns = 0;
+              } else {
+                  // Not mentioned by the model this run → do NOT resolve. Just count.
+                  entry.missingRuns = (entry.missingRuns || 0) + 1;
+                  entry.lastCheckedSha = COMMIT_SHA;
+              }
+          }
+
+          // ── 4. Post genuinely-new findings only ──
+          const inlineComments = [];
+          const fallbackBullets = [];
           let skippedDupes = 0;
-          const inlineComments = [], fallbackBullets = [];
-          for (const f of findings) {
-              if (!f?.file || !f?.line) { fallbackBullets.push(fmtBullet(f)); continue; }
-              if (existingKeys.has(`${f.file}:${f.line}`)) { skippedDupes++; continue; }
+
+          for (const f of newFindings) {
+              if (!f?.file || !f?.line || !f?.ruleId) { fallbackBullets.push(fmtBullet(f)); continue; }
+              const fp = fingerprint(agent, f);
+              const known = ledger.findings[fp];
+              // Skip if already posted (ledger says open, or a live comment carries the marker).
+              if ((known && known.state === "open") || postedFps.has(fp)) {
+                  skippedDupes++;
+                  if (known) { known.lastSeenSha = COMMIT_SHA; known.lastCheckedSha = COMMIT_SHA; known.missingRuns = 0; }
+                  else ledger.findings[fp] = mkEntry(agent, f, fp, "open");
+                  continue;
+              }
               const s = SEV[f.severity?.toLowerCase()] ?? "⚠️";
-              let body = `${s} **${(f.severity||"info").toUpperCase()}: ${f.title||"Finding"}**\n\n${f.message||""}`;
+              let body = `${s} **${(f.severity || "info").toUpperCase()}: ${f.title || "Finding"}**\n\n${f.message || ""}`;
               if (Array.isArray(f.fixPlan) && f.fixPlan.length)
-                  body += "\n\n<details><summary>🛠️ Fix plan</summary>\n\n" + f.fixPlan.map((s,i)=>`${i+1}. ${s}`).join("\n") + "\n\n</details>";
-              inlineComments.push({ path: f.file, line: Number(f.line), side: "RIGHT", body });
+                  body += "\n\n<details><summary>🛠️ Fix plan</summary>\n\n" + f.fixPlan.map((x, i) => `${i + 1}. ${x}`).join("\n") + "\n\n</details>";
+              body += `\n\n${fpMarker(fp)}`;
+              inlineComments.push({ path: f.file, line: Number(f.line), side: "RIGHT", body, _fp: fp, _f: f });
+          }
+
+          function mkEntry(agent, f, fp, state) {
+              return {
+                  agent, ruleId: f.ruleId, file: f.file, symbol: f.symbol || "",
+                  evidenceAnchor: f.evidenceAnchor || "", severity: f.severity || "info",
+                  title: f.title || "", state, commentId: null, threadId: null,
+                  firstSeenSha: COMMIT_SHA, lastSeenSha: COMMIT_SHA, lastCheckedSha: COMMIT_SHA,
+                  resolvedAtSha: null, missingRuns: 0,
+              };
           }
           function fmtBullet(f) {
               const s = SEV[f?.severity?.toLowerCase()] ?? "⚠️";
-              const loc = f?.file ? ` \`${f.file}${f.line?":"+f.line:""}\`` : "";
-              return `- ${s} **${(f?.severity||"info").toUpperCase()}**${loc}: ${f?.title||""} — ${f?.message||""}`;
+              const loc = f?.file ? ` \`${f.file}${f.line ? ":" + f.line : ""}\`` : "";
+              return `- ${s} **${(f?.severity || "info").toUpperCase()}**${loc}: ${f?.title || ""} — ${f?.message || ""}`;
           }
-          const hdr = [`## ${emoji} ${title}`,""];
-          if (subtitle) hdr.push(`_${subtitle}_`,"");
-          hdr.push(summary,"",`**Findings:** ${findings.length}${skippedDupes ? ` (${skippedDupes} duplicate${skippedDupes>1?"s":""} skipped)` : ""}`);
-          const header = hdr.join("\n");
-          function remedSection() {
-              if (!remediationPlan || !findings.length) return "";
-              return "\n---\n\n<details><summary>📋 <strong>Remediation plan</strong></summary>\n\n````markdown\n" + remediationPlan + "\n````\n\n</details>";
+
+          // ── 5. Post the review (only if there is something new to say) ──
+          const openCount = Object.values(ledger.findings).filter((e) => e.state === "open").length + inlineComments.length;
+          const hdr = [`## ${emoji} ${title}`, ""];
+          if (subtitle) hdr.push(`_${subtitle}_`, "");
+          hdr.push(summary, "");
+          const counters = [
+              `**New:** ${inlineComments.length}`,
+              `**Open (total):** ${openCount}`,
+              resolvedCount ? `**Resolved:** ${resolvedCount}` : null,
+              skippedDupes ? `**Unchanged:** ${skippedDupes}` : null,
+          ].filter(Boolean).join(" · ");
+          hdr.push(counters);
+          let body = hdr.join("\n");
+          if (fallbackBullets.length) body += "\n\n### Additional findings\n" + fallbackBullets.join("\n");
+          if (remediationPlan && inlineComments.length)
+              body += "\n---\n\n<details><summary>📋 <strong>Remediation plan</strong></summary>\n\n````markdown\n" + remediationPlan + "\n````\n\n</details>";
+
+          async function postReview(reviewBody, comments) {
+              return ghSend("POST", `${api(REPO)}/pulls/${PR_NUMBER}/reviews`, h,
+                  { commit_id: COMMIT_SHA, event: "COMMENT", body: reviewBody, comments });
           }
-          const api = `https://api.github.com/repos/${REPO}`;
-          const hdrs = { Accept:"application/vnd.github+json", Authorization:`Bearer ${GITHUB_TOKEN}`,
-              "X-GitHub-Api-Version":"2022-11-28", "Content-Type":"application/json", "User-Agent":userAgent };
-          async function ghPost(url,b) { const r=await fetch(url,{method:"POST",headers:hdrs,body:JSON.stringify(b)}); const t=await r.text(); if(!r.ok) throw new Error(`${r.status}: ${t}`); return t?JSON.parse(t):{}; }
-          async function ghGet(url) { const r=await fetch(url,{headers:hdrs}); const t=await r.text(); if(!r.ok) throw new Error(`${r.status}: ${t}`); return t?JSON.parse(t):{}; }
-          async function fetchExistingThreadKeys() {
-              // Fetch existing review comments to deduplicate — avoids re-posting
-              // findings that have already been reported (resolved or not).
-              const keys = new Set();
+
+          if (inlineComments.length || fallbackBullets.length) {
               try {
-                  let page = 1;
-                  while (true) {
-                      const comments = await ghGet(`${api}/pulls/${PR_NUMBER}/comments?per_page=100&page=${page}`);
-                      if (!Array.isArray(comments) || comments.length === 0) break;
-                      for (const c of comments) {
-                          if (c.path && c.line) keys.add(`${c.path}:${c.line}`);
-                          if (c.path && c.original_line) keys.add(`${c.path}:${c.original_line}`);
-                      }
-                      if (comments.length < 100) break;
-                      page++;
-                  }
-              } catch (e) { console.warn(`Could not fetch existing threads: ${e.message}. Skipping dedup.`); }
-              return keys;
-          }
-          async function postReview(body,comments) { return ghPost(`${api}/pulls/${PR_NUMBER}/reviews`,{commit_id:COMMIT_SHA,event:"COMMENT",body,comments}); }
-          try {
-              if (!inlineComments.length && !fallbackBullets.length) { await postReview(`${header}\n\n_No issues found._`,[]); console.log("Clean review."); process.exit(0); }
-              let body = header;
-              if (fallbackBullets.length) body += "\n\n### Additional findings\n" + fallbackBullets.join("\n");
-              body += remedSection();
-              try { await postReview(body,inlineComments); console.log(`Posted ${inlineComments.length} inline comments.`); }
-              catch(e) {
-                  console.warn(`Inline failed: ${e.message}. Falling back.`);
-                  const all = [...inlineComments.map(c=>`- \`${c.path}:${c.line}\` — ${c.body.split("\n")[0]}`),...fallbackBullets];
+                  await postReview(body, inlineComments.map(({ path, line, side, body }) => ({ path, line, side, body })));
+                  console.log(`Posted ${inlineComments.length} new inline comment(s).`);
+              } catch (e) {
+                  console.warn(`Inline review failed: ${e.message}. Falling back to summary-only.`);
+                  const all = inlineComments.map((c) => `- \`${c.path}:${c._f.line}\` — ${c._f.title}`).concat(fallbackBullets);
                   await postReview(`${body}\n\n### All findings\n${all.join("\n")}`, []);
               }
-          } catch(e) { console.error(e.message); process.exit(1); }
+          } else {
+              console.log("Nothing new to post (convergence reached).");
+          }
+
+          // ── 6. Resolve thread IDs for newly posted comments + record in ledger ──
+          for (const c of inlineComments) ledger.findings[c._fp] = mkEntry(agent, c._f, c._fp, "open");
+          await attachThreadIds(ledger, agent);
+
+          // ── 7. Write merged ledger back (optimistic concurrency) ──
+          await persistLedger();
+
+          async function attachThreadIds(ledger, agent) {
+              // Map fp -> review thread node id via GraphQL, by scanning comment bodies for the fp marker.
+              try {
+                  const data = await gql(GITHUB_TOKEN, ua, `
+                      query($owner:String!,$name:String!,$number:Int!){
+                        repository(owner:$owner,name:$name){
+                          pullRequest(number:$number){
+                            reviewThreads(first:100){
+                              nodes { id isResolved comments(first:20){ nodes { databaseId body } } }
+                            }
+                          }
+                        }
+                      }`,
+                      { owner: REPO.split("/")[0], name: REPO.split("/")[1], number: Number(PR_NUMBER) });
+                  const threads = data?.repository?.pullRequest?.reviewThreads?.nodes || [];
+                  for (const t of threads) {
+                      for (const cm of (t.comments?.nodes || [])) {
+                          const m = typeof cm.body === "string" && cm.body.match(/<!-- agent-fp:([0-9a-f]+) -->/);
+                          if (m && ledger.findings[m[1]]) {
+                              ledger.findings[m[1]].threadId = t.id;
+                              if (ledger.findings[m[1]].commentId == null) ledger.findings[m[1]].commentId = cm.databaseId;
+                          }
+                      }
+                  }
+              } catch (e) { console.warn(`attachThreadIds failed: ${e.message}`); }
+          }
+
+          async function persistLedger() {
+              // Re-fetch immediately before writing to honour optimistic concurrency,
+              // then MERGE rather than overwrite.
+              const fresh = await loadLedger({ repo: REPO, pr: PR_NUMBER, agent, token: GITHUB_TOKEN, ua });
+              const base = fresh.ledger?.findings || {};
+              for (const [fp, entry] of Object.entries(ledger.findings)) {
+                  const prior = base[fp];
+                  if (!prior) { base[fp] = entry; continue; }
+                  // Prefer the most progressed state; never downgrade resolved -> open.
+                  if (prior.state === "resolved" && entry.state === "open") { base[fp] = prior; continue; }
+                  base[fp] = { ...prior, ...entry, threadId: entry.threadId || prior.threadId, commentId: entry.commentId ?? prior.commentId };
+              }
+              const merged = {
+                  version: (fresh.ledger?.version || 0) + 1,
+                  headSha: COMMIT_SHA,
+                  updatedAt: new Date().toISOString(),
+                  agent,
+                  findings: base,
+              };
+              const open = Object.values(base).filter((e) => e.state === "open").length;
+              const resolved = Object.values(base).filter((e) => e.state === "resolved").length;
+              const data = Buffer.from(JSON.stringify(merged)).toString("base64");
+              const bodyMd = [
+                  marker(agent),
+                  `<!-- This is an automated, machine-managed ledger for ${agent}. Do not edit by hand. -->`,
+                  ``,
+                  `### ${emoji} ${title} — finding ledger`,
+                  ``,
+                  `_Tracks findings across pushes so each issue is reported once and resolved when fixed._`,
+                  ``,
+                  `**Open:** ${open} · **Resolved:** ${resolved} · **Updated:** ${merged.updatedAt} · **version** ${merged.version}`,
+                  ``,
+                  `<!-- ledger-data ${data} -->`,
+              ].join("\n");
+
+              const target = fresh.commentId || ledgerCommentId;
+              if (target) {
+                  await ghSend("PATCH", `${api(REPO)}/issues/comments/${target}`, h, { body: bodyMd });
+                  console.log(`Updated ledger comment ${target} (open=${open}, resolved=${resolved}).`);
+              } else {
+                  const created = await ghSend("POST", `${api(REPO)}/issues/${PR_NUMBER}/comments`, h, { body: bodyMd });
+                  console.log(`Created ledger comment ${created.id} (open=${open}, resolved=${resolved}).`);
+              }
+          }
           SCRIPT
 
           node .agent-review/post-review.mjs \

@@ -154,36 +154,15 @@ For **all code you review**, identify assumptions about:
 | **Logging** | "Personal data is not logged to telemetry" |
 | **Messaging** | "Message handlers receive valid tenant context from the event" |
 
-**Format:**
-```
-📋 ASSUMPTION: [Short description]
-Location: [file:line]
-Verified: ✅ Yes / ❌ No / ⚠️ Partially
-Risk if wrong: [What happens if the assumption is broken]
-Recommendation: [Action to verify/secure]
-```
+Surface assumptions inside the `message` field of the relevant finding, or in the `summary`.
 
 ---
 
 ## 4. Threat modeling
 
-For **each new feature**, identify the **three most likely attack vectors**:
+For **each new feature**, identify the **three most likely attack vectors** and fold them into
+the `summary`. Common attack vectors in multi-tenant .NET applications:
 
-```
-🎯 THREAT MODEL for [feature-name]
-
-1. [Attack vector #1]
-   Attack method: [How an attacker can exploit this]
-   Likelihood: High / Medium / Low
-   Impact: Critical / High / Medium / Low
-   Existing protection: [What is already in place]
-   Gaps: [What is potentially missing]
-
-2. [Attack vector #2] ...
-3. [Attack vector #3] ...
-```
-
-**Common attack vectors in multi-tenant .NET applications:**
 - **Tenant leakage** — user sees data from another tenant
 - **IDOR** — user manipulates ID in URL to access others' resources
 - **Privilege escalation** — regular user performs admin operations
@@ -205,33 +184,110 @@ For **each new feature**, identify the **three most likely attack vectors**:
 
 ---
 
-## Report format
+## 5. Closed rule catalogue (REQUIRED `ruleId` for every finding)
 
-For each finding:
+Every finding MUST carry exactly one `ruleId` from this closed list. The `ruleId` is part of a
+finding's stable identity across pushes, so never invent new IDs — pick the closest match.
+
+| ruleId | Covers |
+|--------|--------|
+| `SEC-INPUT-VALIDATION`   | Missing/insufficient request validation, length/ID/Guid checks |
+| `SEC-DESERIALIZATION`    | Unsafe deserialization of untrusted input |
+| `SEC-MASS-ASSIGNMENT`    | Over-posting / binding EF entities directly |
+| `SEC-AUTHZ-MISSING`      | Missing/incorrect authorization, wrong role/policy, unjustified `AllowAnonymous` |
+| `SEC-TENANT-ISOLATION`   | Missing tenant filter (EF or Dapper), cross-tenant data exposure |
+| `SEC-IDOR`               | Object fetched/mutated by ID without ownership/tenant check |
+| `SEC-EVENT-AUTHZ`        | CAP/message handler missing tenant context or idempotency (security angle) |
+| `SEC-SQL-INJECTION`      | Raw SQL/string concatenation, unparameterized Dapper, `FromSqlRaw` |
+| `SEC-LOG-INJECTION`      | User input in non-structured log calls |
+| `SEC-PII-EXPOSURE`       | PII/personal data written to logs or telemetry |
+| `SEC-HEADER-INJECTION`   | Unsanitized user input into HTTP headers |
+| `SEC-PATH-TRAVERSAL`     | File paths built from user input without full-path validation |
+| `SEC-ERROR-HANDLING`     | Swallowed exceptions, internal detail leakage, missing error logging |
+| `SEC-CANCELLATION`       | Missing `CancellationToken` propagation (DoS vector) |
+| `SEC-FILE-UPLOAD`        | Missing type/MIME/size validation, temp-file cleanup |
+| `SEC-SAS-TOKEN`          | Insecure SAS/presigned URL (no expiry, broad perms, account key) |
+| `SEC-SECRET-EXPOSURE`    | Hardcoded secrets/connection strings/keys |
+| `SEC-AUDIT-LOGGING`      | Sensitive operation without audit logging |
+| `SEC-JWT-CONFIG`         | Weak JWT/auth configuration (shared infra) |
+| `SEC-CORS`               | Permissive CORS configuration |
+| `SEC-RATE-LIMIT`         | Missing rate limiting on public endpoints |
+
+---
+
+## 6. Stable identity & re-validation (convergence contract)
+
+The workflow tracks findings across pushes so each issue is reported **once** and auto-resolved
+when fixed. Your output is what makes this converge — follow it exactly.
+
+### 6.1 Three identity fields (REQUIRED on every finding)
+
+- `ruleId` — from the catalogue in §5.
+- `symbol` — the enclosing method / class / endpoint / type. **Never a line number.**
+- `evidenceAnchor` — a short, stable anchor for the *specific* risky construct, so two distinct
+  issues of the same rule in the same method stay distinct. Use the sink/callee, route,
+  command/query/event type, or parameter. Examples:
+  - `GetProjectEndpoint:projectId->FirstOrDefaultAsync` (IDOR target)
+  - `UploadModelEndpoint:formFile->BlobClient.UploadAsync` (file upload)
+  - `ProjectQuery:tenantId-missing-WHERE` (Dapper tenant filter)
+
+Keep these three fields **deterministic**: the same issue must produce the same three values on
+every run, even after unrelated lines shift.
+
+### 6.2 Re-validate existing findings FIRST
+
+The prompt gives you `OPEN_FINDINGS_JSON` — findings already reported on this PR. Before looking
+for new issues, read the current code for each and emit a `revalidations` entry with the same
+`fingerprint` and a `status`:
+
+- `still-present` — the issue still exists.
+- `fixed` — you **confirmed by reading the code** that it is gone.
+- `uncertain` — you cannot tell from the current code.
+
+Only use `fixed` when you have actually verified the fix. If unsure, use `uncertain` — never
+guess `fixed`, because that wrongly closes a real vulnerability.
+
+---
+
+## 7. Output contract
+
+Emit ONLY a JSON document between the EXACT marker lines (each on its own line):
 
 ```
-🔴 CRITICAL: [Short description]
-File: [filename:line number]
-Category: [Input validation / Authorization / Injection / Error handling / File handling]
-Attack scenario: [How this can be exploited]
-Suggestion: [Concrete code fix]
-
-🟠 HIGH: [Short description]
-File: [filename:line number]
-Category: [...]
-Risk: [What can go wrong]
-Suggestion: [Concrete code fix]
-
-🟡 MEDIUM: [Short description]
-File: [filename:line number]
-Category: [...]
-Suggestion: [Concrete code fix]
+<<<FINDINGS_JSON>>>
+{
+  "summary": "<short markdown summary incl. top assumptions/threats, max ~10 lines>",
+  "revalidations": [
+    { "fingerprint": "<from OPEN_FINDINGS_JSON>", "status": "still-present|fixed|uncertain", "reason": "<one line>" }
+  ],
+  "findings": [
+    {
+      "file": "path/from/repo/root.cs",
+      "line": 123,
+      "ruleId": "SEC-IDOR",
+      "symbol": "GetProjectEndpoint",
+      "evidenceAnchor": "projectId->FirstOrDefaultAsync",
+      "severity": "critical|high|medium|low|info",
+      "title": "Short title",
+      "message": "Attack scenario + concrete fix recommendation.",
+      "fixPlan": ["Step 1: ...", "Step 2: ...", "Step 3: 'Add or update the matching test in ...'"]
+    }
+  ],
+  "remediationPlan": "<markdown block — copy-paste-ready prompt to fix ALL findings>"
+}
+<<<END_FINDINGS_JSON>>>
 ```
 
-Sort findings by severity: 🔴 first, then 🟠, then 🟡.
+If there are no existing and no new findings:
 
-Always conclude with:
-1. **Security findings summary** — count per category and severity
-2. **Security assumptions** — all identified assumptions
-3. **Threat model** — top 3 attack vectors
-4. **Overall assessment** — approved / needs changes / critical stop
+```
+<<<FINDINGS_JSON>>>
+{"summary":"No security issues found.","revalidations":[],"findings":[],"remediationPlan":""}
+<<<END_FINDINGS_JSON>>>
+```
+
+**Notes:**
+- Each finding's `file` + `line` MUST point at an added or modified RIGHT-side line in `pr.diff`.
+- `ruleId`, `symbol`, `evidenceAnchor` are mandatory and define stable identity.
+- Sort findings by severity: critical first.
+- Markers and the JSON between them are the only contract.
