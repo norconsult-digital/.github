@@ -106,7 +106,7 @@
       if: ${{ needs.prepare.outputs.useShards == 'false' }}
       runs-on: ${{ inputs.vmImage }}
       environment: ${{ inputs.environment }}
-      name: .NET Integration Test Wihtout Shards
+      name: .NET Integration Test Without Shards
 
       steps:
         - name: Checkout repository
