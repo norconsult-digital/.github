@@ -33,6 +33,10 @@ jobs:
   load-testing-jobs:
     name: Load Test
     runs-on: ubuntu-latest
+    env:
+      # Remove once azure/load-testing ships a node24-compatible release.
+      # See https://github.com/Azure/load-testing/issues/155
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
       - name: Checkout GitHub Actions
         uses: actions/checkout@v5
