@@ -57,6 +57,21 @@ on:
         required: false
         type: string
         default: ubuntu-latest
+      enableNugetCache:
+        description: Enable NuGet package caching to speed up restores
+        required: false
+        type: boolean
+        default: false
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
+        required: false
+        type: string
+        default: ""
+      enableDockerCache:
+        description: Enable Docker BuildKit layer caching via GitHub Actions cache
+        required: false
+        type: boolean
+        default: false
     secrets:
       NUGET_CONFIG:
         required: false
@@ -76,6 +91,8 @@ jobs:
       dotnetVersion: ${{ inputs.dotnetVersion }}
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
+      enableNugetCache: ${{ inputs.enableNugetCache }}
+      nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   create_migration_bundle:
     if: ${{ inputs.migrationBundleArguments != '' }}
@@ -87,7 +104,9 @@ jobs:
       migrationBundleAppSettingsPath: ${{ inputs.migrationBundleAppSettingsPath }}
       dotnetVersion: ${{ inputs.dotnetVersion }}
       ostype: ${{ inputs.ostype }}
-      
+      enableNugetCache: ${{ inputs.enableNugetCache }}
+      nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
+
   build_docker_image:
     needs: [test, create_migration_bundle]
     if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
@@ -102,3 +121,4 @@ jobs:
       dockerFile: ${{ inputs.dockerFile }}
       repositoryName: ${{ inputs.repositoryName }}
       dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
+      enableDockerCache: ${{ inputs.enableDockerCache }}

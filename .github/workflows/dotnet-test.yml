@@ -3,7 +3,7 @@ name: .NET Test
 permissions:
   id-token: write
   contents: read
-  packages: read  
+  packages: read
 
 on:
   workflow_call:
@@ -39,6 +39,16 @@ on:
         required: false
         type: string
         default: ""
+      enableNugetCache:
+        description: Enable NuGet package caching to speed up restores
+        required: false
+        type: boolean
+        default: false
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
+        required: false
+        type: string
+        default: ""
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}
@@ -60,6 +70,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
+          cache: ${{ inputs.enableNugetCache }}
+          cache-dependency-path: ${{ inputs.nugetCacheDependencyPath }}
 
       - name: Azure Login via OIDC
         if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}

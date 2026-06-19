@@ -29,6 +29,11 @@ on:
         required: false
         default: "container-image"
         type: string
+      enableDockerCache:
+        description: Enable Docker BuildKit layer caching via GitHub Actions cache
+        required: false
+        type: boolean
+        default: false
     secrets:
       NUGET_CONFIG:
         required: false
@@ -81,6 +86,8 @@ jobs:
           tags: ${{ inputs.repositoryName }}:tmp
           build-args: ${{ inputs.dockerBuildArguments }}
           load: true
+          cache-from: ${{ inputs.enableDockerCache && 'type=gha' || '' }}
+          cache-to: ${{ inputs.enableDockerCache && 'type=gha,mode=max' || '' }}
           secrets: |
             nuget_config=${{ secrets.NUGET_CONFIG }}
             npmrc_config=${{ secrets.NPMRC_CONFIG }}
