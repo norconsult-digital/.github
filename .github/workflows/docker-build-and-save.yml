@@ -34,10 +34,11 @@ on:
         required: false
         type: boolean
         default: false
-    secrets:
-      NUGET_CONFIG:
+      nugetConfigPath:
+        description: Path to NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
         required: false
-        description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during restore only)"
+        type: string
+    secrets:
       NPMRC_CONFIG:
         required: false
         description: "Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)"
@@ -72,6 +73,17 @@ jobs:
               }
           }
 
+      - name: Prepare NuGet.Config for Docker secret mount
+        shell: pwsh
+        run: |
+          if ("${{ inputs.nugetConfigPath }}" -eq "") {
+            '<?xml version="1.0" encoding="utf-8"?><configuration></configuration>' | Set-Content ./.nuget-config-for-docker
+          } elseif (Test-Path "${{ inputs.nugetConfigPath }}") {
+            Copy-Item "${{ inputs.nugetConfigPath }}" ./.nuget-config-for-docker
+          } else {
+            Write-Error "nugetConfigPath '${{ inputs.nugetConfigPath }}' not found. Set to empty string if no private feeds are needed."
+          }
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -89,7 +101,7 @@ jobs:
           cache-from: ${{ inputs.enableDockerCache && 'type=gha' || '' }}
           cache-to: ${{ inputs.enableDockerCache && 'type=gha,mode=max' || '' }}
           secret-files: |
-            nuget_config=./NuGet.Config
+            nuget_config=./.nuget-config-for-docker
           secrets: |
             npmrc_config=${{ secrets.NPMRC_CONFIG }}
 

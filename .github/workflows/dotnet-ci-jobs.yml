@@ -68,9 +68,6 @@ on:
         type: boolean
         default: false
     secrets:
-      NUGET_CONFIG:
-        required: false
-        description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during Docker restore only)"
       NPMRC_CONFIG:
         required: false
         description: "Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)"
@@ -105,7 +102,6 @@ jobs:
     if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
     uses: ./.github/workflows/docker-build-and-save.yml
     secrets:
-      NUGET_CONFIG: ${{ secrets.NUGET_CONFIG }}
       NPMRC_CONFIG: ${{ secrets.NPMRC_CONFIG }}
     with:
       vmImage: ${{ inputs.vmImage }}
@@ -115,3 +111,4 @@ jobs:
       repositoryName: ${{ inputs.repositoryName }}
       dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
       enableDockerCache: ${{ inputs.enableDockerCache }}
+      nugetConfigPath: ${{ inputs.nugetConfigPath }}
