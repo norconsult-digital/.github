@@ -23,7 +23,6 @@ on:
       gitRepo:
         required: false
         type: string
-        default: ""
       testProjects:
         required: true
         type: string
@@ -34,16 +33,13 @@ on:
       azureServicePrincipalClientId:
         required: false
         type: string
-        default: ""
       azureTenantId:
         required: false
         type: string
-        default: ""
       nugetCacheDependencyPath:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
-        default: ""
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}

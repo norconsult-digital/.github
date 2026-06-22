@@ -7,12 +7,10 @@ on:
         description: Git Repository
         required: false
         type: string
-        default: ""
       nugetConfigPath:
         description: Path to NuGet.Config
         required: false
         type: string
-        default: ""
       migrationBundleArguments:
         description: Arguments for the EF migrations bundle command
         required: true
@@ -40,7 +38,6 @@ on:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
-        default: ""
 
 jobs:
   migrations-bundle-create:

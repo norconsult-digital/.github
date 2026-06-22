@@ -47,11 +47,9 @@ on:
       azureServicePrincipalClientId:
         required: false
         type: string
-        default: ""
       azureTenantId:
         required: false
         type: string
-        default: ""
       ostype:
         description: Operating system type for the migrations bundle runtime
         required: false
@@ -61,7 +59,6 @@ on:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
-        default: ""
       enableDockerCache:
         description: Enable Docker BuildKit layer caching via GitHub Actions cache
         required: false

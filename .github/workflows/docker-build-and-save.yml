@@ -35,7 +35,7 @@ on:
         type: boolean
         default: false
       nugetConfigPath:
-        description: Path to NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
+        description: Directory containing NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
         required: false
         type: string
     secrets:
@@ -76,12 +76,13 @@ jobs:
       - name: Prepare NuGet.Config for Docker secret mount
         shell: pwsh
         run: |
-          if ("${{ inputs.nugetConfigPath }}" -eq "") {
+          $configDir = "${{ inputs.nugetConfigPath }}"
+          if ($configDir -eq "") {
             '<?xml version="1.0" encoding="utf-8"?><configuration></configuration>' | Set-Content ./.nuget-config-for-docker
-          } elseif (Test-Path "${{ inputs.nugetConfigPath }}") {
-            Copy-Item "${{ inputs.nugetConfigPath }}" ./.nuget-config-for-docker
+          } elseif (Test-Path "$configDir/NuGet.Config") {
+            Copy-Item "$configDir/NuGet.Config" ./.nuget-config-for-docker
           } else {
-            Write-Error "nugetConfigPath '${{ inputs.nugetConfigPath }}' not found. Set to empty string if no private feeds are needed."
+            Write-Error "NuGet.Config not found in '$configDir'. Set nugetConfigPath to empty string if no private feeds are needed."
           }
 
       - name: Set up QEMU
