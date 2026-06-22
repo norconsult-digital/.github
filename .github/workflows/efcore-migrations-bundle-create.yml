@@ -36,11 +36,6 @@ on:
         required: false
         type: string
         default: ubuntu-latest
-      enableNugetCache:
-        description: Enable NuGet package caching to speed up restores
-        required: false
-        type: boolean
-        default: false
       nugetCacheDependencyPath:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
@@ -67,7 +62,7 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
-          cache: ${{ inputs.enableNugetCache }}
+          cache: ${{ inputs.nugetCacheDependencyPath != '' }}
           cache-dependency-path: ${{ inputs.nugetCacheDependencyPath }}
 
       - name: Install EF tools

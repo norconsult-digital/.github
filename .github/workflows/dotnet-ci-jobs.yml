@@ -57,11 +57,6 @@ on:
         required: false
         type: string
         default: ubuntu-latest
-      enableNugetCache:
-        description: Enable NuGet package caching to speed up restores
-        required: false
-        type: boolean
-        default: false
       nugetCacheDependencyPath:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
@@ -91,7 +86,6 @@ jobs:
       dotnetVersion: ${{ inputs.dotnetVersion }}
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
-      enableNugetCache: ${{ inputs.enableNugetCache }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   create_migration_bundle:
@@ -104,7 +98,6 @@ jobs:
       migrationBundleAppSettingsPath: ${{ inputs.migrationBundleAppSettingsPath }}
       dotnetVersion: ${{ inputs.dotnetVersion }}
       ostype: ${{ inputs.ostype }}
-      enableNugetCache: ${{ inputs.enableNugetCache }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   build_docker_image:
