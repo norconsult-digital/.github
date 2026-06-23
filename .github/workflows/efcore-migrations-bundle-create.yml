@@ -23,11 +23,11 @@ on:
         description: .NET SDK version to use
         required: true
         type: string
-        default: "7.*"
+        default: '7.*'
       projectName:
         description: Name of the project (used for artifact naming)
         required: false
-        default: "migrations-bundle"
+        default: 'migrations-bundle'
         type: string
       ostype:
         description: Operating system type for the migrations bundle runtime
@@ -38,6 +38,10 @@ on:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
 
 jobs:
   migrations-bundle-create:
@@ -46,14 +50,17 @@ jobs:
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Default Checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
         uses: actions/setup-dotnet@v5

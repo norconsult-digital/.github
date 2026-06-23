@@ -5,29 +5,29 @@ on:
     inputs:
       vmImage:
         type: string
-        default: "ubuntu-latest"
+        default: 'ubuntu-latest'
         required: false
       dockerFile:
         required: true
         type: string
       dockerBuildContext:
         required: false
-        default: "."
+        default: '.'
         type: string
       dockerBuildArguments:
         required: false
-        default: ""
+        default: ''
         type: string
       repositoryName:
         required: true
         type: string
       gitRepo:
         required: false
-        default: ""
+        default: ''
         type: string
       artifactName:
         required: false
-        default: "container-image"
+        default: 'container-image'
         type: string
       enableDockerCache:
         description: Enable Docker BuildKit layer caching via GitHub Actions cache
@@ -38,10 +38,19 @@ on:
         description: Directory containing NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
         required: false
         type: string
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
+      dockerCacheScope:
+        description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
+        required: false
+        type: string
+        default: 'buildkit'
     secrets:
       NPMRC_CONFIG:
         required: false
-        description: "Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)"
+        description: 'Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)'
 
 jobs:
   docker-build-and-save:
@@ -50,14 +59,17 @@ jobs:
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Default Checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Replace GitHub Packages feed token in NuGet.Config files
         shell: pwsh
@@ -99,8 +111,8 @@ jobs:
           tags: ${{ inputs.repositoryName }}:tmp
           build-args: ${{ inputs.dockerBuildArguments }}
           load: true
-          cache-from: ${{ inputs.enableDockerCache && 'type=gha' || '' }}
-          cache-to: ${{ inputs.enableDockerCache && 'type=gha,mode=max' || '' }}
+          cache-from: ${{ inputs.enableDockerCache && format('type=gha,scope={0}', inputs.dockerCacheScope) || '' }}
+          cache-to: ${{ inputs.enableDockerCache && format('type=gha,scope={0},mode=max', inputs.dockerCacheScope) || '' }}
           secret-files: |
             nuget_config=./.nuget-config-for-docker
           secrets: |

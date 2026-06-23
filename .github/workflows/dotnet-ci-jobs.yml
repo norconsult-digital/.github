@@ -10,7 +10,7 @@ on:
     inputs:
       vmImage:
         type: string
-        default: "ubuntu-latest"
+        default: 'ubuntu-latest'
         required: false
       gitRepo:
         required: false
@@ -20,14 +20,14 @@ on:
         type: string
       dotnetVersion:
         required: false
-        default: "7.*"
+        default: '7.*'
         type: string
       testProjects:
         required: false
         type: string
       dockerBuildContext:
         required: false
-        default: "."
+        default: '.'
         type: string
       dockerFile:
         required: false
@@ -64,10 +64,19 @@ on:
         required: false
         type: boolean
         default: false
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
+      dockerCacheScope:
+        description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
+        required: false
+        type: string
+        default: 'buildkit'
     secrets:
       NPMRC_CONFIG:
         required: false
-        description: "Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)"
+        description: 'Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)'
 
 jobs:
   test:
@@ -81,6 +90,7 @@ jobs:
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
+      sparseCheckout: ${{ inputs.sparseCheckout }}
 
   create_migration_bundle:
     if: ${{ inputs.migrationBundleArguments != '' }}
@@ -93,6 +103,7 @@ jobs:
       dotnetVersion: ${{ inputs.dotnetVersion }}
       ostype: ${{ inputs.ostype }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
+      sparseCheckout: ${{ inputs.sparseCheckout }}
 
   build_docker_image:
     needs: [test, create_migration_bundle]
@@ -109,3 +120,5 @@ jobs:
       dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
       enableDockerCache: ${{ inputs.enableDockerCache }}
       nugetConfigPath: ${{ inputs.nugetConfigPath }}
+      sparseCheckout: ${{ inputs.sparseCheckout }}
+      dockerCacheScope: ${{ inputs.dockerCacheScope }}

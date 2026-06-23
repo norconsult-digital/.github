@@ -11,15 +11,15 @@ on:
       environment:
         required: false
         type: string
-        default: "integration-test"
+        default: 'integration-test'
       vmImage:
         type: string
-        default: "ubuntu-latest"
+        default: 'ubuntu-latest'
         required: false
       buildConfiguration:
         required: false
         type: string
-        default: "Release"
+        default: 'Release'
       gitRepo:
         required: false
         type: string
@@ -28,7 +28,7 @@ on:
         type: string
       dotnetVersion:
         required: false
-        default: "7.*"
+        default: '7.*'
         type: string
       azureServicePrincipalClientId:
         required: false
@@ -40,6 +40,10 @@ on:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}
@@ -49,13 +53,16 @@ jobs:
     steps:
       - name: Checkout repository
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Default checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
         uses: actions/setup-dotnet@v4
@@ -136,4 +143,4 @@ jobs:
           name: .NET Tests
           path: test-results/*.trx
           reporter: dotnet-trx
-          output-to: "step-summary"
+          output-to: 'step-summary'
