@@ -60,6 +60,7 @@ jobs:
           sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Default checkout
+        if: ${{ inputs.gitRepo == '' }}
         uses: actions/checkout@v7
         with:
           sparse-checkout: ${{ inputs.sparseCheckout }}
