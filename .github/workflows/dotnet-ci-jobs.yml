@@ -59,11 +59,6 @@ on:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
-      enableDockerCache:
-        description: Enable Docker BuildKit layer caching via GitHub Actions cache
-        required: false
-        type: boolean
-        default: false
       sparseCheckout:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
         required: false
@@ -72,7 +67,6 @@ on:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
         type: string
-        default: 'buildkit'
     secrets:
       NPMRC_CONFIG:
         required: false
@@ -118,7 +112,6 @@ jobs:
       dockerFile: ${{ inputs.dockerFile }}
       repositoryName: ${{ inputs.repositoryName }}
       dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
-      enableDockerCache: ${{ inputs.enableDockerCache }}
       nugetConfigPath: ${{ inputs.nugetConfigPath }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
       dockerCacheScope: ${{ inputs.dockerCacheScope }}

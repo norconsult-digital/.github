@@ -29,11 +29,6 @@ on:
         required: false
         default: 'container-image'
         type: string
-      enableDockerCache:
-        description: Enable Docker BuildKit layer caching via GitHub Actions cache
-        required: false
-        type: boolean
-        default: false
       nugetConfigPath:
         description: Directory containing NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
         required: false
@@ -46,7 +41,6 @@ on:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
         type: string
-        default: 'buildkit'
     secrets:
       NPMRC_CONFIG:
         required: false
@@ -111,8 +105,8 @@ jobs:
           tags: ${{ inputs.repositoryName }}:tmp
           build-args: ${{ inputs.dockerBuildArguments }}
           load: true
-          cache-from: ${{ inputs.enableDockerCache && format('type=gha,scope={0}', inputs.dockerCacheScope) || '' }}
-          cache-to: ${{ inputs.enableDockerCache && format('type=gha,scope={0},mode=max', inputs.dockerCacheScope) || '' }}
+          cache-from: ${{ inputs.dockerCacheScope != '' && format('type=gha,scope={0}', inputs.dockerCacheScope) || '' }}
+          cache-to: ${{ inputs.dockerCacheScope != '' && format('type=gha,scope={0},mode=max', inputs.dockerCacheScope) || '' }}
           secret-files: |
             nuget_config=./.nuget-config-for-docker
           secrets: |
