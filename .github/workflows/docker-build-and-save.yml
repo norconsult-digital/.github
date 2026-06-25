@@ -98,7 +98,7 @@ jobs:
           load: true
           cache-from: ${{ inputs.dockerCacheScope != '' && format('type=gha,scope={0}', inputs.dockerCacheScope) || '' }}
           cache-to: ${{ inputs.dockerCacheScope != '' && format('type=gha,scope={0},mode=max', inputs.dockerCacheScope) || '' }}
-          secret-files: |
+          secrets: |
             nuget_config=${{ secrets.NUGET_CONFIG }}
             npmrc_config=${{ secrets.NPMRC_CONFIG }}
 
