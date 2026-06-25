@@ -7,12 +7,10 @@ on:
         description: Git Repository
         required: false
         type: string
-        default: ""
       nugetConfigPath:
         description: Path to NuGet.Config
         required: false
         type: string
-        default: ""
       migrationBundleArguments:
         description: Arguments for the EF migrations bundle command
         required: true
@@ -25,18 +23,25 @@ on:
         description: .NET SDK version to use
         required: true
         type: string
-        default: "7.*"
+        default: '7.*'
       projectName:
         description: Name of the project (used for artifact naming)
         required: false
-        default: "migrations-bundle"
+        default: 'migrations-bundle'
         type: string
       ostype:
         description: Operating system type for the migrations bundle runtime
         required: false
         type: string
         default: ubuntu-latest
-
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
+        required: false
+        type: string
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
 
 jobs:
   migrations-bundle-create:
@@ -45,19 +50,24 @@ jobs:
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Default Checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
+          cache: ${{ inputs.nugetCacheDependencyPath != '' }}
+          cache-dependency-path: ${{ inputs.nugetCacheDependencyPath }}
 
       - name: Install EF tools
         run: dotnet tool install -g dotnet-ef --version ${{ inputs.dotnetVersion }}
@@ -66,7 +76,7 @@ jobs:
         run: mkdir -p migrations-bundle
 
       - name: Copy NuGet.Config
-        if: ${{ inputs.nugetConfigPath != '' }}
+        if: ${{ inputs.nugetConfigPath != '' && inputs.nugetConfigPath != '.' }}
         run: cp -v ${{ inputs.nugetConfigPath }}/NuGet.Config $GITHUB_WORKSPACE
 
       - name: Replace GitHub Packages feed token in NuGet.Config files

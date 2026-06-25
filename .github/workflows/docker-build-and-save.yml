@@ -5,37 +5,46 @@ on:
     inputs:
       vmImage:
         type: string
-        default: "ubuntu-latest"
+        default: 'ubuntu-latest'
         required: false
       dockerFile:
         required: true
         type: string
       dockerBuildContext:
         required: false
-        default: "."
+        default: '.'
         type: string
       dockerBuildArguments:
         required: false
-        default: ""
+        default: ''
         type: string
       repositoryName:
         required: true
         type: string
       gitRepo:
         required: false
-        default: ""
+        default: ''
         type: string
       artifactName:
         required: false
-        default: "container-image"
+        default: 'container-image'
+        type: string
+      nugetConfigPath:
+        description: Directory containing NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
+        required: false
+        type: string
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
+      dockerCacheScope:
+        description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
+        required: false
         type: string
     secrets:
-      NUGET_CONFIG:
-        required: false
-        description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during restore only)"
       NPMRC_CONFIG:
         required: false
-        description: "Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)"
+        description: 'Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)'
 
 jobs:
   docker-build-and-save:
@@ -44,14 +53,17 @@ jobs:
     steps:
       - name: Conditional Checkout
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Default Checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Replace GitHub Packages feed token in NuGet.Config files
         shell: pwsh
@@ -67,22 +79,37 @@ jobs:
               }
           }
 
+      - name: Prepare NuGet.Config for Docker secret mount
+        shell: pwsh
+        run: |
+          $configDir = "${{ inputs.nugetConfigPath }}"
+          if ($configDir -eq "") {
+            '<?xml version="1.0" encoding="utf-8"?><configuration></configuration>' | Set-Content ./.nuget-config-for-docker
+          } elseif (Test-Path "$configDir/NuGet.Config") {
+            Copy-Item "$configDir/NuGet.Config" ./.nuget-config-for-docker
+          } else {
+            Write-Error "NuGet.Config not found in '$configDir'. Set nugetConfigPath to empty string if no private feeds are needed."
+          }
+
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.dockerBuildContext }}
           file: ${{ inputs.dockerFile }}
           tags: ${{ inputs.repositoryName }}:tmp
           build-args: ${{ inputs.dockerBuildArguments }}
           load: true
+          cache-from: ${{ inputs.dockerCacheScope != '' && format('type=gha,scope={0}', inputs.dockerCacheScope) || '' }}
+          cache-to: ${{ inputs.dockerCacheScope != '' && format('type=gha,scope={0},mode=max', inputs.dockerCacheScope) || '' }}
+          secret-files: |
+            nuget_config=./.nuget-config-for-docker
           secrets: |
-            nuget_config=${{ secrets.NUGET_CONFIG }}
             npmrc_config=${{ secrets.NPMRC_CONFIG }}
 
       - name: Save Docker Image

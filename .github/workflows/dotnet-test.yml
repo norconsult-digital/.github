@@ -3,7 +3,7 @@ name: .NET Test
 permissions:
   id-token: write
   contents: read
-  packages: read  
+  packages: read
 
 on:
   workflow_call:
@@ -11,34 +11,39 @@ on:
       environment:
         required: false
         type: string
-        default: "integration-test"
+        default: 'integration-test'
       vmImage:
         type: string
-        default: "ubuntu-latest"
+        default: 'ubuntu-latest'
         required: false
       buildConfiguration:
         required: false
         type: string
-        default: "Release"
+        default: 'Release'
       gitRepo:
         required: false
         type: string
-        default: ""
       testProjects:
         required: true
         type: string
       dotnetVersion:
         required: false
-        default: "7.*"
+        default: '7.*'
         type: string
       azureServicePrincipalClientId:
         required: false
         type: string
-        default: ""
       azureTenantId:
         required: false
         type: string
-        default: ""
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
+        required: false
+        type: string
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}
@@ -48,22 +53,28 @@ jobs:
     steps:
       - name: Checkout repository
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Default checkout
-        uses: actions/checkout@v5
+        if: ${{ inputs.gitRepo == '' }}
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
+          cache: ${{ inputs.nugetCacheDependencyPath != '' }}
+          cache-dependency-path: ${{ inputs.nugetCacheDependencyPath }}
 
       - name: Azure Login via OIDC
         if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ inputs.azureServicePrincipalClientId }}
           tenant-id: ${{ inputs.azureTenantId }}
@@ -128,9 +139,9 @@ jobs:
 
       - name: Report test results
         if: always() && env.present_test_summary == 'true'
-        uses: phoenix-actions/test-reporting@v15
+        uses: phoenix-actions/test-reporting@v16
         with:
           name: .NET Tests
           path: test-results/*.trx
           reporter: dotnet-trx
-          output-to: "step-summary"
+          output-to: 'step-summary'
