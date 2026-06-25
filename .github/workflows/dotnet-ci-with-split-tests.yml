@@ -10,7 +10,7 @@ on:
     inputs:
       vmImage:
         type: string
-        default: "ubuntu-latest"
+        default: 'ubuntu-latest'
         required: false
       gitRepo:
         required: false
@@ -20,28 +20,28 @@ on:
         type: string
       dotnetVersion:
         required: false
-        default: "7.*"
+        default: '7.*'
         type: string
       unitTestProjects:
         required: false
         type: string
-        default: ""
+        default: ''
       architectureTestProjects:
         required: false
         type: string
-        default: ""
+        default: ''
       integrationTestProject:
-        description: "Single integration test project to run, optionally sharded by integrationShardPlanPath"
+        description: 'Single integration test project to run, optionally sharded by integrationShardPlanPath'
         required: false
         type: string
-        default: ""
+        default: ''
       integrationShardPlanPath:
         required: false
         type: string
-        default: ""
+        default: ''
       dockerBuildContext:
         required: false
-        default: "."
+        default: '.'
         type: string
       dockerFile:
         required: false
@@ -61,20 +61,32 @@ on:
       azureServicePrincipalClientId:
         required: false
         type: string
-        default: ""
+        default: ''
       azureTenantId:
         required: false
         type: string
-        default: ""
+        default: ''
       ostype:
         description: Operating system type for the migrations bundle runtime
         required: false
         type: string
         default: ubuntu-latest
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
+        required: false
+        type: string
+      sparseCheckout:
+        description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
+      dockerCacheScope:
+        description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
+        required: false
+        type: string
     secrets:
       NUGET_CONFIG:
         required: false
-        description: "Full NuGet.Config content for private package sources (mounted as BuildKit secret during Docker restore only)"
+        description: 'Full NuGet.Config content for private package sources (mounted as BuildKit secret during Docker restore only)'
 jobs:
   unit_tests:
     if: ${{ inputs.unitTestProjects != '' }}
@@ -89,6 +101,8 @@ jobs:
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
       artifactName: dotnet-unit-test-results
+      sparseCheckout: ${{ inputs.sparseCheckout }}
+      nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   architecture_tests:
     if: ${{ inputs.architectureTestProjects != '' }}
@@ -103,6 +117,8 @@ jobs:
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
       artifactName: dotnet-architecture-test-results
+      sparseCheckout: ${{ inputs.sparseCheckout }}
+      nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   integration_tests:
     if: ${{ inputs.integrationTestProject != '' }}
@@ -117,6 +133,7 @@ jobs:
       azureServicePrincipalClientId: ${{ inputs.azureServicePrincipalClientId }}
       azureTenantId: ${{ inputs.azureTenantId }}
       artifactName: dotnet-integration-test-results
+      sparseCheckout: ${{ inputs.sparseCheckout }}
 
   test_summary:
     needs: [unit_tests, integration_tests, architecture_tests]
@@ -131,11 +148,11 @@ jobs:
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Default checkout
         if: ${{ inputs.gitRepo == '' }}
         uses: actions/checkout@v5
-        
+
       - name: Download test result artifacts
         uses: actions/download-artifact@v4
         with:
@@ -165,7 +182,7 @@ jobs:
           name: .NET Tests
           path: all-test-results/**/*.trx
           reporter: dotnet-trx
-          output-to: "step-summary"
+          output-to: 'step-summary'
 
   create_migration_bundle:
     if: ${{ inputs.migrationBundleArguments != '' }}
@@ -177,14 +194,22 @@ jobs:
       migrationBundleAppSettingsPath: ${{ inputs.migrationBundleAppSettingsPath }}
       dotnetVersion: ${{ inputs.dotnetVersion }}
       ostype: ${{ inputs.ostype }}
+      sparseCheckout: ${{ inputs.sparseCheckout }}
+      nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   build_docker_image:
-    needs: [unit_tests, architecture_tests, integration_tests, create_migration_bundle]
+    needs:
+      [
+        unit_tests,
+        architecture_tests,
+        integration_tests,
+        create_migration_bundle,
+      ]
     if: ${{ always() && inputs.dockerFile != ''
-        && (needs.unit_tests.result == 'success' || needs.unit_tests.result == 'skipped')
-        && (needs.architecture_tests.result == 'success' || needs.architecture_tests.result == 'skipped')
-        && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')
-        && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
+      && (needs.unit_tests.result == 'success' || needs.unit_tests.result == 'skipped')
+      && (needs.architecture_tests.result == 'success' || needs.architecture_tests.result == 'skipped')
+      && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')
+      && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
     uses: ./.github/workflows/docker-build-and-save.yml
     secrets:
       NUGET_CONFIG: ${{ secrets.NUGET_CONFIG }}
@@ -195,3 +220,5 @@ jobs:
       dockerFile: ${{ inputs.dockerFile }}
       repositoryName: ${{ inputs.repositoryName }}
       dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
+      sparseCheckout: ${{ inputs.sparseCheckout }}
+      dockerCacheScope: ${{ inputs.dockerCacheScope }}
