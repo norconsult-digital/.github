@@ -71,22 +71,19 @@ on:
         required: false
         type: string
         default: ubuntu-latest
-      nugetCacheDependencyPath:
-        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
-        required: false
-        type: string
       sparseCheckout:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
       dockerCacheScope:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
         type: string
-    secrets:
-      NUGET_CONFIG:
-        required: false
-        description: 'Full NuGet.Config content for private package sources (mounted as BuildKit secret during Docker restore only)'
+
 jobs:
   unit_tests:
     if: ${{ inputs.unitTestProjects != '' }}
@@ -134,6 +131,7 @@ jobs:
       azureTenantId: ${{ inputs.azureTenantId }}
       artifactName: dotnet-integration-test-results
       sparseCheckout: ${{ inputs.sparseCheckout }}
+      nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   test_summary:
     needs: [unit_tests, integration_tests, architecture_tests]
@@ -211,14 +209,13 @@ jobs:
       && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')
       && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
     uses: ./.github/workflows/docker-build-and-save.yml
-    secrets:
-      NUGET_CONFIG: ${{ secrets.NUGET_CONFIG }}
     with:
       vmImage: ${{ inputs.vmImage }}
       gitRepo: ${{ inputs.gitRepo }}
       dockerBuildContext: ${{ inputs.dockerBuildContext }}
       dockerFile: ${{ inputs.dockerFile }}
       repositoryName: ${{ inputs.repositoryName }}
+      nugetConfigPath: ${{ inputs.nugetConfigPath }}
       dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
       dockerCacheScope: ${{ inputs.dockerCacheScope }}

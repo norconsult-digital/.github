@@ -67,10 +67,6 @@ on:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
         type: string
-    secrets:
-      NPMRC_CONFIG:
-        required: false
-        description: 'Full .npmrc content for private npm registries (mounted as BuildKit secret during npm install only)'
 
 jobs:
   test:
@@ -103,8 +99,6 @@ jobs:
     needs: [test, create_migration_bundle]
     if: ${{ always() && inputs.dockerFile != '' && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.create_migration_bundle.result == 'success' || needs.create_migration_bundle.result == 'skipped') }}
     uses: ./.github/workflows/docker-build-and-save.yml
-    secrets:
-      NPMRC_CONFIG: ${{ secrets.NPMRC_CONFIG }}
     with:
       vmImage: ${{ inputs.vmImage }}
       gitRepo: ${{ inputs.gitRepo }}
