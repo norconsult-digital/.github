@@ -29,12 +29,12 @@ on:
         required: false
         default: 'container-image'
         type: string
-      nugetConfigPath:
-        description: Directory containing NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
-        required: false
-        type: string
       sparseCheckout:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
+      nugetConfigPath:
+        description: Directory containing NuGet.Config relative to repo root, mounted as a BuildKit secret during dotnet restore. Leave empty if no private NuGet feeds are needed.
         required: false
         type: string
       dockerCacheScope:

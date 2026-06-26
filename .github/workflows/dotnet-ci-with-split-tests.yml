@@ -71,12 +71,12 @@ on:
         required: false
         type: string
         default: ubuntu-latest
-      nugetCacheDependencyPath:
-        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
-        required: false
-        type: string
       sparseCheckout:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
+        required: false
+        type: string
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
       dockerCacheScope:
@@ -131,6 +131,7 @@ jobs:
       azureTenantId: ${{ inputs.azureTenantId }}
       artifactName: dotnet-integration-test-results
       sparseCheckout: ${{ inputs.sparseCheckout }}
+      nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
 
   test_summary:
     needs: [unit_tests, integration_tests, architecture_tests]
@@ -214,6 +215,7 @@ jobs:
       dockerBuildContext: ${{ inputs.dockerBuildContext }}
       dockerFile: ${{ inputs.dockerFile }}
       repositoryName: ${{ inputs.repositoryName }}
+      nugetConfigPath: ${{ inputs.nugetConfigPath }}
       dockerBuildArguments: ${{ inputs.dockerBuildArguments }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
       dockerCacheScope: ${{ inputs.dockerCacheScope }}

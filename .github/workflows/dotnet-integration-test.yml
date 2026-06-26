@@ -51,7 +51,10 @@ on:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
         required: false
         type: string
-        default: ''
+      nugetCacheDependencyPath:
+        description: Glob pattern for lock files used as cache key (scoped to relevant solution)
+        required: false
+        type: string
 
 jobs:
   prepare:
@@ -231,6 +234,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
+          cache: ${{ inputs.nugetCacheDependencyPath != '' }}
+          cache-dependency-path: ${{ inputs.nugetCacheDependencyPath }}
 
       - name: Azure Login via OIDC
         if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
