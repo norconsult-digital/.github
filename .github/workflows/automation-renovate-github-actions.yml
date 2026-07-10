@@ -1,0 +1,49 @@
+name: "[Automation] Renovate - update GitHub Actions dependencies"
+on:
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron: "0 6 * * 3" # 06:00 (UTC), wednesday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check_week:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if this is an odd or even week
+        id: check_week
+        run: |
+          week_num=$(date +'%V' | sed 's/^0*//')
+          echo "odd_week=$((week_num % 2))" >> "$GITHUB_OUTPUT"
+    outputs:
+      odd_week: ${{ steps.check_week.outputs.odd_week }}
+  deploy:
+    needs: check_week
+    if: needs.check_week.outputs.odd_week == '1' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Get token
+        id: get_token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_PRIVATE_KEY }}
+
+      - name: Self-hosted Renovate
+        uses: renovatebot/github-action@v46.1.18
+        with:
+          token: "${{ steps.get_token.outputs.token }}"
+        env:
+          RENOVATE_AUTODISCOVER: true
+          RENOVATE_PLATFORM: "github"
+          RENOVATE_INCLUDE_PATHS: |
+            [
+              ".github/workflows/**",
+              "workflow-templates/**"
+            ]
