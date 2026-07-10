@@ -1,0 +1,43 @@
+/*
+Run locally:
+docker run --rm \
+  -e DRY_RUN=true -e LOG_LEVEL=debug \
+  -e RENOVATE_PLATFORM=local \
+  -v "$PWD":/usr/src/app \
+  renovate/renovate
+*/
+{
+  "enabledManagers": [
+    "github-actions",
+  ],
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "pruneStaleBranches": false,
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "packageRules": [
+    // Disable patch updates
+    {
+      "matchManagers": [
+        "github-actions",
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "enabled": false
+    },
+    // Enable patch updates for certain resources
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "enabled": true
+    }
+  ]
+}
