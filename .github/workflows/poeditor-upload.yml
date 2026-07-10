@@ -57,7 +57,7 @@ jobs:
     name: POEditor Upload
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Determine package manager
         run: |

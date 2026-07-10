@@ -40,7 +40,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate GitHub App token for platform repo
         id: app-token
@@ -51,7 +51,7 @@ jobs:
           repositories: platform
 
       - name: Checkout platform repo for configuration files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: norconsult-digital/platform
           ref: main
@@ -202,7 +202,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
           
       - name: Download artifacts-from-portal
         uses: actions/download-artifact@v7

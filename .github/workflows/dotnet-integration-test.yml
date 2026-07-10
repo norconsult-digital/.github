@@ -67,13 +67,13 @@ jobs:
     steps:
       - name: Checkout repository
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Default checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Read shard plan
         id: read-plan
@@ -119,7 +119,7 @@ jobs:
     steps:
       - name: Checkout repository
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -127,7 +127,7 @@ jobs:
 
       - name: Default checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           sparse-checkout: ${{ inputs.sparseCheckout }}
 
@@ -218,7 +218,7 @@ jobs:
     steps:
       - name: Checkout repository
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -226,7 +226,7 @@ jobs:
 
       - name: Default checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           sparse-checkout: ${{ inputs.sparseCheckout }}
 
