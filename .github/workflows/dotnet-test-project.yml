@@ -88,7 +88,7 @@ jobs:
 
       - name: Azure Login via OIDC
         if: ${{ inputs.azureServicePrincipalClientId != '' && inputs.azureTenantId != '' }}
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ inputs.azureServicePrincipalClientId }}
           tenant-id: ${{ inputs.azureTenantId }}
