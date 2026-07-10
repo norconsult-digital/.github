@@ -47,6 +47,10 @@ on:
         required: false
       ACR_CACHE_DOCKER_PASSWORD:
         required: false
+      RENOVATE_GITHUB_APP_ID:
+        required: false
+      RENOVATE_GITHUB_APP_PRIVATE_KEY:
+        required: false
 
       # secret for copilot-usage-dashboard application
       GH_APP_ND_COPILOT_USAGE_DASHBOARD_PRIVATE_KEY:
@@ -98,6 +102,8 @@ jobs:
       TF_VAR_argo_cd_github_app_id: ${{ secrets.ARGO_CD_GITHUB_APP_ID }}
       TF_VAR_argo_cd_github_app_installation_id: ${{ secrets.ARGO_CD_GITHUB_APP_INSTALLATION_ID }}
       TF_VAR_argo_cd_github_app_private_key: ${{ secrets.ARGO_CD_GITHUB_APP_PRIVATE_KEY }}
+      TF_VAR_renovate_github_app_id: ${{ secrets.RENOVATE_GITHUB_APP_ID }}
+      TF_VAR_renovate_github_app_private_key: ${{ secrets.RENOVATE_GITHUB_APP_PRIVATE_KEY }}
 
       # ACR cache docker credentials
       TF_VAR_acr_cache_docker_username: ${{ secrets.ACR_CACHE_DOCKER_USERNAME }}
