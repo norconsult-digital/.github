@@ -84,7 +84,7 @@ jobs:
           echo "DEPLOYMENT_NAME=${{ inputs.deploymentBaseName }}-${BRANCH_NAME}-$DEPLOYMENT_TIMESTAMP" >> $GITHUB_ENV  
 
       - name: Log in with Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ inputs.azureServicePrincipalId }}
           tenant-id: "5546488e-16ae-4971-ba91-b12a928efaf8"
