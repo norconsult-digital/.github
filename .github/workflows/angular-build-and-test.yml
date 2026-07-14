@@ -30,7 +30,7 @@ jobs:
       npm_cache_key: ${{ github.workspace }}/s/${{ inputs.workspaceDir }}/package-lock.json
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           path: s
           fetch-depth: 0
