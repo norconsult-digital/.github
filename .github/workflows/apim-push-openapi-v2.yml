@@ -1,0 +1,142 @@
+# Imports an OpenAPI specification into Azure API Management.
+#
+# Replaces apim-push-openapi.yml. That one is left untouched so nothing currently calling it changes. It is
+# deleted once template-apim-deploy-orchestrator.yml — its only caller, in this repository — has been pointed
+# here; that cleanup is tracked in the platform repository under docs/apim-external-api/03-publisering-til-test.md.
+#
+# Differences from the template it replaces, all deliberate:
+#
+#   * The GitHub environment is an input. The old template hardcoded api-ops-non-prod, so a caller could not
+#     choose which instance to publish to. Environments are named after the workload environment — test,
+#     stage, prod — not the landing zone, per ADR-0004 in the platform repository.
+#   * SERVICE_URL replaces SERVICE_URL_NON_PROD, which was only ever a backend address and never non-prod
+#     specific.
+#   * API_PATH and DISPLAY_NAME are separate inputs. The old template passed API_NAME to --api-id, --path and
+#     --display-name at once, which cannot express ADR-0006: the resource name carries a product prefix
+#     (project-controls-estimation), the path uses a slash (project-controls/estimation), and the display name
+#     is written for customers (ISY Project Controls - Estimation). A resource name cannot contain a slash, so
+#     one value for all three is not a shortcut — it makes conforming names impossible.
+#   * The import waits and is verified. The old template used --no-wait, so the job reported success without
+#     knowing whether APIM accepted the specification.
+
+name: "[APIM] Import OpenAPI specification"
+
+on:
+  workflow_call:
+    inputs:
+      API_NAME:
+        required: true
+        type: string
+        description: "APIM resource name, e.g. project-controls-estimation"
+      SERVICE_URL:
+        required: true
+        type: string
+        description: "Backend the API in APIM points at"
+      ENVIRONMENT:
+        required: true
+        type: string
+        description: "GitHub environment holding the credentials and target instance, e.g. api-ops-test"
+      API_PATH:
+        required: false
+        type: string
+        default: ""
+        description: "URL path, e.g. project-controls/estimation. Defaults to API_NAME"
+      DISPLAY_NAME:
+        required: false
+        type: string
+        default: ""
+        description: "Name shown in the developer portal. Defaults to API_NAME"
+
+jobs:
+  import-openapi:
+    runs-on: private-ubuntu-runner
+    environment: ${{ inputs.ENVIRONMENT }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Resolve path and display name
+        id: names
+        shell: bash
+        run: |
+          api_path="${{ inputs.API_PATH }}"
+          display_name="${{ inputs.DISPLAY_NAME }}"
+          [ -z "$api_path" ] && api_path="${{ inputs.API_NAME }}"
+          [ -z "$display_name" ] && display_name="${{ inputs.API_NAME }}"
+          echo "api_path=$api_path" >> "$GITHUB_OUTPUT"
+          echo "display_name=$display_name" >> "$GITHUB_OUTPUT"
+          echo "Resource name: ${{ inputs.API_NAME }}"
+          echo "Path:          $api_path"
+          echo "Display name:  $display_name"
+
+      - name: Download OpenAPI artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.API_NAME }}-openapi
+          path: ./artifacts
+
+      - name: Validate the specification exists
+        shell: bash
+        run: |
+          file_path="./artifacts/${{ inputs.API_NAME }}-openapi.json"
+          if [ ! -f "$file_path" ]; then
+            echo "OpenAPI file not found at $file_path"
+            ls -R ./artifacts/
+            exit 1
+          fi
+          echo "Found $file_path ($(wc -c < "$file_path") bytes)"
+
+      - name: Lint the specification
+        continue-on-error: true
+        run: |
+          echo "Lint findings belong in the source API, not here — this step never blocks."
+          npx @redocly/cli lint ./artifacts/${{ inputs.API_NAME }}-openapi.json \
+            --skip-rule operation-summary \
+            --skip-rule no-identical-paths \
+            --skip-rule info-license \
+            --skip-rule no-server-example.com || true
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Import into APIM
+        shell: bash
+        run: |
+          az apim api import \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP_NAME }}" \
+            --service-name "${{ secrets.API_MANAGEMENT_SERVICE_NAME }}" \
+            --api-id "${{ inputs.API_NAME }}" \
+            --path "${{ steps.names.outputs.api_path }}" \
+            --display-name "${{ steps.names.outputs.display_name }}" \
+            --service-url "${{ inputs.SERVICE_URL }}" \
+            --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json" \
+            --specification-format OpenApi
+
+      - name: Verify the API is present
+        shell: bash
+        run: |
+          az apim api show \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP_NAME }}" \
+            --service-name "${{ secrets.API_MANAGEMENT_SERVICE_NAME }}" \
+            --api-id "${{ inputs.API_NAME }}" \
+            --query "{name:name, path:path, displayName:displayName, serviceUrl:serviceUrl}" -o json
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "## API imported"
+            echo ""
+            echo "| | |"
+            echo "| :--- | :--- |"
+            echo "| Environment | ${{ inputs.ENVIRONMENT }} |"
+            echo "| APIM instance | ${{ secrets.API_MANAGEMENT_SERVICE_NAME }} |"
+            echo "| Resource name | ${{ inputs.API_NAME }} |"
+            echo "| Path | ${{ steps.names.outputs.api_path }} |"
+            echo "| Display name | ${{ steps.names.outputs.display_name }} |"
+            echo "| Backend | ${{ inputs.SERVICE_URL }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
