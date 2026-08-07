@@ -103,6 +103,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # --subscription-required false is not a caller choice. External APIs are not fronted by APIM
+      # subscriptions: customers get their credentials from UserAdmin and exchange them for a token in
+      # policy, so an Ocp-Apim-Subscription-Key would be a second secret with no purpose. az apim api import
+      # defaults it to true, and every import resets it - so it belongs here rather than in a one-off fix.
       - name: Import into APIM
         shell: bash
         run: |
@@ -113,6 +117,7 @@ jobs:
             --path "${{ steps.names.outputs.api_path }}" \
             --display-name "${{ steps.names.outputs.display_name }}" \
             --service-url "${{ inputs.SERVICE_URL }}" \
+            --subscription-required false \
             --specification-path "./artifacts/${{ inputs.API_NAME }}-openapi.json" \
             --specification-format OpenApi
 
@@ -139,4 +144,5 @@ jobs:
             echo "| Path | ${{ steps.names.outputs.api_path }} |"
             echo "| Display name | ${{ steps.names.outputs.display_name }} |"
             echo "| Backend | ${{ inputs.SERVICE_URL }} |"
+            echo "| Subscription key | not required |"
           } >> "$GITHUB_STEP_SUMMARY"
