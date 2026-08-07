@@ -11,11 +11,12 @@
 #     stage, prod — not the landing zone, per ADR-0004 in the platform repository.
 #   * SERVICE_URL replaces SERVICE_URL_NON_PROD, which was only ever a backend address and never non-prod
 #     specific.
-#   * API_PATH and DISPLAY_NAME are separate inputs. The old template passed API_NAME to --api-id, --path and
-#     --display-name at once, which cannot express ADR-0006: the resource name carries a product prefix
-#     (project-controls-estimation), the path uses a slash (project-controls/estimation), and the display name
-#     is written for customers (ISY Project Controls - Estimation). A resource name cannot contain a slash, so
-#     one value for all three is not a shortcut — it makes conforming names impossible.
+#   * DISPLAY_NAME is a separate input. The old template passed API_NAME to --api-id, --path and
+#     --display-name at once, but the display name is prose written for customers ("ISY Project Controls -
+#     Estimation") and cannot be an identifier.
+#   * API_PATH is a separate input but rarely needed. Under ADR-0006 the path equals the resource name, so it
+#     defaults to API_NAME - pass it only for a legacy API that must keep an old path while its resource name
+#     is made compliant.
 #   * The import waits and is verified. The old template used --no-wait, so the job reported success without
 #     knowing whether APIM accepted the specification.
 
@@ -27,7 +28,7 @@ on:
       API_NAME:
         required: true
         type: string
-        description: "APIM resource name, e.g. project-controls-estimation"
+        description: "APIM resource name, e.g. project-controls or project-controls-estimation"
       SERVICE_URL:
         required: true
         type: string
@@ -40,7 +41,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "URL path, e.g. project-controls/estimation. Defaults to API_NAME"
+        description: "Only for a legacy path that differs from the resource name. Defaults to API_NAME"
       DISPLAY_NAME:
         required: false
         type: string
