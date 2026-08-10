@@ -1,0 +1,240 @@
+# Opens a pull request against the platform repository with a generated OpenAPI specification.
+#
+# This is the supported way for a team to get its API into APIM. The team's build produces a specification;
+# this workflow puts it in Git and asks for it to be merged. APIOps publishes from there, to test, then stage,
+# then prod, through the same mechanism each time.
+#
+# Replaces apim-push-openapi-v2.yml as the normal path. That one writes straight to an APIM instance, which
+# means the change has already happened by the time anyone can see it, and each environment would be written
+# by a different mechanism. It is kept for bootstrapping a new instance and for recovery. See ADR-0008 and
+# docs/apim-external-api/04-openapi-fra-ipc.md in the platform repository.
+#
+# The caller owns one file and nothing else: apis/<API_NAME>/specification.json. The API's identity - its
+# path, display name, product membership and policy - is platform's, and is not touched here. That boundary
+# is the point: exposing an endpoint is a code change, exposing an API is a product decision.
+#
+# What the caller must have in place:
+#
+#   * A job that uploads the specification as an artifact named <API_NAME>-openapi, containing
+#     <API_NAME>-openapi.json. Same convention as apim-push-openapi-v2.yml.
+#   * The APIM Spec Proposer GitHub App installed on the target repository, its app id passed as
+#     GITHUB_APP_ID and its private key as the APIM_SPEC_PR_APP_PRIVATE_KEY secret.
+#
+# The app can propose and nothing more. It holds contents and pull-requests write, but the target's main is
+# protected and apimartifacts/** has CODEOWNERS, so a person still decides what merges. Write access cannot
+# be narrowed to a single path - GitHub App permissions are per repository - so branch protection, not the
+# token, is what actually holds.
+
+name: "[APIM] Propose specification to platform"
+
+on:
+  workflow_call:
+    inputs:
+      API_NAME:
+        required: true
+        type: string
+        description: "APIM resource name. Must match the folder under apimartifacts/apis/, e.g. project-controls"
+      GITHUB_APP_ID:
+        required: true
+        type: string
+        description: "App id of the APIM Spec Proposer app. Pass vars.APIM_SPEC_PR_APP_ID"
+      TARGET_REPOSITORY:
+        required: false
+        type: string
+        default: "platform"
+        description: "Repository name holding apimartifacts, without the owner. Override only for a dry run"
+      ARTIFACT_FOLDER:
+        required: false
+        type: string
+        default: "apimartifacts"
+        description: "APIOps artifact folder in the target repository"
+    secrets:
+      APIM_SPEC_PR_APP_PRIVATE_KEY:
+        required: true
+    outputs:
+      pull_request_url:
+        value: ${{ jobs.propose-spec.outputs.pull_request_url }}
+        description: "The pull request, or empty when the specification was unchanged"
+
+jobs:
+  propose-spec:
+    name: Propose specification
+    runs-on: ubuntu-latest
+
+    # Nothing is read from or written to the calling repository. The specification arrives as an artifact from
+    # an earlier job in the same run, and everything else happens in the target repository under the app token.
+    permissions:
+      contents: read
+
+    outputs:
+      pull_request_url: ${{ steps.pull-request.outputs.url }}
+
+    env:
+      TARGET_FULL_NAME: ${{ github.repository_owner }}/${{ inputs.TARGET_REPOSITORY }}
+
+    steps:
+      # Scoped to the target repository and to the two permissions actually used, rather than to everything
+      # the installation holds. The token also expires with the run.
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ inputs.GITHUB_APP_ID }}
+          private-key: ${{ secrets.APIM_SPEC_PR_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ inputs.TARGET_REPOSITORY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Download the specification
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.API_NAME }}-openapi
+          path: spec
+
+      - name: Check out the target repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.TARGET_FULL_NAME }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: target-repo
+          # The branch is recreated from the default branch on every run, so no older history is needed.
+          fetch-depth: 1
+
+      - name: Put the specification in place
+        id: place
+        shell: bash
+        working-directory: target-repo
+        env:
+          API_NAME: ${{ inputs.API_NAME }}
+          ARTIFACT_FOLDER: ${{ inputs.ARTIFACT_FOLDER }}
+        run: |
+          set -euo pipefail
+
+          source_file="$GITHUB_WORKSPACE/spec/${API_NAME}-openapi.json"
+          target_dir="${ARTIFACT_FOLDER}/apis/${API_NAME}"
+          target_file="${target_dir}/specification.json"
+
+          if [ ! -s "$source_file" ]; then
+            echo "::error::No specification at $source_file. The export job produced nothing."
+            exit 1
+          fi
+
+          # The API must already exist as an APIOps artifact. Creating one from here would mean deciding its
+          # path, display name and product membership - platform's call, made in a pull request written by a
+          # person. A missing folder is therefore an error with an instruction, not something to paper over.
+          if [ ! -d "$target_dir" ]; then
+            echo "::error::${target_dir} does not exist in ${TARGET_FULL_NAME}. A new API needs apiInformation.json and a product link before a specification can be proposed - see docs/apim-external-api/04-openapi-fra-ipc.md."
+            exit 1
+          fi
+
+          cp "$source_file" "$target_file"
+          echo "target_file=$target_file" >> "$GITHUB_OUTPUT"
+          echo "Wrote $target_file ($(wc -c < "$target_file") bytes)"
+
+      - name: Commit on a branch of its own
+        id: commit
+        shell: bash
+        working-directory: target-repo
+        env:
+          API_NAME: ${{ inputs.API_NAME }}
+          TARGET_FILE: ${{ steps.place.outputs.target_file }}
+        run: |
+          set -euo pipefail
+
+          # The specification is regenerated on every run, and an unchanged one must not produce noise. Staging
+          # first, then asking, is what makes "nothing changed" cheap to detect.
+          git add "$TARGET_FILE"
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The specification is identical to what is already in ${TARGET_FULL_NAME}. Nothing to propose."
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+          # One long-lived branch per API, recreated from the default branch each run and force-pushed. A new
+          # branch per build would give platform one pull request per team build, which nobody would read.
+          # Recreating rather than committing on top keeps the diff to exactly one commit against main - and
+          # stops a stale branch from conflicting once someone else edits the folder.
+          #
+          # The cost of the force-push is that review comments on a superseded commit go stale. That is the
+          # right trade: what is under review is the current specification, not how it got there.
+          branch="apim-spec/${API_NAME}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+
+          git commit -m "chore(apim): update the ${API_NAME} specification" \
+            -m "Generated by ${{ github.repository }} run ${{ github.run_id }} from commit ${{ github.sha }}."
+          git push --force origin "$branch"
+
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the pull request
+        id: pull-request
+        if: steps.commit.outputs.changed == 'true'
+        shell: bash
+        working-directory: target-repo
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          # An open pull request on this branch already has the new commit - force-pushing updated it. So this
+          # only has to create one when there is none.
+          existing=$(gh pr list --repo "$TARGET_FULL_NAME" --head "$BRANCH" --state open --json url --jq '.[0].url // ""')
+
+          if [ -n "$existing" ]; then
+            echo "url=$existing" >> "$GITHUB_OUTPUT"
+            echo "Updated $existing"
+            exit 0
+          fi
+
+          # Quoted heredoc: the body holds backticks and dollar signs that are markdown, not shell. Anything
+          # that has to be interpolated is a ${{ }} expression, substituted before bash ever sees the script.
+          body=$(cat <<'EOF'
+          Generated by [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) in `${{ github.repository }}`, from commit `${{ github.sha }}`.
+
+          Only `${{ inputs.ARTIFACT_FOLDER }}/apis/${{ inputs.API_NAME }}/specification.json` is touched. The API's path, display name, product membership and policy are not in this diff.
+
+          Merging publishes to test. Stage and prod follow behind their approval gates.
+
+          ### What to look at
+
+          - Endpoints and models that were removed or renamed, since those break callers
+          - Operation ids, which decide APIM's operation names - a rename orphans any operation-level policy
+          - Whether the change deserves a new version date
+
+          This branch is recreated on every run of the generating workflow, so it always holds the current specification as a single commit.
+          EOF
+          )
+
+          url=$(gh pr create \
+            --repo "$TARGET_FULL_NAME" \
+            --head "$BRANCH" \
+            --title "chore(apim): update the ${{ inputs.API_NAME }} specification" \
+            --body "$body")
+
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Opened $url"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Specification proposed"
+            echo ""
+            echo "| | |"
+            echo "| :--- | :--- |"
+            echo "| API | ${{ inputs.API_NAME }} |"
+            echo "| Target | ${{ env.TARGET_FULL_NAME }} |"
+            echo "| File | ${{ inputs.ARTIFACT_FOLDER }}/apis/${{ inputs.API_NAME }}/specification.json |"
+            if [ "${{ steps.commit.outputs.changed }}" = "true" ]; then
+              echo "| Pull request | ${{ steps.pull-request.outputs.url }} |"
+            else
+              echo "| Pull request | none - the specification was unchanged |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
