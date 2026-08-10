@@ -896,7 +896,7 @@ jobs:
 
       - name: Upload findings artifact
         if: always() && steps.changes.outputs.count != '0'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: "${{ matrix.agent }}-findings"
           path: .agent-review/findings.json
