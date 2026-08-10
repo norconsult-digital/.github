@@ -50,7 +50,7 @@ jobs:
           path: ${{ github.workspace }}/nuget-sources
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
 
@@ -154,7 +154,7 @@ jobs:
             --api-key "$token" --skip-duplicate
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           source-url: https://pkgs.dev.azure.com/Norconsult-IS/_packaging/isy360-packages/nuget/v3/index.json
           dotnet-version: ${{ inputs.dotnetVersion }}
