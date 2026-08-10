@@ -63,7 +63,7 @@ jobs:
           sparse-checkout: ${{ inputs.sparseCheckout }}
 
       - name: Setup dotnet ${{ inputs.dotnetVersion }}
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ inputs.dotnetVersion }}
           cache: ${{ inputs.nugetCacheDependencyPath != '' }}
