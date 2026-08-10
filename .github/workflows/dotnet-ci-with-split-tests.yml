@@ -175,7 +175,7 @@ jobs:
 
       - name: Report test results
         if: env.present_test_summary == 'true'
-        uses: phoenix-actions/test-reporting@v15
+        uses: phoenix-actions/test-reporting@v16
         with:
           name: .NET Tests
           path: all-test-results/**/*.trx
