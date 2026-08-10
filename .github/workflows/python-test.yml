@@ -72,7 +72,7 @@ jobs:
       #----------------------------------------------
       - name: Load cached venv
         id: cached-dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ inputs.projectPath }}/.venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles(format('{0}/**/*.lock', inputs.projectPath)) }}
