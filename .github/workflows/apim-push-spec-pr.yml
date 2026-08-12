@@ -77,7 +77,7 @@ jobs:
       # the installation holds. The token also expires with the run.
       - name: Create GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ inputs.GITHUB_APP_ID }}
           private-key: ${{ secrets.APIM_SPEC_PR_APP_PRIVATE_KEY }}
