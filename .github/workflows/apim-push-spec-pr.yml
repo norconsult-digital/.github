@@ -87,7 +87,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Download the specification
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.API_NAME }}-openapi
           path: spec

@@ -71,7 +71,7 @@ jobs:
           echo "Display name:  $display_name"
 
       - name: Download OpenAPI artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.API_NAME }}-openapi
           path: ./artifacts
