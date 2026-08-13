@@ -16,6 +16,9 @@ on:
     secrets:
       API_KEY:
         required: true
+      CHECKOUT_TOKEN:
+        required: false
+        description: "Optional token for checkout and push, defaults to github.token"
 
 jobs:
   download-and-commit:
@@ -23,10 +26,9 @@ jobs:
     name: POEditor Download
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Setup jq
-        run: sudo apt-get install jq
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.CHECKOUT_TOKEN || github.token }}
 
       - name: Download translations from POEditor
         run: |
