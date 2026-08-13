@@ -9,15 +9,20 @@
 # by a different mechanism. It is kept for bootstrapping a new instance and for recovery. See ADR-0008 and
 # docs/apim-external-api/04-openapi-fra-ipc.md in the platform repository.
 #
-# The caller owns one file and nothing else: apis/<API_NAME>/specification.json. The API's identity - its
-# path, display name, product membership and policy - is platform's, and is not touched here. That boundary
-# is the point: exposing an endpoint is a code change, exposing an API is a product decision.
+# The caller owns specifications. It never writes an API's identity - path, display name, backend, product
+# membership, policy - and never spells out a resource name: those are composed here from the module name and
+# the version date, so the naming rule lives in one place and no team can arrive at its own spelling.
+#
+# A new *version* is generated, because everything except the date is inherited from the version before it and
+# nothing new is decided. A new *API* is not: its path, display name and product membership are a product
+# decision, and a missing first version is an error with an instruction. That is the boundary - exposing an
+# endpoint is a code change, exposing an API is a product decision.
 #
 # What the caller must have in place:
 #
-#   * A job that uploads the specification as an artifact named <API_NAME>-openapi, containing
-#     <API_NAME>-openapi.json. Same convention as apim-push-openapi-v2.yml. An API versioned with a version
-#     set uploads one file per version, <API_NAME>-<version>-openapi.json, and passes SPEC_MAP.
+#   * A job that uploads an artifact named <API_NAME>-openapi. An API in a version set puts one file per
+#     version in it, named <version>.json, and passes VERSIONS. An API that is not versioned puts a single
+#     <API_NAME>-openapi.json in it and passes nothing.
 #   * The APIM Spec Proposer GitHub App installed on the target repository, its app id passed as
 #     GITHUB_APP_ID and its private key as the APIM_SPEC_PR_APP_PRIVATE_KEY secret.
 #
@@ -34,7 +39,9 @@ on:
       API_NAME:
         required: true
         type: string
-        description: "APIM resource name. Must match the folder under apimartifacts/apis/, e.g. project-controls"
+        description: >-
+          The module's name, without any version - e.g. project-controls. Resource names are composed from
+          this and the version date, so a caller never spells out a combined name.
       GITHUB_APP_ID:
         required: true
         type: string
@@ -49,15 +56,15 @@ on:
         type: string
         default: "apimartifacts"
         description: "APIOps artifact folder in the target repository"
-      SPEC_MAP:
+      VERSIONS:
         required: false
         type: string
         default: ""
         description: >-
-          For an API versioned with a version set: a JSON object mapping each version date to the APIM
-          resource name that serves it, e.g. {"2026-06-01":"product","2026-12-01":"product-2026-12-01"}.
-          Each version's artifact is then expected as <API_NAME>-<version>-openapi.json. Leave empty for a
-          single unversioned specification.
+          Space-separated version dates, e.g. "2026-06-01 2026-12-01". Each one is expected in the artifact as
+          <version>.json, and its APIM resource name is composed as <API_NAME>--<version> per Rule 5b in
+          ADR-0006. Leave empty for an API that is not in a version set; its specification is then expected as
+          <API_NAME>-openapi.json.
     secrets:
       APIM_SPEC_PR_APP_PRIVATE_KEY:
         required: true
@@ -118,56 +125,119 @@ jobs:
         env:
           API_NAME: ${{ inputs.API_NAME }}
           ARTIFACT_FOLDER: ${{ inputs.ARTIFACT_FOLDER }}
-          SPEC_MAP: ${{ inputs.SPEC_MAP }}
+          VERSIONS: ${{ inputs.VERSIONS }}
         run: |
           set -euo pipefail
 
-          # One specification, or one per version. An unversioned API is the single-entry case of the same
-          # loop, so there is one code path rather than two.
-          # A literal dash marks "no version", rather than an empty first field: read strips leading
-          # whitespace, and a tab is whitespace, so an empty field would shift the API name into it and the
-          # loop would skip the only entry - silently.
-          if [ -n "$SPEC_MAP" ]; then
-            pairs=$(printf '%s' "$SPEC_MAP" | jq -r 'to_entries[] | "\(.key)\t\(.value)"')
-          else
-            pairs=$(printf -- '-\t%s' "$API_NAME")
-          fi
+          apis="${ARTIFACT_FOLDER}/apis"
 
-          written=""
+          # One path per line in a file, because "version sets" contains a space and a space-joined list of
+          # paths cannot carry it. git add --pathspec-from-file reads the file as-is.
+          written_list="$GITHUB_WORKSPACE/written-paths.txt"
+          : > "$written_list"
+          note() { printf '%s\n' "$1" >> "$written_list"; }
 
-          while IFS=$'\t' read -r version api; do
-            [ -n "$api" ] || continue
+          # An unversioned API is the one-entry case of the same loop, so there is one code path rather than
+          # two. A literal dash marks "no version": an empty field cannot be used, because read strips leading
+          # whitespace and would shift the next field into it.
+          entries="${VERSIONS:--}"
 
-            if [ "$version" != "-" ]; then
-              source_file="$GITHUB_WORKSPACE/spec/${API_NAME}-${version}-openapi.json"
-            else
+          # The newest existing member of the version set is what a new version inherits from. Newest rather
+          # than any, so a version added today copies the most recent decisions about path and backend.
+          template_dir=""
+          for candidate in "$apis/${API_NAME}--"*; do
+            [ -d "$candidate" ] && template_dir="$candidate"
+          done
+
+          for version in $entries; do
+            if [ "$version" = "-" ]; then
+              api="$API_NAME"
               source_file="$GITHUB_WORKSPACE/spec/${API_NAME}-openapi.json"
+            else
+              # A date and nothing else. A malformed version would otherwise create a folder named after the
+              # mistake, and the mistake would reach APIM as an API.
+              if ! printf '%s' "$version" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+                echo "::error::'$version' is not a version date. Expected YYYY-MM-DD."
+                exit 1
+              fi
+
+              # Composed here and nowhere else - Rule 5b in ADR-0006. A caller supplies the module name and
+              # the date; if every caller spelled the combination out, every caller could spell it differently.
+              api="${API_NAME}--${version}"
+              source_file="$GITHUB_WORKSPACE/spec/${version}.json"
             fi
 
-            target_dir="${ARTIFACT_FOLDER}/apis/${api}"
-            target_file="${target_dir}/specification.json"
+            target_dir="$apis/$api"
+            target_file="$target_dir/specification.json"
 
             if [ ! -s "$source_file" ]; then
-              echo "::error::No specification at $source_file. The export job produced nothing for ${version:-$API_NAME}."
+              echo "::error::No specification at $source_file. The export job produced nothing for ${version}."
               exit 1
             fi
 
-            # The API must already exist as an APIOps artifact. Creating one from here would mean deciding its
-            # path, display name and product membership - platform's call, made in a pull request written by a
-            # person. A missing folder is therefore an error with an instruction, not something to paper over.
             if [ ! -d "$target_dir" ]; then
-              echo "::error::${target_dir} does not exist in ${TARGET_FULL_NAME}. A new API needs apiInformation.json and a product link before a specification can be proposed - see docs/apim-external-api/04-openapi-fra-ipc.md."
-              exit 1
+              # A new version, not a new API. Everything except the date is inherited from the version before
+              # it - path, display name, backend, protocols, product membership - so nothing is decided here
+              # that a person has not already decided once. That is what makes generating it safe.
+              #
+              # A first version has nothing to inherit from, and its path and display name are a product
+              # decision. So that stays an error with an instruction.
+              if [ "$version" = "-" ] || [ -z "$template_dir" ]; then
+                echo "::error::$target_dir does not exist in $TARGET_FULL_NAME, and there is no existing version of $API_NAME to inherit from. The first version of an API needs its path, display name and product membership decided - open a pull request against $TARGET_FULL_NAME. See docs/apim-external-api/04-openapi-fra-ipc.md."
+                exit 1
+              fi
+
+              echo "New version $version - inheriting from $(basename "$template_dir")"
+              mkdir -p "$target_dir"
+
+              jq --arg v "$version" --arg set "/apiVersionSets/$API_NAME" '
+                .properties.apiVersion = $v
+                | .properties.apiVersionSetId = $set
+                | del(.properties.apiVersionDescription)
+              ' "$template_dir/apiInformation.json" > "$target_dir/apiInformation.json"
+              note "$target_dir/apiInformation.json"
+
+              # Same products as the version it inherits from. Without this the new version inherits no
+              # policy, and every call to it fails on a credential exchange that never runs.
+              for product_link in "${ARTIFACT_FOLDER}/products/"*"/apis/$(basename "$template_dir")"; do
+                [ -d "$product_link" ] || continue
+                new_link="$(dirname "$product_link")/$api"
+                mkdir -p "$new_link"
+                echo '{}' > "$new_link/productApiInformation.json"
+                note "$new_link/productApiInformation.json"
+                echo "  linked to product $(basename "$(dirname "$(dirname "$product_link")")")"
+              done
             fi
 
             cp "$source_file" "$target_file"
-            written="$written $target_file"
+            note "$target_file"
             echo "Wrote $target_file ($(wc -c < "$target_file") bytes)"
-          done <<< "$pairs"
+          done
 
-          # Paths only, never a wildcard: git add on the whole folder would also stage anything else that
-          # happened to differ, and this branch must contain the specifications and nothing besides.
-          echo "target_files=$(echo $written)" >> "$GITHUB_OUTPUT"
+          # The version set groups the members and carries the scheme. Derivable in full from the module name
+          # and an existing member, so it is created rather than waited for - a team adding a version should
+          # not need a platform pull request first.
+          if [ -n "$VERSIONS" ]; then
+            set_dir="${ARTIFACT_FOLDER}/version sets/${API_NAME}"
+            if [ ! -d "$set_dir" ]; then
+              if [ -z "$template_dir" ]; then
+                echo "::error::No version set for $API_NAME and no existing version to take a display name from."
+                exit 1
+              fi
+              echo "Creating version set $API_NAME"
+              mkdir -p "$set_dir"
+              jq -n --arg name "$(jq -r '.properties.displayName' "$template_dir/apiInformation.json")" '
+                {properties: {displayName: $name, versioningScheme: "Query", versionQueryName: "version"}}
+              ' > "$set_dir/versionSetInformation.json"
+              note "$set_dir/versionSetInformation.json"
+            fi
+          fi
+
+          # A list of paths, never a wildcard: git add on the whole folder would also stage anything else
+          # that happened to differ, and this branch must contain what was generated and nothing besides.
+          echo "Paths staged for commit:"
+          sed 's/^/  /' "$written_list"
+          echo "path_list=$written_list" >> "$GITHUB_OUTPUT"
 
       - name: Commit on a branch of its own
         id: commit
@@ -175,13 +245,13 @@ jobs:
         working-directory: target-repo
         env:
           API_NAME: ${{ inputs.API_NAME }}
-          TARGET_FILES: ${{ steps.place.outputs.target_files }}
+          PATH_LIST: ${{ steps.place.outputs.path_list }}
         run: |
           set -euo pipefail
 
           # The specification is regenerated on every run, and an unchanged one must not produce noise. Staging
           # first, then asking, is what makes "nothing changed" cheap to detect.
-          git add $TARGET_FILES
+          git add --pathspec-from-file="$PATH_LIST"
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "The specification is identical to what is already in ${TARGET_FULL_NAME}. Nothing to propose."
