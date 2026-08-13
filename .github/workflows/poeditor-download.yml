@@ -16,19 +16,31 @@ on:
     secrets:
       API_KEY:
         required: true
-      CHECKOUT_TOKEN:
+      APP_CLIENT_ID:
         required: false
-        description: "Optional token for checkout and push, defaults to github.token"
+        description: "GitHub App ID for generating a token with push access"
+      APP_PRIVATE_KEY:
+        required: false
+        description: "GitHub App private key for generating a token with push access"
 
 jobs:
   download-and-commit:
     runs-on: ubuntu-latest
     name: POEditor Download
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        if: ${{ secrets.APP_ID != '' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          token: ${{ secrets.CHECKOUT_TOKEN || github.token }}
+          token: ${{ steps.app-token.outputs.token || github.token }}
 
       - name: Download translations from POEditor
         run: |
