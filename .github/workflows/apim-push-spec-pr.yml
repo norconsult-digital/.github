@@ -16,7 +16,8 @@
 # What the caller must have in place:
 #
 #   * A job that uploads the specification as an artifact named <API_NAME>-openapi, containing
-#     <API_NAME>-openapi.json. Same convention as apim-push-openapi-v2.yml.
+#     <API_NAME>-openapi.json. Same convention as apim-push-openapi-v2.yml. An API versioned with a version
+#     set uploads one file per version, <API_NAME>-<version>-openapi.json, and passes SPEC_MAP.
 #   * The APIM Spec Proposer GitHub App installed on the target repository, its app id passed as
 #     GITHUB_APP_ID and its private key as the APIM_SPEC_PR_APP_PRIVATE_KEY secret.
 #
@@ -48,6 +49,15 @@ on:
         type: string
         default: "apimartifacts"
         description: "APIOps artifact folder in the target repository"
+      SPEC_MAP:
+        required: false
+        type: string
+        default: ""
+        description: >-
+          For an API versioned with a version set: a JSON object mapping each version date to the APIM
+          resource name that serves it, e.g. {"2026-06-01":"product","2026-12-01":"product-2026-12-01"}.
+          Each version's artifact is then expected as <API_NAME>-<version>-openapi.json. Leave empty for a
+          single unversioned specification.
     secrets:
       APIM_SPEC_PR_APP_PRIVATE_KEY:
         required: true
@@ -108,29 +118,56 @@ jobs:
         env:
           API_NAME: ${{ inputs.API_NAME }}
           ARTIFACT_FOLDER: ${{ inputs.ARTIFACT_FOLDER }}
+          SPEC_MAP: ${{ inputs.SPEC_MAP }}
         run: |
           set -euo pipefail
 
-          source_file="$GITHUB_WORKSPACE/spec/${API_NAME}-openapi.json"
-          target_dir="${ARTIFACT_FOLDER}/apis/${API_NAME}"
-          target_file="${target_dir}/specification.json"
-
-          if [ ! -s "$source_file" ]; then
-            echo "::error::No specification at $source_file. The export job produced nothing."
-            exit 1
+          # One specification, or one per version. An unversioned API is the single-entry case of the same
+          # loop, so there is one code path rather than two.
+          # A literal dash marks "no version", rather than an empty first field: read strips leading
+          # whitespace, and a tab is whitespace, so an empty field would shift the API name into it and the
+          # loop would skip the only entry - silently.
+          if [ -n "$SPEC_MAP" ]; then
+            pairs=$(printf '%s' "$SPEC_MAP" | jq -r 'to_entries[] | "\(.key)\t\(.value)"')
+          else
+            pairs=$(printf -- '-\t%s' "$API_NAME")
           fi
 
-          # The API must already exist as an APIOps artifact. Creating one from here would mean deciding its
-          # path, display name and product membership - platform's call, made in a pull request written by a
-          # person. A missing folder is therefore an error with an instruction, not something to paper over.
-          if [ ! -d "$target_dir" ]; then
-            echo "::error::${target_dir} does not exist in ${TARGET_FULL_NAME}. A new API needs apiInformation.json and a product link before a specification can be proposed - see docs/apim-external-api/04-openapi-fra-ipc.md."
-            exit 1
-          fi
+          written=""
 
-          cp "$source_file" "$target_file"
-          echo "target_file=$target_file" >> "$GITHUB_OUTPUT"
-          echo "Wrote $target_file ($(wc -c < "$target_file") bytes)"
+          while IFS=$'\t' read -r version api; do
+            [ -n "$api" ] || continue
+
+            if [ "$version" != "-" ]; then
+              source_file="$GITHUB_WORKSPACE/spec/${API_NAME}-${version}-openapi.json"
+            else
+              source_file="$GITHUB_WORKSPACE/spec/${API_NAME}-openapi.json"
+            fi
+
+            target_dir="${ARTIFACT_FOLDER}/apis/${api}"
+            target_file="${target_dir}/specification.json"
+
+            if [ ! -s "$source_file" ]; then
+              echo "::error::No specification at $source_file. The export job produced nothing for ${version:-$API_NAME}."
+              exit 1
+            fi
+
+            # The API must already exist as an APIOps artifact. Creating one from here would mean deciding its
+            # path, display name and product membership - platform's call, made in a pull request written by a
+            # person. A missing folder is therefore an error with an instruction, not something to paper over.
+            if [ ! -d "$target_dir" ]; then
+              echo "::error::${target_dir} does not exist in ${TARGET_FULL_NAME}. A new API needs apiInformation.json and a product link before a specification can be proposed - see docs/apim-external-api/04-openapi-fra-ipc.md."
+              exit 1
+            fi
+
+            cp "$source_file" "$target_file"
+            written="$written $target_file"
+            echo "Wrote $target_file ($(wc -c < "$target_file") bytes)"
+          done <<< "$pairs"
+
+          # Paths only, never a wildcard: git add on the whole folder would also stage anything else that
+          # happened to differ, and this branch must contain the specifications and nothing besides.
+          echo "target_files=$(echo $written)" >> "$GITHUB_OUTPUT"
 
       - name: Commit on a branch of its own
         id: commit
@@ -138,13 +175,13 @@ jobs:
         working-directory: target-repo
         env:
           API_NAME: ${{ inputs.API_NAME }}
-          TARGET_FILE: ${{ steps.place.outputs.target_file }}
+          TARGET_FILES: ${{ steps.place.outputs.target_files }}
         run: |
           set -euo pipefail
 
           # The specification is regenerated on every run, and an unchanged one must not produce noise. Staging
           # first, then asking, is what makes "nothing changed" cheap to detect.
-          git add "$TARGET_FILE"
+          git add $TARGET_FILES
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "The specification is identical to what is already in ${TARGET_FULL_NAME}. Nothing to propose."
