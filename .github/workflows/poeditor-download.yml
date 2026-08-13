@@ -13,12 +13,13 @@ on:
       projectId:
         required: true
         type: string
+      appClientId:
+        required: false
+        type: string
+        description: "GitHub App client ID for generating a token with push access"
     secrets:
       API_KEY:
         required: true
-      APP_CLIENT_ID:
-        required: false
-        description: "GitHub App ID for generating a token with push access"
       APP_PRIVATE_KEY:
         required: false
         description: "GitHub App private key for generating a token with push access"
@@ -30,10 +31,10 @@ jobs:
     steps:
       - name: Generate GitHub App Token
         id: app-token
-        if: ${{ secrets.APP_CLIENT_ID != '' && secrets.APP_PRIVATE_KEY != '' }}
+        if: ${{ inputs.appClientId != '' }}
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ secrets.APP_CLIENT_ID }}
+          client-id: ${{ inputs.appClientId }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           repositories: ${{ github.event.repository.name }}
 
