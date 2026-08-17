@@ -73,6 +73,21 @@ on:
         value: ${{ jobs.propose-spec.outputs.pull_request_url }}
         description: "The pull request, or empty when the specification was unchanged"
 
+# The contended resource is the branch apim-spec/<API_NAME> in the target repository. Every run recreates it
+# from the default branch and force-pushes, so two runs at once meant the one that finished last won - which
+# is not the same as the one that started last. A slow run carrying an older specification could quietly
+# overwrite a newer one, and nothing failed. The second run could also lose the race to create the pull
+# request and fail on a conflict that said nothing about the specification.
+#
+# Cancelled rather than queued, unlike the publisher in platform: a superseded proposal has no value, and the
+# newest specification is the one that should reach review. Nothing outside git is written here, so a run
+# stopped midway leaves at worst a branch whose pull request the next run opens.
+#
+# Keyed per target repository and API, so two teams proposing different APIs never wait for each other.
+concurrency:
+  group: apim-spec-${{ inputs.TARGET_REPOSITORY }}-${{ inputs.API_NAME }}
+  cancel-in-progress: true
+
 jobs:
   propose-spec:
     name: Propose specification
