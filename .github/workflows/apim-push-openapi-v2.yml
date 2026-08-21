@@ -1,3 +1,6 @@
+# DEPRECATED 2026-08-21 — APIM is managed from norconsult-digital/platform
+# via APIOps. Kept for reference only. Remove after 2026-11-21.
+
 # Imports an OpenAPI specification into Azure API Management.
 #
 # Replaces apim-push-openapi.yml. That one is left untouched so nothing currently calling it changes. It is
@@ -20,7 +23,7 @@
 #   * The import waits and is verified. The old template used --no-wait, so the job reported success without
 #     knowing whether APIM accepted the specification.
 
-name: "[APIM] Import OpenAPI specification"
+name: "[Deprecated] [APIM] Import OpenAPI specification"
 
 on:
   workflow_call:

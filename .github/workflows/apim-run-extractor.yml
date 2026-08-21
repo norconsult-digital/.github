@@ -1,4 +1,7 @@
-name: Run - Extractor
+# DEPRECATED 2026-08-21 — APIM is managed from norconsult-digital/platform
+# via APIOps. Kept for reference only. Remove after 2026-11-21.
+
+name: "[Deprecated] Run - Extractor"
 
 on:
   workflow_call:
