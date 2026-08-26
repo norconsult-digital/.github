@@ -142,14 +142,14 @@ jobs:
     steps:
       - name: Checkout repository
         if: ${{ inputs.gitRepo != '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.gitRepo }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Default checkout
         if: ${{ inputs.gitRepo == '' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download test result artifacts
         uses: actions/download-artifact@v4
