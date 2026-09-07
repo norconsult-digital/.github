@@ -57,6 +57,10 @@ on:
         required: false
         type: string
         default: ''
+      useMTP:
+        required: false
+        type: boolean
+        default: false        
 
 jobs:
   test:
@@ -137,7 +141,8 @@ jobs:
 
             $project = Get-Item -LiteralPath $fullPath
             $projectName = [System.IO.Path]::GetFileNameWithoutExtension($project.FullName)
-            $trxPath = Join-Path (Join-Path $env:GITHUB_WORKSPACE "test-results") "$projectName.trx"
+            $trxPath = Join-Path $env:GITHUB_WORKSPACE "test-results"
+            $trxFilePath = Join-Path $trxPath "$projectName.trx"
 
             dotnet build $project.FullName --configuration "${{ inputs.buildConfiguration }}"
             if ($LASTEXITCODE -ne 0) {
@@ -145,12 +150,26 @@ jobs:
               exit 1
             }
 
-            dotnet test $project.FullName `
+          $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
+          if ($useMtp) {
+            dotnet test $projectPath `
               --configuration "${{ inputs.buildConfiguration }}" `
               --no-build `
               --no-restore `
-              --logger "trx;LogFileName=$trxPath" `
+              --verbosity quiet `
+              --results-directory "$trxPath" `
+              -- `
+              --report-trx `
+              --report-trx-filename "$projectName.trx"
+          }
+          else {
+            dotnet test $projectPath `
+              --configuration "${{ inputs.buildConfiguration }}" `
+              --no-build `
+              --no-restore `
+              --logger "trx;LogFileName=$trxFilePath" `
               --verbosity quiet
+          }
 
             if ($LASTEXITCODE -ne 0) {
               Write-Output "Tests failed: $projectName"

@@ -67,6 +67,10 @@ on:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
         type: string
+      useMTP:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -81,6 +85,7 @@ jobs:
       azureTenantId: ${{ inputs.azureTenantId }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
+      useMTP: ${{ inputs.useMTP }}
 
   create_migration_bundle:
     if: ${{ inputs.migrationBundleArguments != '' }}
