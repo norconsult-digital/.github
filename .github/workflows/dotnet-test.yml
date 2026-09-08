@@ -123,8 +123,7 @@ jobs:
             $projectName = $project_name
             $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
 
-            Write-Output "TRX Path: $trxPath trxFilePath: $trxFilePath"
-            Write-Host "TRX Path: $trxPath trxFilePath: $trxFilePath"
+            Write-Output "Test! super test"
             if ($useMtp) {
               dotnet test $projectPath `
                 --configuration "${{ inputs.buildConfiguration }}" `
