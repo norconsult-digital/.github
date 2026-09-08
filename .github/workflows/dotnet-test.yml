@@ -117,13 +117,11 @@ jobs:
             }
 
             # Proceed to test
-            $trxPath = (Resolve-Path "test-results").Path
+            $trxPath = Join-Path $env:GITHUB_WORKSPACE "test-results"
             $trxFilePath = Join-Path $trxPath "$project_name.trx"
             $projectPath = $project.FullName
             $projectName = $project_name
             $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
-
-            Write-Output "Test! super test"
             if ($useMtp) {
               dotnet test $projectPath `
                 --configuration "${{ inputs.buildConfiguration }}" `
