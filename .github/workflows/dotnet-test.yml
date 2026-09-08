@@ -117,8 +117,8 @@ jobs:
             }
 
             # Proceed to test
-            $trxPath = Join-Path -Path (Get-Location) -ChildPath "test-results"
-            $trxFilePath = Join-Path -Path $trxPath -ChildPath "$project_name.trx"
+            $trxPath = Join-Path -Path (Get-Location) "test-results"
+            $trxFilePath = Join-Path $trxPath "$project_name.trx"
             $projectPath = $project.FullName
             $projectName = $project_name
             $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
