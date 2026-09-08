@@ -117,7 +117,7 @@ jobs:
             }
 
             # Proceed to test
-            $trxPath = Join-Path -Path (Get-Location) "test-results"
+            $trxPath = (Resolve-Path "test-results").Path
             $trxFilePath = Join-Path $trxPath "$project_name.trx"
             $projectPath = $project.FullName
             $projectName = $project_name
