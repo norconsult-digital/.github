@@ -44,6 +44,10 @@ on:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
         required: false
         type: string
+      useMTP:
+        required: false
+        type: boolean
+        default: false     
 jobs:
   test:
     runs-on: ${{ inputs.vmImage }}
@@ -113,7 +117,30 @@ jobs:
             }
 
             # Proceed to test
-            dotnet test $project.FullName --configuration ${{ inputs.buildConfiguration }} --no-build --no-restore --logger "trx;LogFileName=$(Get-Location)/test-results/$project_name.trx" --verbosity quiet
+            $trxPath = Join-Path $env:GITHUB_WORKSPACE "test-results"
+            $trxFilePath = Join-Path $trxPath "$project_name.trx"
+            $projectPath = $project.FullName
+            $projectName = $project_name
+            $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
+            if ($useMtp) {
+              dotnet test $projectPath `
+                --configuration "${{ inputs.buildConfiguration }}" `
+                --no-build `
+                --no-restore `
+                --verbosity quiet `
+                --results-directory "$trxPath" `
+                -- `
+                --report-trx `
+                --report-trx-filename "$projectName.trx"
+            }
+            else {
+              dotnet test $projectPath `
+                --configuration "${{ inputs.buildConfiguration }}" `
+                --no-build `
+                --no-restore `
+                --logger "trx;LogFileName=$trxFilePath" `
+                --verbosity quiet
+            }
 
             if ($LASTEXITCODE -ne 0) {
               Write-Output "Tests failed: $project_name"

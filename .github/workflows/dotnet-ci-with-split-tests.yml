@@ -83,6 +83,10 @@ on:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
         type: string
+      useMTP:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   unit_tests:
@@ -100,6 +104,7 @@ jobs:
       artifactName: dotnet-unit-test-results
       sparseCheckout: ${{ inputs.sparseCheckout }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
+      useMTP: ${{ inputs.useMTP }}
 
   architecture_tests:
     if: ${{ inputs.architectureTestProjects != '' }}
@@ -116,6 +121,7 @@ jobs:
       artifactName: dotnet-architecture-test-results
       sparseCheckout: ${{ inputs.sparseCheckout }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
+      useMTP: ${{ inputs.useMTP }}
 
   integration_tests:
     if: ${{ inputs.integrationTestProject != '' }}
@@ -132,6 +138,7 @@ jobs:
       artifactName: dotnet-integration-test-results
       sparseCheckout: ${{ inputs.sparseCheckout }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
+      useMTP: ${{ inputs.useMTP }}
 
   test_summary:
     needs: [unit_tests, integration_tests, architecture_tests]

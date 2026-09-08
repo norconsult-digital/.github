@@ -55,6 +55,10 @@ on:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
+      useMTP:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   prepare:
@@ -175,20 +179,35 @@ jobs:
           }
 
           $projectName = [System.IO.Path]::GetFileNameWithoutExtension($projectPath)
-          $trxPath = Join-Path (Join-Path $env:GITHUB_WORKSPACE "test-results") "$projectName.trx"
-
+          $trxPath = Join-Path $env:GITHUB_WORKSPACE "test-results"
+          $trxFilePath = Join-Path $trxPath "$projectName.trx"
+          
           dotnet build $projectPath --configuration "${{ inputs.buildConfiguration }}"
           if ($LASTEXITCODE -ne 0) {
             Write-Output "Build failed: $projectName"
             exit 1
           }
-
-          dotnet test $projectPath `
-            --configuration "${{ inputs.buildConfiguration }}" `
-            --no-build `
-            --no-restore `
-            --logger "trx;LogFileName=$trxPath" `
-            --verbosity quiet
+            
+          $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
+          if ($useMtp) {
+            dotnet test $projectPath `
+              --configuration "${{ inputs.buildConfiguration }}" `
+              --no-build `
+              --no-restore `
+              --verbosity quiet `
+              --results-directory "$trxPath" `
+              -- `
+              --report-trx `
+              --report-trx-filename "$projectName.trx"
+          }
+          else {
+            dotnet test $projectPath `
+              --configuration "${{ inputs.buildConfiguration }}" `
+              --no-build `
+              --no-restore `
+              --logger "trx;LogFileName=$trxFilePath" `
+              --verbosity quiet
+          }
 
           if ($LASTEXITCODE -ne 0) {
             Write-Output "Tests failed: $projectName"
@@ -275,21 +294,37 @@ jobs:
             throw "Test project not found: $projectPath"
           }
 
-          $trxPath = Join-Path (Join-Path $env:GITHUB_WORKSPACE "test-results") "shard-${{ matrix.shard.name }}.trx"
-
+          $trxPath = Join-Path $env:GITHUB_WORKSPACE "test-results"
+          $trxFilePath = Join-Path $trxPath "shard-${{ matrix.shard.name }}.trx"
+          
           dotnet build $projectPath --configuration "${{ inputs.buildConfiguration }}"
           if ($LASTEXITCODE -ne 0) {
             Write-Output "Build failed for shard ${{ matrix.shard.name }}"
             exit 1
           }
-
-          dotnet test $projectPath `
-            --configuration "${{ inputs.buildConfiguration }}" `
-            --no-build `
-            --no-restore `
-            --filter "${{ matrix.shard.filter }}" `
-            --logger "trx;LogFileName=$trxPath" `
-            --verbosity quiet
+            
+          $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
+          if ($useMtp) {
+            dotnet test $projectPath `
+              --configuration "${{ inputs.buildConfiguration }}" `
+              --no-build `
+              --no-restore `
+              --filter "${{ matrix.shard.filter }}" `
+              --verbosity quiet `
+              --results-directory "$trxPath" `
+              -- `
+              --report-trx `
+              --report-trx-filename "shard-${{ matrix.shard.name }}.trx"
+          }
+          else {
+            dotnet test $projectPath `
+              --configuration "${{ inputs.buildConfiguration }}" `
+              --no-build `
+              --no-restore `
+              --filter "${{ matrix.shard.filter }}" `
+              --logger "trx;LogFileName=$trxFilePath" `
+              --verbosity quiet
+          }
 
           if ($LASTEXITCODE -ne 0) {
             Write-Output "Tests failed for shard ${{ matrix.shard.name }}"
