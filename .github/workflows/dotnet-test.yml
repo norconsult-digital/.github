@@ -121,16 +121,26 @@ jobs:
             $trxFilePath = Join-Path $trxPath "$project_name.trx"
             $projectPath = $project.FullName
             $projectName = $project_name
-
-            dotnet test $projectPath `
-              --configuration "${{ inputs.buildConfiguration }}" `
-              --no-build `
-              --no-restore `
-              --verbosity quiet `
-              --results-directory "$trxPath" `
-              -- `
-              --report-trx `
-              --report-trx-filename "$projectName.trx"
+            $useMtp = "${{ inputs.useMTP }}".ToLowerInvariant() -eq "true"
+            if ($useMtp) {
+              dotnet test $projectPath `
+                --configuration "${{ inputs.buildConfiguration }}" `
+                --no-build `
+                --no-restore `
+                --verbosity quiet `
+                --results-directory "$trxPath" `
+                -- `
+                --report-trx `
+                --report-trx-filename "$projectName.trx"
+            }
+            else {
+              dotnet test $projectPath `
+                --configuration "${{ inputs.buildConfiguration }}" `
+                --no-build `
+                --no-restore `
+                --logger "trx;LogFileName=$trxFilePath" `
+                --verbosity quiet
+            }
 
             if ($LASTEXITCODE -ne 0) {
               Write-Output "Tests failed: $project_name"
