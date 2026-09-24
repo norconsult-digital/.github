@@ -75,25 +75,7 @@ jobs:
           cache-dependency-path: ${{ inputs.nugetCacheDependencyPath }}
 
       - name: Install EF tools
-        shell: bash
-        run: |
-          # A local tools manifest shadows globally installed tools, so restore it when present (#97)
-          dotnet tool install -g dotnet-ef --version ${{ inputs.dotnetVersion }}
-
-          manifest="${{ inputs.toolManifestPath }}"
-          if [ -n "$manifest" ] && [ ! -f "$manifest" ]; then
-            echo "ERROR: toolManifestPath '$manifest' not found. If using sparseCheckout, include its directory."
-            exit 1
-          fi
-
-          for candidate in "$manifest" ".config/dotnet-tools.json" "dotnet-tools.json"; do
-            if [ -f "$candidate" ]; then
-              echo "Restoring tool manifest: $candidate"
-              dotnet tool restore --tool-manifest "$candidate"
-              exit 0
-            fi
-          done
-          echo "No dotnet-tools.json found; using globally installed dotnet-ef"
+        run: dotnet tool install -g dotnet-ef --version ${{ inputs.dotnetVersion }}
 
       - name: Create migrations-bundle directory
         run: mkdir -p migrations-bundle
@@ -121,6 +103,22 @@ jobs:
         run: |
           # Extracts --project and --startup-project paths from migrationBundleArguments and restores them
           # Handles quoted and unquoted paths, and both long and short argument forms
+
+          # A local tools manifest shadows globally installed tools, so restore it when present.
+          # Runs here, after NuGet.Config is in place, so tools on private feeds authenticate (#97)
+          manifest="${{ inputs.toolManifestPath }}"
+          if [ -n "$manifest" ] && [ ! -f "$manifest" ]; then
+            echo "ERROR: toolManifestPath '$manifest' not found. If using sparseCheckout, include its directory."
+            exit 1
+          fi
+
+          for candidate in "$manifest" ".config/dotnet-tools.json" "dotnet-tools.json"; do
+            if [ -f "$candidate" ]; then
+              echo "Restoring tool manifest: $candidate"
+              dotnet tool restore --tool-manifest "$candidate"
+              break
+            fi
+          done
 
           args="${{ inputs.migrationBundleArguments }}"
 
