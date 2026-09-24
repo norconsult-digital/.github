@@ -42,6 +42,11 @@ on:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
         required: false
         type: string
+      toolManifestPath:
+        description: Path to dotnet-tools.json. Leave empty to autodetect .config/dotnet-tools.json.
+        required: false
+        type: string
+        default: ''
 
 jobs:
   migrations-bundle-create:
@@ -70,7 +75,25 @@ jobs:
           cache-dependency-path: ${{ inputs.nugetCacheDependencyPath }}
 
       - name: Install EF tools
-        run: dotnet tool install -g dotnet-ef --version ${{ inputs.dotnetVersion }}
+        shell: bash
+        run: |
+          # A local tools manifest shadows globally installed tools, so restore it when present (#97)
+          dotnet tool install -g dotnet-ef --version ${{ inputs.dotnetVersion }}
+
+          manifest="${{ inputs.toolManifestPath }}"
+          if [ -z "$manifest" ]; then
+            manifest=".config/dotnet-tools.json"
+          elif [ ! -e "$manifest" ]; then
+            echo "ERROR: toolManifestPath '$manifest' not found. If using sparseCheckout, include its directory."
+            exit 1
+          fi
+
+          if [ -e "$manifest" ]; then
+            echo "Restoring tool manifest: $manifest"
+            dotnet tool restore --tool-manifest "$manifest"
+          else
+            echo "No dotnet-tools.json found; using globally installed dotnet-ef"
+          fi
 
       - name: Create migrations-bundle directory
         run: mkdir -p migrations-bundle

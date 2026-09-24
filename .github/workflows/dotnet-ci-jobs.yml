@@ -63,6 +63,11 @@ on:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
         required: false
         type: string
+      toolManifestPath:
+        description: Path to dotnet-tools.json. Leave empty to autodetect .config/dotnet-tools.json.
+        required: false
+        type: string
+        default: ''
       dockerCacheScope:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
@@ -99,6 +104,7 @@ jobs:
       ostype: ${{ inputs.ostype }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
+      toolManifestPath: ${{ inputs.toolManifestPath }}
 
   build_docker_image:
     needs: [test, create_migration_bundle]

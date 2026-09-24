@@ -79,6 +79,11 @@ on:
         description: Glob pattern for lock files used as cache key (scoped to relevant solution)
         required: false
         type: string
+      toolManifestPath:
+        description: Path to dotnet-tools.json. Leave empty to autodetect .config/dotnet-tools.json.
+        required: false
+        type: string
+        default: ''
       dockerCacheScope:
         description: GHA cache scope for Docker layer caching. Use a unique value per service to avoid cache thrashing.
         required: false
@@ -201,6 +206,7 @@ jobs:
       ostype: ${{ inputs.ostype }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
+      toolManifestPath: ${{ inputs.toolManifestPath }}
 
   build_docker_image:
     needs:
