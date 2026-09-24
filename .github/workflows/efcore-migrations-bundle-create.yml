@@ -81,19 +81,19 @@ jobs:
           dotnet tool install -g dotnet-ef --version ${{ inputs.dotnetVersion }}
 
           manifest="${{ inputs.toolManifestPath }}"
-          if [ -z "$manifest" ]; then
-            manifest=".config/dotnet-tools.json"
-          elif [ ! -e "$manifest" ]; then
+          if [ -n "$manifest" ] && [ ! -f "$manifest" ]; then
             echo "ERROR: toolManifestPath '$manifest' not found. If using sparseCheckout, include its directory."
             exit 1
           fi
 
-          if [ -e "$manifest" ]; then
-            echo "Restoring tool manifest: $manifest"
-            dotnet tool restore --tool-manifest "$manifest"
-          else
-            echo "No dotnet-tools.json found; using globally installed dotnet-ef"
-          fi
+          for candidate in "$manifest" ".config/dotnet-tools.json" "dotnet-tools.json"; do
+            if [ -f "$candidate" ]; then
+              echo "Restoring tool manifest: $candidate"
+              dotnet tool restore --tool-manifest "$candidate"
+              exit 0
+            fi
+          done
+          echo "No dotnet-tools.json found; using globally installed dotnet-ef"
 
       - name: Create migrations-bundle directory
         run: mkdir -p migrations-bundle
