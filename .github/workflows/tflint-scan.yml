@@ -37,7 +37,7 @@ jobs:
 
       # Cache TFLint plugins
       - name: Cache TFLint plugins
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.tflint.d/plugins
           key: ${{ runner.os }}-tflint-v0.61.0-${{ inputs.repository }}-${{ inputs.path }}-${{ hashFiles(format('{0}/.tflint.hcl', inputs.path)) }}
