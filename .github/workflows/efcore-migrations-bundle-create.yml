@@ -42,6 +42,11 @@ on:
         description: Newline-separated list of paths for sparse checkout. Leave empty for full checkout.
         required: false
         type: string
+      toolManifestPath:
+        description: Path to dotnet-tools.json. Leave empty to autodetect .config/dotnet-tools.json.
+        required: false
+        type: string
+        default: ''
 
 jobs:
   migrations-bundle-create:
@@ -98,6 +103,22 @@ jobs:
         run: |
           # Extracts --project and --startup-project paths from migrationBundleArguments and restores them
           # Handles quoted and unquoted paths, and both long and short argument forms
+
+          # A local tools manifest shadows globally installed tools, so restore it when present.
+          # Runs here, after NuGet.Config is in place, so tools on private feeds authenticate (#97)
+          manifest="${{ inputs.toolManifestPath }}"
+          if [ -n "$manifest" ] && [ ! -f "$manifest" ]; then
+            echo "ERROR: toolManifestPath '$manifest' not found. If using sparseCheckout, include its directory."
+            exit 1
+          fi
+
+          for candidate in "$manifest" ".config/dotnet-tools.json" "dotnet-tools.json"; do
+            if [ -f "$candidate" ]; then
+              echo "Restoring tool manifest: $candidate"
+              dotnet tool restore --tool-manifest "$candidate"
+              break
+            fi
+          done
 
           args="${{ inputs.migrationBundleArguments }}"
 
