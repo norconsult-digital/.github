@@ -65,7 +65,7 @@ jobs:
     name: Deploy Bicep File
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download Bicep artifact
         uses: actions/download-artifact@v7
