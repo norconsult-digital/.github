@@ -45,7 +45,7 @@ jobs:
           subscription-id: ${{ inputs.subscription }}
 
       - name: "Azure Load Testing: ${{ inputs.loadTestName }}"
-        uses: azure/load-testing@v1.2.6
+        uses: azure/load-testing@v1.2.7
         with:
           loadTestConfigFile: ${{ inputs.loadTestConfig }}
           loadTestResource: ${{ inputs.loadTestResource }}
