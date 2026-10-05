@@ -13,8 +13,9 @@
 # membership, policy - and never spells out a resource name: those are composed here from the module name and
 # the version date, so the naming rule lives in one place and no team can arrive at its own spelling.
 #
-# A new *version* is generated, because everything except the date is inherited from the version before it and
-# nothing new is decided. A new *API* is not: its path, display name and product membership are a product
+# A new *version* is generated from reviewed configuration. Opted-in Segment APIs use the target's preparation
+# tool for dated backend URLs and environment overrides; other APIs inherit their existing metadata unchanged.
+# A new *API* is not generated: its path, display name and product membership are a product
 # decision, and a missing first version is an error with an instruction. That is the boundary - exposing an
 # endpoint is a code change, exposing an API is a product decision.
 #
@@ -133,8 +134,118 @@ jobs:
           # The branch is recreated from the default branch on every run, so no older history is needed.
           fetch-depth: 1
 
+      - name: Prepare opted-in Segment artifacts
+        id: prepare
+        shell: bash
+        working-directory: target-repo
+        env:
+          API_NAME: ${{ inputs.API_NAME }}
+          ARTIFACT_FOLDER: ${{ inputs.ARTIFACT_FOLDER }}
+          VERSIONS: ${{ inputs.VERSIONS }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import subprocess
+          import sys
+
+          def fail(message):
+              sys.exit(f"::error::{message}")
+
+          def unique_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      fail(f"Duplicate JSON key in import configuration or manifest: {key}")
+                  result[key] = value
+              return result
+
+          def read_json(path):
+              try:
+                  return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object,
+                                    parse_constant=lambda value: fail(f"Invalid JSON constant: {value}"))
+              except (OSError, ValueError) as error:
+                  fail(f"Cannot read valid JSON from {path}: {error}")
+
+          root = Path.cwd().resolve()
+          config_path = root / "tools/apim/specification-imports.json"
+          api_name = os.environ["API_NAME"]
+          opted_in = False
+          if config_path.exists():
+              config = read_json(config_path)
+              if not isinstance(config, dict) or not isinstance(config.get("apis"), dict):
+                  fail(f"{config_path} must contain an object with an 'apis' object.")
+              if api_name in config["apis"]:
+                  settings = config["apis"][api_name]
+                  if not isinstance(settings, dict) or settings.get("versioningScheme") != "Segment":
+                      fail(f"Import opt-in for {api_name} must explicitly configure Segment. Fix the reviewed target configuration.")
+                  opted_in = True
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              if not opted_in:
+                  output.write("segment_prepared=false\n")
+                  print(f"No import opt-in for {api_name}; retaining the legacy proposal path.")
+                  sys.exit(0)
+
+              if os.environ["ARTIFACT_FOLDER"] != "apimartifacts":
+                  fail("Segment preparation supports only ARTIFACT_FOLDER=apimartifacts.")
+              versions = os.environ["VERSIONS"].split()
+              if not versions:
+                  fail(f"Segment import for {api_name} requires explicit VERSIONS.")
+              tool = root / "tools/apim/prepare_segment_specifications.py"
+              if not tool.is_file():
+                  fail(f"Opted-in API {api_name} requires {tool}. Land the platform tool before activating opt-in.")
+
+              manifest = root / ".apim-preparation/changed-paths.json"
+              try:
+                  subprocess.run([
+                      sys.executable, str(tool), "--api-name", api_name,
+                      "--export-directory", str(Path(os.environ["GITHUB_WORKSPACE"]) / "spec"),
+                      "--versions", *versions, "--repository-root", ".",
+                      "--changed-path-manifest", str(manifest),
+                  ], check=True)
+              except subprocess.CalledProcessError as error:
+                  fail(f"Platform preparation failed for {api_name} (exit {error.returncode}); no raw-copy fallback. Review its diagnostic, configuration and existing version-set scheme.")
+
+              paths = read_json(manifest)
+              if not isinstance(paths, list) or not paths or not all(isinstance(path, str) for path in paths):
+                  fail("Platform preparation must report a nonempty JSON array of exact Git paths.")
+              if paths != sorted(set(paths)):
+                  fail("Platform preparation paths must be sorted and unique.")
+              api_directories = {f"apimartifacts/apis/{api_name}--{version}" for version in versions}
+              required = {f"{directory}/{name}" for directory in api_directories
+                          for name in ("specification.json", "apiInformation.json")}
+              required.add(f"apimartifacts/version sets/{api_name}/versionSetInformation.json")
+              required.update(f"terraform/settings/apim/configuration.{environment}.yml"
+                              for environment in ("test", "stage", "prod"))
+              for path in paths:
+                  relative = PurePosixPath(path)
+                  parts = relative.parts
+                  product_file = (len(parts) >= 6 and parts[:2] == ("apimartifacts", "products")
+                                  and parts[3] == "apis"
+                                  and parts[4] in {f"{api_name}--{version}" for version in versions})
+                  if (relative.is_absolute() or relative.as_posix() != path
+                          or any(part in (".", "..") for part in parts)
+                          or any(character in path for character in ("\0", "\n", "\r", "\\"))
+                          or (path not in required and not product_file)):
+                      fail(f"Preparation reported an out-of-scope path: {path!r}")
+                  destination = root / relative
+                  if not destination.resolve().is_relative_to(root) or not destination.is_file():
+                      fail(f"Preparation reported a missing or escaped file: {path!r}")
+              if not required.issubset(paths):
+                  fail("Preparation manifest omits required specifications, API metadata, version set or environment overrides.")
+
+              # NUL separation preserves spaces and literal Git pathnames without quote interpretation.
+              written_list = Path(os.environ["GITHUB_WORKSPACE"]) / "written-paths.txt"
+              written_list.write_bytes(b"".join(path.encode("utf-8") + b"\0" for path in paths))
+              output.write(f"segment_prepared=true\npath_list={written_list}\n")
+          PY
+
       - name: Put the specification in place
         id: place
+        if: steps.prepare.outputs.segment_prepared != 'true'
         shell: bash
         working-directory: target-repo
         env:
@@ -146,11 +257,10 @@ jobs:
 
           apis="${ARTIFACT_FOLDER}/apis"
 
-          # One path per line in a file, because "version sets" contains a space and a space-joined list of
-          # paths cannot carry it. git add --pathspec-from-file reads the file as-is.
+          # NUL-delimited literal paths preserve spaces in "version sets" and avoid Git quote interpretation.
           written_list="$GITHUB_WORKSPACE/written-paths.txt"
           : > "$written_list"
-          note() { printf '%s\n' "$1" >> "$written_list"; }
+          note() { printf '%s\0' "$1" >> "$written_list"; }
 
           # An unversioned API is the one-entry case of the same loop, so there is one code path rather than
           # two. A literal dash marks "no version": an empty field cannot be used, because read strips leading
@@ -251,7 +361,7 @@ jobs:
           # A list of paths, never a wildcard: git add on the whole folder would also stage anything else
           # that happened to differ, and this branch must contain what was generated and nothing besides.
           echo "Paths staged for commit:"
-          sed 's/^/  /' "$written_list"
+          tr '\0' '\n' < "$written_list" | sed 's/^/  /'
           echo "path_list=$written_list" >> "$GITHUB_OUTPUT"
 
       - name: Commit on a branch of its own
@@ -260,19 +370,20 @@ jobs:
         working-directory: target-repo
         env:
           API_NAME: ${{ inputs.API_NAME }}
-          PATH_LIST: ${{ steps.place.outputs.path_list }}
+          PATH_LIST: ${{ steps.prepare.outputs.path_list || steps.place.outputs.path_list }}
         run: |
           set -euo pipefail
 
           # The specification is regenerated on every run, and an unchanged one must not produce noise. Staging
           # first, then asking, is what makes "nothing changed" cheap to detect.
-          git add --pathspec-from-file="$PATH_LIST"
+          git --literal-pathspecs add --pathspec-from-file="$PATH_LIST" --pathspec-file-nul
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "The specification is identical to what is already in ${TARGET_FULL_NAME}. Nothing to propose."
+            echo "The generated artifacts are identical to what is already in ${TARGET_FULL_NAME}. Nothing to propose."
             exit 0
           fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
+          git diff --cached --name-only > "$GITHUB_WORKSPACE/changed-paths.txt"
 
           # One long-lived branch per API, recreated from the default branch each run and force-pushed. A new
           # branch per build would give platform one pull request per team build, which nobody would read.
@@ -308,12 +419,6 @@ jobs:
           # only has to create one when there is none.
           existing=$(gh pr list --repo "$TARGET_FULL_NAME" --head "$BRANCH" --state open --json url --jq '.[0].url // ""')
 
-          if [ -n "$existing" ]; then
-            echo "url=$existing" >> "$GITHUB_OUTPUT"
-            echo "Updated $existing"
-            exit 0
-          fi
-
           # Quoted heredoc: the body holds backticks and dollar signs that are markdown, not shell. Whatever has
           # to be interpolated is a workflow expression, substituted before bash ever sees the script.
           #
@@ -322,19 +427,33 @@ jobs:
           body=$(cat <<'EOF'
           Generated by [run ${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) in `${{ github.repository }}`, from commit `${{ github.sha }}`.
 
-          Only `${{ inputs.ARTIFACT_FOLDER }}/apis/${{ inputs.API_NAME }}/specification.json` is touched. The API's path, display name, product membership and policy are not in this diff.
+          This proposal contains generated specifications and, when required, API metadata, version-set information, product associations and environment overrides. Review the actual changed paths below; existing reviewed version-set schemes are never converted automatically.
 
-          Merging publishes to test. Stage and prod follow behind their approval gates.
+          Merging publishes to test. Stage and prod follow behind their approval gates. Changes to environment override files require the full artifact-publish workflow and the applicable environment approvals, not a specification-only import.
 
           ### What to look at
 
           - Endpoints and models that were removed or renamed, since those break callers
           - Operation ids, which decide APIM's operation names - a rename orphans any operation-level policy
           - Whether the change deserves a new version date
+          - Version-specific backend URLs in API metadata and every environment override
+          - Product associations that inherit credential policies for a new version
 
           This branch is recreated on every run of the generating workflow, so it always holds the current specification as a single commit.
           EOF
           )
+
+          body+=$'\n\n### Changed paths\n\n'
+          while IFS= read -r path; do
+            body+="- \`$path\`"$'\n'
+          done < "$GITHUB_WORKSPACE/changed-paths.txt"
+
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --repo "$TARGET_FULL_NAME" --body "$body"
+            echo "url=$existing" >> "$GITHUB_OUTPUT"
+            echo "Updated $existing"
+            exit 0
+          fi
 
           url=$(gh pr create \
             --repo "$TARGET_FULL_NAME" \
@@ -356,10 +475,14 @@ jobs:
             echo "| :--- | :--- |"
             echo "| API | ${{ inputs.API_NAME }} |"
             echo "| Target | ${{ env.TARGET_FULL_NAME }} |"
-            echo "| File | ${{ inputs.ARTIFACT_FOLDER }}/apis/${{ inputs.API_NAME }}/specification.json |"
             if [ "${{ steps.commit.outputs.changed }}" = "true" ]; then
               echo "| Pull request | ${{ steps.pull-request.outputs.url }} |"
+              echo ""
+              echo "### Changed paths"
+              while IFS= read -r path; do
+                printf -- '- `%s`\n' "$path"
+              done < "$GITHUB_WORKSPACE/changed-paths.txt"
             else
-              echo "| Pull request | none - the specification was unchanged |"
+              echo "| Pull request | none - no generated artifacts changed, or proposal did not complete (see step results) |"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
