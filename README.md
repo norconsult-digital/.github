@@ -34,6 +34,9 @@ turns backend OpenAPI exports into a pull request in the target repository.
   before a proposal commit. Only allowlisted manifest files are staged, including
   unchanged intended artifacts so Git determines the actual diff. Side-channel
   files such as the manifest and tool stdout are never staged.
+- The membership allowlist includes reviewed local files (such as `policy.xml`)
+  under the requested API/date's product membership directories, not product-level
+  policies. The platform tool owns baseline cloning and policy-backfill checks.
 - Unchanged artifacts produce no commit or PR.
 - Changes require review and merge before publishing; this workflow never deploys
   directly. Environment override changes require full artifact publication and

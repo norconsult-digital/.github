@@ -198,9 +198,8 @@ jobs:
           for path in paths:
               relative = PurePosixPath(path)
               parts = relative.parts
-              product_file = (len(parts) == 6 and parts[:2] == ("apimartifacts", "products")
-                              and parts[3] == "apis" and parts[4] in api_resources
-                              and parts[5] == "productApiInformation.json")
+              product_file = (len(parts) >= 6 and parts[:2] == ("apimartifacts", "products")
+                              and parts[3] == "apis" and parts[4] in api_resources)
               if (relative.is_absolute() or relative.as_posix() != path
                       or any(part in (".", "..") for part in parts)
                       or any(character in path for character in ("\0", "\n", "\r", "\\"))
