@@ -585,8 +585,19 @@ jobs:
             take priority in case of conflict.
 
           ## Output contract
-          Emit ONLY a JSON document on stdout, wrapped between these EXACT marker lines
-          (each on its own line, no other text on those lines):
+          You MUST deliver the result in BOTH of these ways:
+
+          1. PRIMARY: write the JSON document to the file
+             .agent-review/agent-findings.json (path relative to the repository root)
+             using your file-writing tool. This file is what gets parsed.
+          2. SECONDARY: print the same JSON between the EXACT marker lines below,
+             directly in your own final reply (each marker on its own line, no other
+             text on those lines).
+
+          Do NOT produce the marker block through a shell command (cat, echo, printf,
+          a heredoc or similar). The CLI truncates tool output in the transcript, the
+          end marker gets cut off, and the whole review is then discarded as invalid.
+          Print it yourself, as text.
 
           <<<FINDINGS_JSON>>>
           {
@@ -615,12 +626,13 @@ jobs:
           }
           <<<END_FINDINGS_JSON>>>
 
-          If there are no existing findings and no new findings, emit:
+          If there are no existing findings and no new findings, write and print:
           <<<FINDINGS_JSON>>>
           {"summary":"No issues found.","revalidations":[],"findings":[],"remediationPlan":""}
           <<<END_FINDINGS_JSON>>>
 
-          The markers and the JSON between them are the only contract.
+          The JSON is the only contract. The file is authoritative; the printed block
+          is the fallback used if the file is missing.
           PROMPT
 
           set +e
@@ -644,24 +656,64 @@ jobs:
 
           python3 - <<'PY'
           import json, re, pathlib, sys
-          raw = pathlib.Path(".agent-review/agent-output.txt").read_text(encoding="utf-8", errors="replace")
-          m = re.search(r"<<<FINDINGS_JSON>>>\s*(.*?)\s*<<<END_FINDINGS_JSON>>>", raw, re.DOTALL)
+
           out_path = pathlib.Path(".agent-review/findings.json")
-          if not m:
-              print("::error title=Copilot Agent Review — no structured output::The agent produced no <<<FINDINGS_JSON>>> block, so the review did not complete. This is NOT the same as 'no issues found'.")
-              out_path.write_text(json.dumps({"summary": "Agent did not produce structured output.", "revalidations": [], "findings": []}))
+          agent_file = pathlib.Path(".agent-review/agent-findings.json")
+
+          def fail(title, message, summary):
+              print(f"::error title=Copilot Agent Review — {title}::{message}")
+              out_path.write_text(json.dumps({"summary": summary, "revalidations": [], "findings": []}))
               sys.exit(1)
-          payload = m.group(1).strip()
+
+          def normalize(text):
+              """Tolerate a payload the agent wrapped in markers or a code fence."""
+              text = text.strip()
+              m = re.search(r"<<<FINDINGS_JSON>>>\s*(.*?)\s*<<<END_FINDINGS_JSON>>>", text, re.DOTALL)
+              if m:
+                  text = m.group(1).strip()
+              m = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.DOTALL)
+              if m:
+                  text = m.group(1).strip()
+              return text
+
+          # Primary contract: the file the agent was told to write. Preferred because
+          # the CLI truncates tool output in the transcript, so a marker block emitted
+          # through a shell call loses its end marker and cannot be recovered.
+          payload = None
+          source = None
+          if agent_file.is_file():
+              candidate = normalize(agent_file.read_text(encoding="utf-8", errors="replace"))
+              if candidate:
+                  payload, source = candidate, str(agent_file)
+
+          # Fallback contract: the marker block printed in the agent's own reply.
+          if payload is None:
+              raw = pathlib.Path(".agent-review/agent-output.txt").read_text(encoding="utf-8", errors="replace")
+              m = re.search(r"<<<FINDINGS_JSON>>>\s*(.*?)\s*<<<END_FINDINGS_JSON>>>", raw, re.DOTALL)
+              if not m:
+                  fail(
+                      "no structured output",
+                      "The agent wrote no .agent-review/agent-findings.json and produced no complete "
+                      "<<<FINDINGS_JSON>>> block, so the review did not complete. This is NOT the same "
+                      "as 'no issues found'.",
+                      "Agent did not produce structured output.",
+                  )
+              payload, source = m.group(1).strip(), "marker block"
+
           try:
               parsed = json.loads(payload)
           except json.JSONDecodeError as e:
-              print(f"::error title=Copilot Agent Review — invalid JSON::The agent emitted a findings block that is not valid JSON ({e}). The review result cannot be trusted.")
-              out_path.write_text(json.dumps({"summary": f"Agent produced invalid JSON: {e}", "revalidations": [], "findings": []}))
-              sys.exit(1)
+              fail(
+                  "invalid JSON",
+                  f"The agent produced a findings payload ({source}) that is not valid JSON ({e}). "
+                  "The review result cannot be trusted.",
+                  f"Agent produced invalid JSON: {e}",
+              )
+
           parsed.setdefault("revalidations", [])
           parsed.setdefault("findings", [])
           out_path.write_text(json.dumps(parsed, indent=2))
-          print(f"Wrote {len(parsed.get('findings', []))} new finding(s), {len(parsed.get('revalidations', []))} revalidation(s) to {out_path}")
+          print(f"Wrote {len(parsed['findings'])} new finding(s), {len(parsed['revalidations'])} revalidation(s) to {out_path} (source: {source})")
           PY
 
           echo "--- findings.json ---"
