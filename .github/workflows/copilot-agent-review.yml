@@ -949,6 +949,10 @@ jobs:
               const open = Object.values(base).filter((e) => e.state === "open").length;
               const resolved = Object.values(base).filter((e) => e.state === "resolved").length;
               const data = Buffer.from(JSON.stringify(merged)).toString("base64");
+              const shortSha = (COMMIT_SHA || "").slice(0, 7);
+              const verdict = open === 0
+                  ? `✅ **No open findings** as of ${shortSha}.`
+                  : `⚠️ **${open} open finding(s)** as of ${shortSha}.`;
               const bodyMd = [
                   marker(agent),
                   `<!-- This is an automated, machine-managed ledger for ${agent}. Do not edit by hand. -->`,
@@ -956,6 +960,10 @@ jobs:
                   `### ${emoji} ${title} — finding ledger`,
                   ``,
                   `_Tracks findings across pushes so each issue is reported once and resolved when fixed._`,
+                  ``,
+                  verdict,
+                  ``,
+                  summary,
                   ``,
                   `**Open:** ${open} · **Resolved:** ${resolved} · **Updated:** ${merged.updatedAt} · **version** ${merged.version}`,
                   ``,
