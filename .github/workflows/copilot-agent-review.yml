@@ -326,12 +326,36 @@ jobs:
         env:
           COPILOT_CLI_TOKEN: ${{ secrets.COPILOT_CLI_TOKEN }}
         run: |
-          if [ -n "${COPILOT_CLI_TOKEN}" ]; then
-              echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-              echo "available=false" >> "$GITHUB_OUTPUT"
-              echo "::warning::COPILOT_CLI_TOKEN not set — skipping ${{ matrix.agent }}."
+          set -euo pipefail
+
+          if [ -z "${COPILOT_CLI_TOKEN}" ]; then
+              echo "::error title=Copilot Agent Review — token missing::COPILOT_CLI_TOKEN is not configured for this repository, so ${{ matrix.agent }} cannot run. Add it as a repository secret (a PAT with Copilot access). See the 'Copilot Agent Review Token' wiki page."
+              exit 1
           fi
+
+          # A non-empty secret proves nothing — an expired or revoked token looks
+          # identical to a valid one until the Copilot CLI tries to use it, and
+          # the CLI then fails in a way that is easy to mistake for "no findings".
+          # Validate it up front so the failure is unmistakable.
+          http_code=$(curl -sS -m 30 -o /tmp/token-check.json -D /tmp/token-check.headers \
+              -w '%{http_code}' \
+              -H "Authorization: Bearer ${COPILOT_CLI_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/user || echo "000")
+
+          if [ "${http_code}" != "200" ]; then
+              echo "::error title=Copilot Agent Review — token rejected::COPILOT_CLI_TOKEN is set but GitHub rejected it (HTTP ${http_code}). The token is most likely expired or revoked. Rotate it and update the COPILOT_CLI_TOKEN repository secret — see the 'Copilot Agent Review Token' wiki page."
+              echo "API response:" >&2
+              cat /tmp/token-check.json >&2 || true
+              exit 1
+          fi
+
+          login=$(python3 -c 'import json;print(json.load(open("/tmp/token-check.json")).get("login","?"))')
+          scopes=$(grep -i '^x-oauth-scopes:' /tmp/token-check.headers | cut -d' ' -f2- | tr -d '\r' || true)
+          echo "✅ COPILOT_CLI_TOKEN is valid — authenticated as ${login}"
+          echo "   Classic-PAT scopes: ${scopes:-<none reported (fine-grained PAT or GitHub App token)>}"
+
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       # ──────────────────────────────────────────────────────────────────
       # Convergence step 1/3: load this agent's ledger of OPEN findings
@@ -605,9 +629,18 @@ jobs:
               --no-color \
               -p "$(cat .agent-review/prompt.md)" \
               | tee .agent-review/agent-output.txt
-          copilot_rc=$?
+          copilot_rc=${PIPESTATUS[0]}
           set -e
           echo "copilot exit code: ${copilot_rc}"
+
+          # A non-zero exit means no review was performed. Without this guard the
+          # job continues, writes an empty findings file and posts a ledger that
+          # reads "0 findings" — indistinguishable from a clean review.
+          if [ "${copilot_rc}" -ne 0 ]; then
+              echo "::error title=Copilot Agent Review — agent did not run::Copilot CLI exited with code ${copilot_rc}, so ${{ matrix.agent }} performed NO review of this pull request. This is usually an expired COPILOT_CLI_TOKEN or a token without Copilot access. Last 30 lines of CLI output follow."
+              tail -n 30 .agent-review/agent-output.txt >&2 || true
+              exit "${copilot_rc}"
+          fi
 
           python3 - <<'PY'
           import json, re, pathlib, sys
@@ -615,16 +648,16 @@ jobs:
           m = re.search(r"<<<FINDINGS_JSON>>>\s*(.*?)\s*<<<END_FINDINGS_JSON>>>", raw, re.DOTALL)
           out_path = pathlib.Path(".agent-review/findings.json")
           if not m:
-              print("No JSON markers found — writing empty result.", file=sys.stderr)
+              print("::error title=Copilot Agent Review — no structured output::The agent produced no <<<FINDINGS_JSON>>> block, so the review did not complete. This is NOT the same as 'no issues found'.")
               out_path.write_text(json.dumps({"summary": "Agent did not produce structured output.", "revalidations": [], "findings": []}))
-              sys.exit(0)
+              sys.exit(1)
           payload = m.group(1).strip()
           try:
               parsed = json.loads(payload)
           except json.JSONDecodeError as e:
-              print(f"JSON parse error: {e}.", file=sys.stderr)
+              print(f"::error title=Copilot Agent Review — invalid JSON::The agent emitted a findings block that is not valid JSON ({e}). The review result cannot be trusted.")
               out_path.write_text(json.dumps({"summary": f"Agent produced invalid JSON: {e}", "revalidations": [], "findings": []}))
-              sys.exit(0)
+              sys.exit(1)
           parsed.setdefault("revalidations", [])
           parsed.setdefault("findings", [])
           out_path.write_text(json.dumps(parsed, indent=2))
