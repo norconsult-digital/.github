@@ -97,7 +97,7 @@ jobs:
           fi
         env:
           INPUT_PATH: ${{ inputs.path }}
-      
+
       - name: Extract i18n
         run: |
           cd "$INPUT_PATH"
@@ -106,46 +106,19 @@ jobs:
           INPUT_PATH: ${{ inputs.path }}
           INPUT_EXTRACTCOMMAND: ${{ inputs.extractCommand }}
 
-
-      - name: Upload to POEditor if file has changes
+      - name: Upload to POEditor
         run: |
           file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
           overwriteValue=$(echo "${{ inputs.overwrite }}" | grep -iq "true" && echo "1" || echo "0")
-          if [ -f "$file" ] && ! git diff --exit-code -- "$file"; then
-            echo "Differences found, uploading $file..."
-            sleep 30
-            curl -X POST https://api.poeditor.com/v2/projects/upload \
-              -F api_token="${{ secrets.API_KEY }}" \
-              -F id="${{ inputs.projectId }}" \
-              -F updating="terms_translations" \
-              -F language="en" \
-              -F overwrite="$overwriteValue" \
-              -F read_from_source="1" \
-              -F fuzzy_trigger="1" \
-              -F sync_terms="1" \
-              -F file=@"$file" \
-              -F tags="{\"obsolete\":\"removed-strings\"}"
-          else
-            echo "No differences found for $file."
-          fi
 
-      - name: Add changed xlf file and push
-        run: |
-          set -e
-          file="${{ inputs.path }}/${{ inputs.outputPath }}/${{ inputs.outputFileName }}"
-          if [ -f "$file" ] && ! git diff --quiet -- "$file"; then
-            echo "Changes found in $file"
-            git config --global user.email "$GITHUB_ACTOR_EMAIL"
-            git config --global user.name "$GITHUB_ACTOR - automatic"
-            git add "$file"
-            # Skip push for protected main branch
-            if [ "${GITHUB_REF#refs/heads/}" != "main" ]; then
-              git pull --no-rebase origin "${GITHUB_REF#refs/heads/}"
-              git commit -m "Automatic workflow update in $file"
-              git push origin HEAD:"${GITHUB_REF#refs/heads/}"
-            else
-              echo "Skipping push to protected branch main."
-            fi
-          else
-            echo "No changes in $file"
-          fi
+          curl -f -X POST https://api.poeditor.com/v2/projects/upload \
+            -F api_token="${{ secrets.API_KEY }}" \
+            -F id="${{ inputs.projectId }}" \
+            -F updating="terms_translations" \
+            -F language="en" \
+            -F overwrite="$overwriteValue" \
+            -F read_from_source="1" \
+            -F fuzzy_trigger="1" \
+            -F sync_terms="1" \
+            -F file=@"$file" \
+            -F tags="{\"obsolete\":\"removed-strings\"}"
