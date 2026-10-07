@@ -1,4 +1,4 @@
-﻿name: "POEditor Upload Workflow"
+name: "POEditor Upload Workflow"
 
 on:
   workflow_call:
@@ -127,7 +127,3 @@ jobs:
             -F sync_terms="1" \
             -F file=@"$file" \
             -F tags="{\"obsolete\":\"removed-strings\"}"
-
-
-
-
