@@ -51,6 +51,10 @@ on:
       API_KEY:
         required: true
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   upload-to-poeditor:
     runs-on: ubuntu-latest
@@ -97,6 +101,7 @@ jobs:
           fi
         env:
           INPUT_PATH: ${{ inputs.path }}
+          GHP_TOKEN: ${{ github.token }}
 
       - name: Extract i18n
         run: |
