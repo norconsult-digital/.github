@@ -1,0 +1,131 @@
+name: Mark native-federation blobs stale
+description: >
+  Idempotently stamps blobs in a container scope with a `stalesince` metadata
+  timestamp for deferred garbage collection (the scheduled federation-gc action
+  deletes them after a retention window). Nothing is deleted here. Two modes,
+  selected by whether `source` is given:
+
+    * WITH source  → publish/orphan mode: stamps blobs in scope that are NOT in
+      the freshly built bundle (leftover chunks from previous builds).
+    * WITHOUT source → retire mode: stamps EVERY blob under `path` (retire a
+      whole version once its coexistence window ends).
+
+  Stamping is idempotent: already-stamped blobs are left untouched, so repeated
+  runs never push the deletion clock forward.
+
+inputs:
+  account:
+    description: Storage account name (e.g. stbimremotestest001).
+    required: true
+  container:
+    description: Blob container / remote app name (e.g. admin-app).
+    required: true
+  path:
+    description: >
+      Optional virtual-directory prefix inside the container (e.g. v1). When set,
+      stamping is confined to <container>/<path>/, so one version is never
+      stamped while operating on another. Empty = whole container.
+    required: false
+    default: ""
+  source:
+    description: >
+      Optional path to the freshly built bundle whose files must be PROTECTED
+      (never stamped). Provided by the publish flow. Omit to retire the whole
+      scope (every blob under `path` is stamped).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Mark blobs stale (idempotent, deferred GC)
+      shell: bash
+      env:
+        ACCOUNT: ${{ inputs.account }}
+        CONTAINER: ${{ inputs.container }}
+        DEST_PATH: ${{ inputs.path }}
+        SOURCE: ${{ inputs.source }}
+      run: |
+        set -euo pipefail
+
+        # Scope prefix (e.g. v1). Strip any trailing slash. Stamping never
+        # reaches outside <container>/<PREFIX>/.
+        PREFIX="${DEST_PATH%/}"
+
+        # Scratch under RUNNER_TEMP (caller workspace stays clean); auto-removed.
+        WORK="$(mktemp -d "${RUNNER_TEMP:-/tmp}/mark-stale.XXXXXX")"
+        trap 'rm -rf "${WORK}"' EXIT
+        KEEP="${WORK}/keep.txt"
+        LIST="${WORK}/list.tsv"
+
+        # keep = files that must NOT be stamped. Empty when no source (retire),
+        # so every blob in scope becomes an orphan. Names are aligned to the
+        # remote list: <PREFIX>/<relative> when scoped.
+        : > "${KEEP}"
+        if [ -n "${SOURCE}" ]; then
+          if [ ! -d "${SOURCE}" ]; then
+            echo "::error::Source directory '${SOURCE}' does not exist"
+            exit 1
+          fi
+          if [ -n "${PREFIX}" ]; then
+            ( cd "${SOURCE}" && find . -type f -printf "%P\n" ) \
+              | sed "s#^#${PREFIX}/#" | sort > "${KEEP}"
+          else
+            ( cd "${SOURCE}" && find . -type f -printf "%P\n" ) | sort > "${KEEP}"
+          fi
+        fi
+
+        declare -A PROTECTED=()
+        while IFS= read -r f; do
+          [ -n "${f}" ] && PROTECTED["${f}"]=1
+        done < "${KEEP}"
+
+        # One listing with metadata (--include m) yields name + stalesince in a
+        # single call — no per-blob `metadata show`.
+        list_args=(
+          --account-name "${ACCOUNT}"
+          --auth-mode login
+          --container-name "${CONTAINER}"
+          --include m
+          --query "[].[name, metadata.stalesince]" -o tsv
+        )
+        [ -n "${PREFIX}" ] && list_args+=(--prefix "${PREFIX}/")
+        az storage blob list "${list_args[@]}" > "${LIST}"
+
+        NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        ORPHANS=0
+        MARKED=0
+        while IFS=$'\t' read -r blob since; do
+          [ -z "${blob}" ] && continue
+          # Protected by the current build → not an orphan.
+          [ -n "${PROTECTED[${blob}]:-}" ] && continue
+          ORPHANS=$((ORPHANS + 1))
+
+          # Idempotent: only stamp orphans that are not already stamped, so later
+          # runs never push the deletion clock forward.
+          if [ -n "${since}" ] && [ "${since}" != "None" ]; then
+            continue
+          fi
+          az storage blob metadata update \
+            --account-name "${ACCOUNT}" \
+            --auth-mode login \
+            --container-name "${CONTAINER}" \
+            --name "${blob}" \
+            --metadata "stalesince=${NOW}" \
+            --output none
+          echo "  marked stale: ${blob}"
+          MARKED=$((MARKED + 1))
+        done < "${LIST}"
+
+        if [ -n "${SOURCE}" ]; then
+          MODE="publish (protect current build)"
+        else
+          MODE="retire (stamp whole scope)"
+        fi
+        {
+          echo "### Marked stale: ${ACCOUNT}/${CONTAINER}${PREFIX:+/${PREFIX}}"
+          echo "- mode: **${MODE}**"
+          echo "- protected build files: **$(wc -l < "${KEEP}" | tr -d ' ')**"
+          echo "- orphan blobs found: **${ORPHANS}**"
+          echo "- newly marked stale: **${MARKED}** (deleted later by GC after retention)"
+        } >> "${GITHUB_STEP_SUMMARY}"

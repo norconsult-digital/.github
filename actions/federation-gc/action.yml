@@ -1,0 +1,80 @@
+name: GC stale remote blobs
+description: >
+  Deferred garbage collection for native-federation remote bundles. Deletes
+  blobs whose `stalesince` metadata (set by the federation-mark-stale action) is older
+  than the retention window. Blobs WITHOUT a `stalesince` value are current
+  (or pointer) files and are never touched — so a long-idle site is safe even
+  though its chunks are immutable + long-cached. Generic mechanics only: env
+  mapping, schedule and Azure login live in the caller workflow.
+
+inputs:
+  account:
+    description: Storage account name (e.g. stbimremotestest001).
+    required: true
+  containers:
+    description: Space-separated blob container names to GC (e.g. "admin viewer").
+    required: true
+  retention-days:
+    description: Delete blobs marked stale more than this many days ago.
+    required: false
+    default: "7"
+
+runs:
+  using: composite
+  steps:
+    - name: Delete stale blobs past retention
+      shell: bash
+      env:
+        ACCOUNT: ${{ inputs.account }}
+        CONTAINERS: ${{ inputs.containers }}
+        RETENTION_DAYS: ${{ inputs.retention-days }}
+      run: |
+        set -euo pipefail
+
+        CUTOFF=$(date -u -d "-${RETENTION_DAYS} days" +%s)
+        echo "Retention: ${RETENTION_DAYS}d — deleting blobs marked stale before $(date -u -d "@${CUTOFF}" +%Y-%m-%dT%H:%M:%SZ)"
+
+        # Scratch under RUNNER_TEMP (caller workspace stays clean); auto-removed.
+        WORK="$(mktemp -d "${RUNNER_TEMP:-/tmp}/gc-stale.XXXXXX")"
+        trap 'rm -rf "${WORK}"' EXIT
+        STALE="${WORK}/stale.tsv"
+
+        TOTAL_DELETED=0
+        for CONTAINER in ${CONTAINERS}; do
+          echo "== ${ACCOUNT}/${CONTAINER} =="
+
+          # name<TAB>stalesince for every blob that carries a stalesince stamp.
+          az storage blob list \
+            --account-name "${ACCOUNT}" \
+            --auth-mode login \
+            --container-name "${CONTAINER}" \
+            --include m \
+            --query "[?metadata.stalesince!=null].[name, metadata.stalesince]" \
+            -o tsv > "${STALE}" || true
+
+          DELETED=0
+          while IFS=$'\t' read -r name since; do
+            [ -z "${name}" ] && continue
+            ts=$(date -u -d "${since}" +%s 2>/dev/null || echo 0)
+            if [ "${ts}" -gt 0 ] && [ "${ts}" -lt "${CUTOFF}" ]; then
+              az storage blob delete \
+                --account-name "${ACCOUNT}" \
+                --auth-mode login \
+                --container-name "${CONTAINER}" \
+                --name "${name}" \
+                --output none
+              echo "  deleted: ${name} (stalesince=${since})"
+              DELETED=$((DELETED + 1))
+            fi
+          done < "${STALE}"
+
+          echo "  deleted ${DELETED} blob(s) from ${CONTAINER}"
+          TOTAL_DELETED=$((TOTAL_DELETED + DELETED))
+        done
+
+        {
+          echo "### GC ${ACCOUNT}"
+          echo "- retention: **${RETENTION_DAYS}d**"
+          echo "- containers: **${CONTAINERS}**"
+          echo "- blobs deleted: **${TOTAL_DELETED}**"
+        } >> "${GITHUB_STEP_SUMMARY}"

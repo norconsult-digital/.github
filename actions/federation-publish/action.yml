@@ -1,0 +1,76 @@
+name: Publish native-federation remote
+description: >
+  Orchestrates the versioned-registry publish flow for a native-federation
+  remote: resolves the contract version, downloads the built bundle artifact,
+  logs in to Azure (OIDC), uploads the bundle into its v<version>/ virtual
+  directory (federation-upload) and stamps that version's orphaned blobs stale for
+  deferred GC (federation-mark-stale). Keeps the CD workflow's per-environment jobs
+  to a single step each.
+
+  Versioned layout produced in the container:
+    <container>/v<version>/remoteEntry.json   (no-cache pointer)
+    <container>/v<version>/<hashed chunks>     (immutable, 1y cache)
+
+inputs:
+  artifact-name:
+    description: Name of the uploaded build artifact (native-federation browser/ dir).
+    required: true
+  project-dir:
+    description: >
+      Remote project root containing contract.json. The version segment
+      (v<contractVersion>) is derived from it via the federation-read-contract action.
+    required: true
+  account:
+    description: Remotes storage account name (e.g. stbimremotestest001).
+    required: true
+  container:
+    description: Blob container / remote app name (e.g. admin-app).
+    required: true
+  client-id:
+    description: Azure service principal client id for OIDC login.
+    required: true
+  tenant-id:
+    description: Azure tenant id.
+    required: true
+  subscription:
+    description: Azure subscription id.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve contract version
+      id: contract
+      uses: $/actions/federation-read-contract
+      with:
+        project-dir: ${{ inputs.project-dir }}
+
+    - name: Download build artifact
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: build
+
+    - name: Azure login (OIDC)
+      uses: azure/login@v3
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription }}
+
+    - name: Upload bundle
+      uses: $/actions/federation-upload
+      with:
+        account: ${{ inputs.account }}
+        container: ${{ inputs.container }}
+        source: build
+        path: ${{ steps.contract.outputs.version }}
+        no-cache-files: remoteEntry.json,index.html
+
+    - name: Mark orphaned blobs stale (deferred GC)
+      uses: $/actions/federation-mark-stale
+      with:
+        account: ${{ inputs.account }}
+        container: ${{ inputs.container }}
+        path: ${{ steps.contract.outputs.version }}
+        source: build

@@ -1,0 +1,50 @@
+name: Read federation contract
+description: >
+  Extracts the federation identity from a remote project's contract.json — the
+  checked-in standard that declares the remote's federation name and its integer
+  contract version. Light extractor only: it reads and echoes the values for
+  downstream steps. Contract *validation* (schema, name-vs-remoteEntry match) is
+  the job of federation-verify, which runs first in the pipeline; by the time
+  anything consumes these outputs the contract is already known-valid.
+
+  Outputs:
+    name    — the federation/contract name (e.g. admin-app)
+    version — the version segment for registry paths (e.g. v1)
+
+inputs:
+  project-dir:
+    description: Remote project root containing contract.json (monorepo support).
+    required: false
+    default: .
+
+outputs:
+  name:
+    description: Federation/contract name from contract.json (e.g. admin-app).
+    value: ${{ steps.read.outputs.name }}
+  version:
+    description: Version segment "v<contractVersion>" for registry paths (e.g. v1).
+    value: ${{ steps.read.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read contract.json
+      id: read
+      shell: bash
+      env:
+        PROJECT_DIR: ${{ inputs.project-dir }}
+      run: |
+        set -euo pipefail
+
+        CONTRACT="${PROJECT_DIR%/}/contract.json"
+        if [ ! -f "${CONTRACT}" ]; then
+          echo "::error::contract.json not found at '${CONTRACT}'"
+          exit 1
+        fi
+
+        NAME=$(jq -r '.name' "${CONTRACT}")
+        VER=$(jq -r '.contractVersion' "${CONTRACT}")
+
+        echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+        echo "version=v${VER}" >> "$GITHUB_OUTPUT"
+        echo "Contract: name=${NAME} version=v${VER}"
