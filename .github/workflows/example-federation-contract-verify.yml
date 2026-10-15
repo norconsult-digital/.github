@@ -1,0 +1,35 @@
+name: Example — federation-verify contract check
+
+# Demo for the federation-verify action, run against the committed fixtures in
+# actions/federation-verify/example/fixtures/ (which mirror the standardized
+# registry layout <name>/v<version>/remoteEntry.json). The compatible candidate
+# passes; the breaking candidate fails (continue-on-error keeps the demo green).
+# Trigger manually.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compatible candidate (should pass)
+        uses: ./actions/federation-verify
+        with:
+          candidate: actions/federation-verify/example/fixtures/candidates/compatible/remoteEntry.json
+          project-dir: actions/federation-verify/example
+          # Local fixture registry instead of a storage URL.
+          base-url: actions/federation-verify/example/fixtures/registry
+
+      - name: Breaking candidate (should fail — demo only)
+        uses: ./actions/federation-verify
+        continue-on-error: true
+        with:
+          candidate: actions/federation-verify/example/fixtures/candidates/breaking/remoteEntry.json
+          project-dir: actions/federation-verify/example
+          base-url: actions/federation-verify/example/fixtures/registry

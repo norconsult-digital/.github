@@ -1,0 +1,95 @@
+name: Upload native-federation remote
+description: >
+  Uploads a native-federation remote bundle to a public remotes blob container.
+  Content-hashed chunks go up first as immutable (1y cache), then the no-cache
+  pointer file(s) are uploaded LAST — so no client can load a new
+  remoteEntry.json before its chunks exist. Optionally scoped to a
+  <container>/<path>/ virtual directory. Uploads only; stamping/GC are separate
+  actions (federation-mark-stale / federation-gc).
+
+inputs:
+  account:
+    description: Storage account name (e.g. stbimremotestest001).
+    required: true
+  container:
+    description: Blob container / remote app name (e.g. admin-app).
+    required: true
+  source:
+    description: Path to the built remote bundle (the native-federation browser/ dir).
+    required: true
+  path:
+    description: >
+      Optional virtual-directory prefix inside the container (e.g. v1). When set,
+      the upload is confined to <container>/<path>/. Empty = container root.
+    required: false
+    default: ""
+  no-cache-files:
+    description: >
+      Comma-separated list of files that must be served no-cache and uploaded
+      AFTER all other files. remoteEntry.json is the correctness-critical pointer.
+    required: false
+    default: "remoteEntry.json,index.html"
+
+runs:
+  using: composite
+  steps:
+    - name: Upload bundle (immutable chunks first, no-cache pointers last)
+      shell: bash
+      env:
+        ACCOUNT: ${{ inputs.account }}
+        CONTAINER: ${{ inputs.container }}
+        SOURCE: ${{ inputs.source }}
+        DEST_PATH: ${{ inputs.path }}
+        NO_CACHE: ${{ inputs.no-cache-files }}
+      run: |
+        set -euo pipefail
+
+        if [ ! -d "${SOURCE}" ]; then
+          echo "::error::Source directory '${SOURCE}' does not exist"
+          exit 1
+        fi
+
+        # Optional virtual-directory prefix (e.g. v1). Strip any trailing slash.
+        PREFIX="${DEST_PATH%/}"
+
+        IFS=',' read -ra NC <<< "${NO_CACHE}"
+
+        # Stage a copy of the build with the no-cache files removed, so the
+        # immutable batch never touches them. The pointer(s) are then uploaded
+        # explicitly last — guaranteeing every referenced chunk exists first.
+        STAGE="$(mktemp -d "${RUNNER_TEMP:-/tmp}/federation-upload.XXXXXX")"
+        trap 'rm -rf "${STAGE}"' EXIT
+        cp -r "${SOURCE}/." "${STAGE}/"
+        for f in "${NC[@]}"; do
+          [ -z "${f}" ] && continue
+          rm -f "${STAGE}/${f}"
+        done
+
+        echo "Uploading immutable assets to ${ACCOUNT}/${CONTAINER}${PREFIX:+/${PREFIX}}"
+        batch_args=(
+          --account-name "${ACCOUNT}"
+          --auth-mode login
+          --destination "${CONTAINER}"
+          --source "${STAGE}"
+          --overwrite
+          --content-cache-control "public, max-age=31536000, immutable"
+        )
+        [ -n "${PREFIX}" ] && batch_args+=(--destination-path "${PREFIX}")
+        az storage blob upload-batch "${batch_args[@]}"
+
+        echo "Uploading no-cache pointer(s) last"
+        for f in "${NC[@]}"; do
+          [ -z "${f}" ] && continue
+          if [ -f "${SOURCE}/${f}" ]; then
+            echo "  - ${f}"
+            az storage blob upload \
+              --account-name "${ACCOUNT}" \
+              --auth-mode login \
+              --container-name "${CONTAINER}" \
+              --name "${PREFIX:+${PREFIX}/}${f}" \
+              --file "${SOURCE}/${f}" \
+              --overwrite \
+              --content-cache-control "no-cache, no-store, must-revalidate" \
+              --output none
+          fi
+        done

@@ -1,0 +1,41 @@
+{
+  "name": "orders-remote",
+  "shared": [
+    {
+      "packageName": "@angular/core",
+      "outFileName": "_angular_core-1z2y3x4w.js",
+      "version": "21.2.0",
+      "requiredVersion": "^21.0.0",
+      "singleton": true,
+      "strictVersion": true
+    },
+    {
+      "packageName": "@ngrx/signals",
+      "outFileName": "_ngrx_signals-2y3x4w5v.js",
+      "version": "21.1.1",
+      "requiredVersion": "^21.0.0",
+      "singleton": true,
+      "strictVersion": true
+    },
+    {
+      "packageName": "rxjs",
+      "outFileName": "_rxjs-3x4w5v6u.js",
+      "version": "7.8.2",
+      "requiredVersion": "^7.8.0",
+      "singleton": true,
+      "strictVersion": false
+    },
+    {
+      "packageName": "zone.js",
+      "outFileName": "_zone_js-4w5v6u7t.js",
+      "version": "0.16.2",
+      "requiredVersion": "~0.16.0",
+      "singleton": false,
+      "strictVersion": false
+    }
+  ],
+  "exposes": [
+    { "key": "./routes", "outFileName": "routes-5v6u7t8s.js" },
+    { "key": "./orders-widget", "outFileName": "orders-widget-6u7t8s9r.js" }
+  ]
+}

@@ -1,0 +1,56 @@
+name: Retire native-federation remote version
+description: >
+  Retires a whole native-federation contract version by stamping every blob
+  under its v<version>/ scope with `stalesince` metadata (via federation-mark-stale,
+  no source). The scheduled federation-gc workflow then deletes them after the
+  retention window — so retirement is deferred and reversible (re-publishing the
+  version before GC runs rescues it). Nothing is deleted here.
+
+  Run from the release branch whose version is being retired: federation-read-contract
+  resolves that branch's v<contractVersion> — the same mechanic federation-publish
+  and federation-verify use.
+
+inputs:
+  project-dir:
+    description: >
+      Remote project root containing contract.json. The version to retire is
+      derived from this branch's contract.json.
+    required: true
+  account:
+    description: Remotes storage account name (e.g. stbimremotestest001).
+    required: true
+  container:
+    description: Blob container / remote app name (e.g. admin-app).
+    required: true
+  client-id:
+    description: Azure service principal client id for OIDC login.
+    required: true
+  tenant-id:
+    description: Azure tenant id.
+    required: true
+  subscription:
+    description: Azure subscription id.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve contract version
+      id: contract
+      uses: $/actions/federation-read-contract
+      with:
+        project-dir: ${{ inputs.project-dir }}
+
+    - name: Azure login (OIDC)
+      uses: azure/login@v3
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription }}
+
+    - name: Mark version stale (retire, deferred GC)
+      uses: $/actions/federation-mark-stale
+      with:
+        account: ${{ inputs.account }}
+        container: ${{ inputs.container }}
+        path: ${{ steps.contract.outputs.version }}

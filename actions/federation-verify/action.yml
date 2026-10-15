@@ -1,0 +1,46 @@
+name: federation-verify
+description: >-
+  Verifies a built native-federation remoteEntry.json against the published
+  baseline for its contract version. Fails the step on contract-breaking
+  changes under an unchanged contract version. Package-manager agnostic:
+  the caller owns checkout/install/build, this action only fetches the
+  baseline and runs the comparator.
+inputs:
+  candidate:
+    description: Path to the freshly built remoteEntry.json, e.g. dist/browser/en/remoteEntry.json
+    required: true
+  base-url:
+    description: >-
+      Public base URL this remote is served from (typically a repo variable,
+      e.g. vars.FEDERATION_REMOTE_BASE_URL). The published remoteEntry.json to
+      compare against is derived as
+      <base-url>/<name>/v<version>/[<subpath>/]remoteEntry.json, with name and
+      version taken from contract.json.
+    required: true
+  project-dir:
+    description: Remote project root containing contract.json
+    required: false
+    default: .
+  subpath:
+    description: >-
+      Optional directory for localized/variant builds within the published build,
+      e.g. 'en' for an Angular build-time-localized remote (matrix per locale if
+      several must be checked). Default: none. The remoteEntry.json filename is fixed.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Verify remoteEntry against contract baseline
+      shell: bash
+      env:
+        CANDIDATE: ${{ inputs.candidate }}
+        PROJECT_DIR: ${{ inputs.project-dir }}
+        SUBPATH: ${{ inputs.subpath }}
+        FEDERATION_REMOTE_BASE_URL: ${{ inputs.base-url }}
+      run: >-
+        node "${{ github.action_path }}/dist/index.mjs"
+        --candidate "$CANDIDATE"
+        --project-dir "$PROJECT_DIR"
+        --subpath "$SUBPATH"

@@ -1,0 +1,21 @@
+{
+  "name": "@norconsult-digital/federation-verify",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Verifies a built native-federation remoteEntry.json against the published baseline for its contract version. Blocks contract-breaking changes under an unchanged contract version.",
+  "bin": {
+    "federation-verify": "./dist/index.mjs"
+  },
+  "scripts": {
+    "build": "esbuild src/index.mjs --bundle --platform=node --format=esm --target=node20 --outfile=dist/index.mjs",
+    "test": "node --test \"test/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "semver": "^7.7.2",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
+  }
+}
