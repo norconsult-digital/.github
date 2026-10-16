@@ -1,28 +1,27 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { z } from 'zod';
 
 // contract.json — checked in at each remote project's root. Declares the
 // federation identity and the current (integer) contract version. Bumping it
 // is a deliberate, reviewable PR act.
 
-export const contractSchema = z.looseObject({
-  name: z
-    .string()
-    .regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, 'must be kebab-case, e.g. orders-remote'),
-  contractVersion: z.number().int().positive()
-});
+const KEBAB_CASE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
-/** @returns {z.infer<typeof contractSchema>} */
 export function parseContract(json, label) {
-  const result = contractSchema.safeParse(json);
-  if (!result.success) {
-    const issues = result.error.issues
-      .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
-      .join('\n');
-    throw new Error(`${label} is not a valid contract.json:\n${issues}`);
+  const issues = [];
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) {
+    throw new Error(`${label} is not a valid contract.json:\n  - (root): expected an object`);
   }
-  return result.data;
+  if (typeof json.name !== 'string' || !KEBAB_CASE.test(json.name)) {
+    issues.push('  - name: must be kebab-case, e.g. orders-remote');
+  }
+  if (typeof json.contractVersion !== 'number' || !Number.isInteger(json.contractVersion) || json.contractVersion < 1) {
+    issues.push('  - contractVersion: expected a positive integer');
+  }
+  if (issues.length > 0) {
+    throw new Error(`${label} is not a valid contract.json:\n${issues.join('\n')}`);
+  }
+  return json;
 }
 
 export async function loadContract(projectDir) {

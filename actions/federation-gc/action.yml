@@ -44,11 +44,15 @@ runs:
           echo "== ${ACCOUNT}/${CONTAINER} =="
 
           # name<TAB>stalesince for every blob that carries a stalesince stamp.
+          # --num-results "*" returns all blobs; the CLI default caps at 5000, so
+          # on a large container stale blobs past the cap would never be deleted
+          # (unbounded growth, retention silently broken).
           az storage blob list \
             --account-name "${ACCOUNT}" \
             --auth-mode login \
             --container-name "${CONTAINER}" \
             --include m \
+            --num-results "*" \
             --query "[?metadata.stalesince!=null].[name, metadata.stalesince]" \
             -o tsv > "${STALE}" || true
 

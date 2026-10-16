@@ -7,20 +7,18 @@ description: >
   version before GC runs rescues it). Nothing is deleted here.
 
   Run from the release branch whose version is being retired: federation-read-contract
-  resolves that branch's v<contractVersion> — the same mechanic federation-publish
-  and federation-verify use.
+  resolves that branch's name + v<contractVersion> — the same mechanic
+  federation-publish and federation-verify use. The blob container is derived from
+  contract.json's name.
 
 inputs:
   project-dir:
     description: >
-      Remote project root containing contract.json. The version to retire is
-      derived from this branch's contract.json.
+      Remote project root containing contract.json. The container name and the
+      version to retire are derived from this branch's contract.json.
     required: true
   account:
     description: Remotes storage account name (e.g. stbimremotestest001).
-    required: true
-  container:
-    description: Blob container / remote app name (e.g. admin-app).
     required: true
   client-id:
     description: Azure service principal client id for OIDC login.
@@ -52,5 +50,5 @@ runs:
       uses: $/actions/federation-mark-stale
       with:
         account: ${{ inputs.account }}
-        container: ${{ inputs.container }}
+        container: ${{ steps.contract.outputs.name }}
         path: ${{ steps.contract.outputs.version }}

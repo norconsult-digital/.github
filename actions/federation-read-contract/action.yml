@@ -42,8 +42,24 @@ runs:
           exit 1
         fi
 
-        NAME=$(jq -r '.name' "${CONTRACT}")
-        VER=$(jq -r '.contractVersion' "${CONTRACT}")
+        # `// ""` collapses a missing/JSON-null key to empty so the regexes below
+        # reject it (jq -r would otherwise emit the literal "null", which happens
+        # to pass the kebab-case check).
+        NAME=$(jq -r '.name // ""' "${CONTRACT}")
+        VER=$(jq -r '.contractVersion // ""' "${CONTRACT}")
+
+        # Validate before anyone builds a registry path from these, otherwise a
+        # bad value propagates as name=null / version=vnull and silently
+        # mis-publishes or mis-retires. Rules mirror federation-verify's contract
+        # schema (kebab-case name, positive integer version) so the readers agree.
+        if ! printf '%s' "${NAME}" | grep -Eq '^[a-z][a-z0-9]*(-[a-z0-9]+)*$'; then
+          echo "::error::contract.json 'name' is missing or invalid ('${NAME}'); expected kebab-case, e.g. orders-remote"
+          exit 1
+        fi
+        if ! printf '%s' "${VER}" | grep -Eq '^[1-9][0-9]*$'; then
+          echo "::error::contract.json 'contractVersion' is missing or invalid ('${VER}'); expected a positive integer"
+          exit 1
+        fi
 
         echo "name=${NAME}" >> "$GITHUB_OUTPUT"
         echo "version=v${VER}" >> "$GITHUB_OUTPUT"

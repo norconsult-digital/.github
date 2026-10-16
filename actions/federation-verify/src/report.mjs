@@ -37,6 +37,33 @@ export function emitAnnotations(violations, log = console.log) {
   }
 }
 
+export function missingBaselineMessage(contract, subpath) {
+  const at = `${contract.name} v${contract.contractVersion}${subpath ? ` (subpath ${subpath})` : ''}`;
+  return (
+    `No published baseline for ${at} — treating as a NEW contract version. ` +
+    `Nothing to compare against; ensure this version bump is intentional and human-reviewed.`
+  );
+}
+
+// A missing baseline is not a contract break — it signals a new contract
+// version with nothing to compare against. Warn loudly (annotation + step
+// summary) but let the caller pass: new versions must be able to roll out, and
+// the version bump itself is the reviewed gate.
+export async function reportMissingBaseline(contract, subpath, url, log = console.log) {
+  const message = missingBaselineMessage(contract, subpath);
+  log(message);
+  if (process.env.GITHUB_ACTIONS) {
+    log(`::warning title=federation-verify: new contract version::${message}`);
+  }
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (summaryPath) {
+    await appendFile(
+      summaryPath,
+      `## ⚠️ Federation contract: new version (no baseline)\n\n${message}\n\nExpected baseline: \`${url}\`\n`
+    );
+  }
+}
+
 export async function writeStepSummary(violations) {
   const summaryPath = process.env.GITHUB_STEP_SUMMARY;
   if (!summaryPath) return;

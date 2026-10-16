@@ -4,8 +4,9 @@ Reads the native-federation identity from a remote's checked-in `contract.json`
 and echoes it for downstream steps. Shared helper — internal to the
 `federation-*` suite.
 
-`contract.json` (at `project-dir`) declares `name` (kebab-case) and an integer
-`contractVersion`.
+`contract.json` (at `project-dir`) declares `name` (kebab-case) and a positive
+integer `contractVersion`. Both are validated here (matching
+`federation-verify`'s schema); the step fails if either is missing or malformed.
 
 ## Inputs
 

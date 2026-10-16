@@ -1,9 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
+import { pathToFileURL } from 'node:url';
 import { parseRemoteEntry } from './remote-entry.mjs';
 import { diffRemoteEntries, BREAKING } from './diff.mjs';
-import { formatText, emitAnnotations, writeStepSummary } from './report.mjs';
+import { formatText, emitAnnotations, writeStepSummary, reportMissingBaseline } from './report.mjs';
 import { loadContract, derivePublishedRemoteEntryUrl, contractNameMismatch } from './contract.mjs';
+
+// A missing published baseline (404) is not a failure — it means this is a new
+// contract version with nothing to compare against. Signalled with a dedicated
+// error type so main() can warn-and-pass instead of exiting 2.
+export class MissingBaselineError extends Error {}
 
 const USAGE = `federation-verify — remoteEntry.json contract drift check
 
@@ -34,13 +40,12 @@ Exit codes:
   2  usage, IO, validation, or build-config error
 `;
 
-async function loadJson(reference, label) {
+export async function loadJson(reference, label, fetchImpl = fetch) {
   if (/^https?:\/\//.test(reference)) {
-    const response = await fetch(reference);
+    const response = await fetchImpl(reference);
     if (response.status === 404) {
-      throw new Error(
-        `${label}: no baseline found at ${reference}. ` +
-        `If this is a new contract version, publish its baseline via the protected publish pipeline first.`
+      throw new MissingBaselineError(
+        `${label}: no baseline found at ${reference}.`
       );
     }
     if (!response.ok) {
@@ -92,7 +97,19 @@ async function main() {
   if (mismatch) throw new Error(mismatch);
 
   const publishedUrl = await resolvePublishedRemoteEntryUrl(contract, values.subpath);
-  const baseline = parseRemoteEntry(await loadJson(publishedUrl, 'baseline'), 'baseline');
+
+  let baselineJson;
+  try {
+    baselineJson = await loadJson(publishedUrl, 'baseline');
+  } catch (error) {
+    if (error instanceof MissingBaselineError) {
+      // New contract version: warn loudly but don't fail — let it roll out.
+      await reportMissingBaseline(contract, values.subpath, publishedUrl);
+      return;
+    }
+    throw error;
+  }
+  const baseline = parseRemoteEntry(baselineJson, 'baseline');
 
   const violations = diffRemoteEntries(baseline, candidate);
 
@@ -110,7 +127,10 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(`federation-verify failed: ${error.message}`);
-  process.exit(2);
-});
+// Run as a CLI only when invoked directly (not when imported by tests).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(`federation-verify failed: ${error.message}`);
+    process.exit(2);
+  });
+}

@@ -25,10 +25,14 @@ inputs:
     default: ""
   no-cache-files:
     description: >
-      Comma-separated list of files that must be served no-cache and uploaded
-      AFTER all other files. remoteEntry.json is the correctness-critical pointer.
+      Comma-separated pointer FILENAMES served no-cache and uploaded AFTER all
+      other files. Each is matched at ANY depth, so the default remoteEntry.json
+      covers both v<version>/remoteEntry.json and the per-locale pointers of a
+      localized build (v<version>/<locale>/remoteEntry.json). remoteEntry.json is
+      the only correctness-critical pointer in a native-federation remote; add
+      more filenames only if a build ships extra always-revalidate documents.
     required: false
-    default: "remoteEntry.json,index.html"
+    default: "remoteEntry.json"
 
 runs:
   using: composite
@@ -54,15 +58,33 @@ runs:
 
         IFS=',' read -ra NC <<< "${NO_CACHE}"
 
+        # no-cache-files are FILENAMES, matched at ANY depth. A native-federation
+        # remote has exactly one correctness-critical pointer — remoteEntry.json —
+        # and localized builds place one in each locale subdir (v1/nb/, v1/sv/ …).
+        # All must bypass the immutable cache; hashed chunks never share the name.
+        NC_PATHS=()
+        for f in "${NC[@]}"; do
+          [ -z "${f}" ] && continue
+          matched=0
+          while IFS= read -r p; do
+            [ -n "${p}" ] && NC_PATHS+=("${p}") && matched=1
+          done < <( cd "${SOURCE}" && find . -type f -name "${f}" -printf '%P\n' )
+          # A no-cache pointer that matches nothing means the bundle is missing
+          # the file (e.g. remoteEntry.json absent) — it would otherwise slip into
+          # the immutable batch unnoticed. Warn, but don't fail: a variant build
+          # legitimately may not contain every listed filename.
+          [ "${matched}" -eq 0 ] && echo "::warning::no-cache file '${f}' matched no files under '${SOURCE}' — nothing to serve no-cache for it"
+        done
+
         # Stage a copy of the build with the no-cache files removed, so the
         # immutable batch never touches them. The pointer(s) are then uploaded
         # explicitly last — guaranteeing every referenced chunk exists first.
         STAGE="$(mktemp -d "${RUNNER_TEMP:-/tmp}/federation-upload.XXXXXX")"
         trap 'rm -rf "${STAGE}"' EXIT
         cp -r "${SOURCE}/." "${STAGE}/"
-        for f in "${NC[@]}"; do
-          [ -z "${f}" ] && continue
-          rm -f "${STAGE}/${f}"
+        for p in "${NC_PATHS[@]:-}"; do
+          [ -z "${p}" ] && continue
+          rm -f "${STAGE}/${p}"
         done
 
         echo "Uploading immutable assets to ${ACCOUNT}/${CONTAINER}${PREFIX:+/${PREFIX}}"
@@ -78,18 +100,16 @@ runs:
         az storage blob upload-batch "${batch_args[@]}"
 
         echo "Uploading no-cache pointer(s) last"
-        for f in "${NC[@]}"; do
-          [ -z "${f}" ] && continue
-          if [ -f "${SOURCE}/${f}" ]; then
-            echo "  - ${f}"
-            az storage blob upload \
-              --account-name "${ACCOUNT}" \
-              --auth-mode login \
-              --container-name "${CONTAINER}" \
-              --name "${PREFIX:+${PREFIX}/}${f}" \
-              --file "${SOURCE}/${f}" \
-              --overwrite \
-              --content-cache-control "no-cache, no-store, must-revalidate" \
-              --output none
-          fi
+        for p in "${NC_PATHS[@]:-}"; do
+          [ -z "${p}" ] && continue
+          echo "  - ${p}"
+          az storage blob upload \
+            --account-name "${ACCOUNT}" \
+            --auth-mode login \
+            --container-name "${CONTAINER}" \
+            --name "${PREFIX:+${PREFIX}/}${p}" \
+            --file "${SOURCE}/${p}" \
+            --overwrite \
+            --content-cache-control "no-cache, no-store, must-revalidate" \
+            --output none
         done

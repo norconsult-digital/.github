@@ -7,17 +7,19 @@ retention window — so retirement is **deferred and reversible** (re-publishing
 the version before GC runs rescues it). Nothing is deleted here.
 
 Run from the release branch whose version is being retired: `federation-read-contract`
-resolves that branch's `v<contractVersion>`.
+resolves that branch's `name` and `v<contractVersion>`.
 
 ## Inputs
 
 | Input | Required | Description |
 | --- | --- | --- |
-| `project-dir` | yes | Remote project root containing `contract.json` (version to retire). |
+| `project-dir` | yes | Remote project root containing `contract.json` (drives the container `name` and the version to retire). |
 | `account` | yes | Remotes storage account name. |
-| `container` | yes | Blob container / remote app name. |
 | `client-id` | yes | Azure service principal client id (OIDC). |
 | `tenant-id` | yes | Azure tenant id. |
 | `subscription` | yes | Azure subscription id. |
+
+The blob container is derived from `contract.json`'s `name` — the same value
+`federation-publish` and `federation-verify` resolve.
 
 Needs `permissions: { id-token: write }` on the job. Requires `runs-on: ubuntu-*`.

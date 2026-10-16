@@ -64,8 +64,10 @@ Additional behavior:
 
 - **Name consistency**: `contract.json` is required; its `name` must match the
   built remoteEntry's `name` (catches contract/federation.config drift) — exit `2`.
-- **Missing published remoteEntry (404)**: exit `2` with guidance — a new contract
-  version's baseline must be published via the protected publish pipeline first.
+- **Missing published baseline (404)**: treated as a **new contract version** —
+  emits a warning annotation + step summary and exits `0`, so a `contractVersion`
+  bump can roll out (the bump is the reviewed gate). A mistyped `base-url` also
+  404s and warns-and-passes; `name` drift is still caught separately (exit `2`).
 - **contract.json versioning**: `contractVersion` is an **integer** (`1`, `2`, …).
   Semver strings are rejected; patches ship continuously under the same version.
 
