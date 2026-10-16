@@ -18,7 +18,7 @@ inputs:
     description: Storage account name (e.g. stbimremotestest001).
     required: true
   container:
-    description: Blob container / remote app name (e.g. admin-app).
+    description: Blob container to stamp (e.g. admin).
     required: true
   path:
     description: >
@@ -30,8 +30,8 @@ inputs:
   source:
     description: >
       Optional path to the freshly built bundle whose files must be PROTECTED
-      (never stamped). Provided by the publish flow. Omit to retire the whole
-      scope (every blob under `path` is stamped).
+      (never stamped). Omit to retire the whole scope (every blob under `path` is
+      stamped).
     required: false
     default: ""
 
@@ -81,12 +81,15 @@ runs:
         done < "${KEEP}"
 
         # One listing with metadata (--include m) yields name + stalesince in a
-        # single call — no per-blob `metadata show`.
+        # single call — no per-blob `metadata show`. --num-results "*" returns
+        # every blob; the CLI default caps at 5000, which would leave orphans
+        # beyond the cap unstamped (and so never GC'd) on large versions.
         list_args=(
           --account-name "${ACCOUNT}"
           --auth-mode login
           --container-name "${CONTAINER}"
           --include m
+          --num-results "*"
           --query "[].[name, metadata.stalesince]" -o tsv
         )
         [ -n "${PREFIX}" ] && list_args+=(--prefix "${PREFIX}/")

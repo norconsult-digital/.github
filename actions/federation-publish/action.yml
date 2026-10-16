@@ -1,19 +1,29 @@
 name: Publish native-federation remote
 description: >
   Orchestrates the versioned-registry publish flow for a native-federation
-  remote: resolves the contract version, downloads the built bundle artifact,
-  logs in to Azure (OIDC), uploads the bundle into its v<version>/ virtual
-  directory (federation-upload) and stamps that version's orphaned blobs stale for
-  deferred GC (federation-mark-stale). Keeps the CD workflow's per-environment jobs
-  to a single step each.
+  remote: resolves the contract module + version, logs in to Azure (OIDC), uploads
+  the built bundle dir into its v<version>/ virtual directory (federation-upload)
+  and stamps that version's orphaned blobs stale for deferred GC
+  (federation-mark-stale). Keeps the CD workflow's per-environment jobs to a
+  single step each.
 
-  Versioned layout produced in the container:
-    <container>/v<version>/remoteEntry.json   (no-cache pointer)
-    <container>/v<version>/<hashed chunks>     (immutable, 1y cache)
+  Takes an on-disk bundle dir (source), not an artifact name: artifact transport
+  is the caller's concern (one actions/download-artifact step). In a split CD job
+  that same step already feeds federation-verify, so publish never re-downloads;
+  in a single build+publish job, pass the build output (e.g. dist/browser)
+  directly.
+
+  The blob container is derived from contract.json's module — the same value
+  federation-verify reads. Versioned layout produced in the container:
+    <module>/v<version>/remoteEntry.json   (no-cache pointer)
+    <module>/v<version>/<hashed chunks>     (immutable, 1y cache)
 
 inputs:
-  artifact-name:
-    description: Name of the uploaded build artifact (native-federation browser/ dir).
+  source:
+    description: >
+      Path to the built native-federation bundle dir to publish (the browser/
+      output, e.g. dist/browser, or a dir you downloaded from a build artifact).
+      Uploaded as-is.
     required: true
   project-dir:
     description: >
@@ -22,9 +32,6 @@ inputs:
     required: true
   account:
     description: Remotes storage account name (e.g. stbimremotestest001).
-    required: true
-  container:
-    description: Blob container / remote app name (e.g. admin-app).
     required: true
   client-id:
     description: Azure service principal client id for OIDC login.
@@ -39,17 +46,11 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Resolve contract version
+    - name: Read contract
       id: contract
       uses: $/actions/federation-read-contract
       with:
         project-dir: ${{ inputs.project-dir }}
-
-    - name: Download build artifact
-      uses: actions/download-artifact@v8
-      with:
-        name: ${{ inputs.artifact-name }}
-        path: build
 
     - name: Azure login (OIDC)
       uses: azure/login@v3
@@ -62,15 +63,14 @@ runs:
       uses: $/actions/federation-upload
       with:
         account: ${{ inputs.account }}
-        container: ${{ inputs.container }}
-        source: build
-        path: ${{ steps.contract.outputs.version }}
-        no-cache-files: remoteEntry.json,index.html
+        container: ${{ steps.contract.outputs.module }}
+        source: ${{ inputs.source }}
+        path: v${{ steps.contract.outputs.contractVersion }}
 
     - name: Mark orphaned blobs stale (deferred GC)
       uses: $/actions/federation-mark-stale
       with:
         account: ${{ inputs.account }}
-        container: ${{ inputs.container }}
-        path: ${{ steps.contract.outputs.version }}
-        source: build
+        container: ${{ steps.contract.outputs.module }}
+        path: v${{ steps.contract.outputs.contractVersion }}
+        source: ${{ inputs.source }}

@@ -1,15 +1,16 @@
 name: Read federation contract
 description: >
-  Extracts the federation identity from a remote project's contract.json — the
-  checked-in standard that declares the remote's federation name and its integer
-  contract version. Light extractor only: it reads and echoes the values for
-  downstream steps. Contract *validation* (schema, name-vs-remoteEntry match) is
-  the job of federation-verify, which runs first in the pipeline; by the time
-  anything consumes these outputs the contract is already known-valid.
+  Reads and validates a remote project's contract.json — the checked-in standard
+  that declares the remote's product, module, name and integer contract version —
+  and echoes each field for downstream steps. Extractor only; it does not decide
+  how the fields are used. Full contract diffing (schema, name-vs-remoteEntry
+  match) is the job of federation-verify, which runs first in the pipeline.
 
   Outputs:
-    name    — the federation/contract name (e.g. admin-app)
-    version — the version segment for registry paths (e.g. v1)
+    product         — the product field from contract.json (e.g. bim)
+    module          — the module field from contract.json (e.g. admin)
+    name            — the name field from contract.json (e.g. admin-app)
+    contractVersion — the integer contract version (e.g. 1)
 
 inputs:
   project-dir:
@@ -18,12 +19,18 @@ inputs:
     default: .
 
 outputs:
+  product:
+    description: The product field from contract.json (e.g. bim).
+    value: ${{ steps.read.outputs.product }}
+  module:
+    description: The module field from contract.json (e.g. admin).
+    value: ${{ steps.read.outputs.module }}
   name:
-    description: Federation/contract name from contract.json (e.g. admin-app).
+    description: The name field from contract.json (e.g. admin-app).
     value: ${{ steps.read.outputs.name }}
-  version:
-    description: Version segment "v<contractVersion>" for registry paths (e.g. v1).
-    value: ${{ steps.read.outputs.version }}
+  contractVersion:
+    description: The integer contract version from contract.json (e.g. 1).
+    value: ${{ steps.read.outputs.contractVersion }}
 
 runs:
   using: composite
@@ -42,9 +49,36 @@ runs:
           exit 1
         fi
 
-        NAME=$(jq -r '.name' "${CONTRACT}")
-        VER=$(jq -r '.contractVersion' "${CONTRACT}")
+        # `// ""` collapses a missing/JSON-null key to empty so the regexes below
+        # reject it (jq -r would otherwise emit the literal "null", which happens
+        # to pass the kebab-case check).
+        PRODUCT=$(jq -r '.product // ""' "${CONTRACT}")
+        MODULE=$(jq -r '.module // ""' "${CONTRACT}")
+        NAME=$(jq -r '.name // ""' "${CONTRACT}")
+        VER=$(jq -r '.contractVersion // ""' "${CONTRACT}")
 
-        echo "name=${NAME}" >> "$GITHUB_OUTPUT"
-        echo "version=v${VER}" >> "$GITHUB_OUTPUT"
-        echo "Contract: name=${NAME} version=v${VER}"
+        # Validate before any downstream step builds a registry path from these,
+        # otherwise a bad value propagates as a null segment and silently
+        # mis-publishes or mis-retires. Rules mirror federation-verify's contract
+        # schema (kebab-case product/module/name, positive integer version) so
+        # the readers agree.
+        for pair in "product:${PRODUCT}" "module:${MODULE}" "name:${NAME}"; do
+          field="${pair%%:*}"
+          value="${pair#*:}"
+          if ! printf '%s' "${value}" | grep -Eq '^[a-z][a-z0-9]*(-[a-z0-9]+)*$'; then
+            echo "::error::contract.json '${field}' is missing or invalid ('${value}'); expected kebab-case, e.g. orders-remote"
+            exit 1
+          fi
+        done
+        if ! printf '%s' "${VER}" | grep -Eq '^[1-9][0-9]*$'; then
+          echo "::error::contract.json 'contractVersion' is missing or invalid ('${VER}'); expected a positive integer"
+          exit 1
+        fi
+
+        {
+          echo "product=${PRODUCT}"
+          echo "module=${MODULE}"
+          echo "name=${NAME}"
+          echo "contractVersion=${VER}"
+        } >> "$GITHUB_OUTPUT"
+        echo "Contract: product=${PRODUCT} module=${MODULE} name=${NAME} contractVersion=${VER}"

@@ -29,9 +29,9 @@ field (changes on every dependabot patch without contract impact).
 
 The action is package-manager agnostic: the caller owns checkout/install/build.
 The published `remoteEntry.json` to compare against is derived from conventions —
-`contract.json` at the project root (its `name` + `version`), the `base-url` input
-(the remote's public base, typically a repo variable), and the standardized storage
-layout `/<name>/v<version>/[<subpath>/]remoteEntry.json`:
+`contract.json` at the project root (its `module` + `version`), the `base-url`
+input (the remote's public base, typically a repo variable), and the standardized
+storage layout `/<module>/v<version>/[<subpath>/]remoteEntry.json`:
 
 ```yaml
 - uses: actions/checkout@v5
@@ -52,7 +52,7 @@ Runtime-localized frameworks publish a single build and omit `subpath`.
 | Input | Required | Description |
 | --- | --- | --- |
 | `candidate` | yes | Path to the freshly built `remoteEntry.json` |
-| `base-url` | yes | Public base URL this remote is served from (repo variable). The published remoteEntry.json to compare against is `<base-url>/<name>/v<version>/[<subpath>/]remoteEntry.json` |
+| `base-url` | yes | Public base URL this remote is served from (repo variable). The published remoteEntry.json to compare against is `<base-url>/<module>/v<version>/[<subpath>/]remoteEntry.json` |
 | `project-dir` | no | Remote project root containing `contract.json` (default `.`) — monorepo support |
 | `subpath` | no | Optional directory for localized/variant builds (e.g. `en`); default none. The `remoteEntry.json` filename is fixed |
 
@@ -62,10 +62,13 @@ step summary emitted automatically on GitHub Actions.
 
 Additional behavior:
 
-- **Name consistency**: `contract.json` is required; its `name` must match the
-  built remoteEntry's `name` (catches contract/federation.config drift) — exit `2`.
-- **Missing published remoteEntry (404)**: exit `2` with guidance — a new contract
-  version's baseline must be published via the protected publish pipeline first.
+- **Name consistency**: `contract.json` is required; the built remoteEntry's
+  `name` must equal `<product>-<name>` (catches contract/federation.config drift)
+  — exit `2`.
+- **Missing published baseline (404)**: treated as a **new contract version** —
+  emits a warning annotation + step summary and exits `0`, so a `contractVersion`
+  bump can roll out (the bump is the reviewed gate). A mistyped `base-url` also
+  404s and warns-and-passes; `name` drift is still caught separately (exit `2`).
 - **contract.json versioning**: `contractVersion` is an **integer** (`1`, `2`, …).
   Semver strings are rejected; patches ship continuously under the same version.
 

@@ -14,7 +14,7 @@ inputs:
       Public base URL this remote is served from (typically a repo variable,
       e.g. vars.FEDERATION_REMOTE_BASE_URL). The published remoteEntry.json to
       compare against is derived as
-      <base-url>/<name>/v<version>/[<subpath>/]remoteEntry.json, with name and
+      <base-url>/<module>/v<version>/[<subpath>/]remoteEntry.json, with name and
       version taken from contract.json.
     required: true
   project-dir:
