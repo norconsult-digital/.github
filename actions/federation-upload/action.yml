@@ -12,7 +12,7 @@ inputs:
     description: Storage account name (e.g. stbimremotestest001).
     required: true
   container:
-    description: Blob container / remote app name (e.g. admin-app).
+    description: Blob container to upload into (e.g. admin).
     required: true
   source:
     description: Path to the built remote bundle (the native-federation browser/ dir).

@@ -18,7 +18,7 @@ inputs:
     description: Storage account name (e.g. stbimremotestest001).
     required: true
   container:
-    description: Blob container / remote app name (e.g. admin-app).
+    description: Blob container to stamp (e.g. admin).
     required: true
   path:
     description: >
@@ -30,8 +30,8 @@ inputs:
   source:
     description: >
       Optional path to the freshly built bundle whose files must be PROTECTED
-      (never stamped). Provided by the publish flow. Omit to retire the whole
-      scope (every blob under `path` is stamped).
+      (never stamped). Omit to retire the whole scope (every blob under `path` is
+      stamped).
     required: false
     default: ""
 

@@ -11,11 +11,11 @@ concern. In a split CD deploy job the `actions/download-artifact` step already
 feeds `federation-verify`, so publish reuses that dir; in a single build+publish
 job, pass the build output (e.g. `dist/browser`) directly.
 
-Produces (the container is the contract `name`, derived from `contract.json`):
+Produces (the container is the contract `module`, derived from `contract.json`):
 
 ```
-<name>/v<version>/remoteEntry.json   (no-cache pointer)
-<name>/v<version>/<hashed chunks>     (immutable, 1y cache)
+<module>/v<version>/remoteEntry.json   (no-cache pointer)
+<module>/v<version>/<hashed chunks>     (immutable, 1y cache)
 ```
 
 ## Inputs
@@ -23,13 +23,13 @@ Produces (the container is the contract `name`, derived from `contract.json`):
 | Input | Required | Description |
 | --- | --- | --- |
 | `source` | yes | Path to the built bundle dir to publish (the `browser/` output, e.g. `dist/browser`, or a dir downloaded from a build artifact). Uploaded as-is. |
-| `project-dir` | yes | Remote project root containing `contract.json` (drives the container `name` and `v<version>`). |
+| `project-dir` | yes | Remote project root containing `contract.json` (drives the container `module` and `v<version>`). |
 | `account` | yes | Remotes storage account name. |
 | `client-id` | yes | Azure service principal client id (OIDC). |
 | `tenant-id` | yes | Azure tenant id. |
 | `subscription` | yes | Azure subscription id. |
 
-The blob container is derived from `contract.json`'s `name` — the same value
+The blob container is derived from `contract.json`'s `module` — the same value
 `federation-verify` reads.
 
 Needs `permissions: { id-token: write }` on the job. Requires `runs-on: ubuntu-*`.

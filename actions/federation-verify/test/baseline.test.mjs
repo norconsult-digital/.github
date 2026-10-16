@@ -27,14 +27,14 @@ test('loadJson still throws (non-missing) on other HTTP errors', async () => {
 });
 
 test('missing-baseline message names the new version and flags intent', () => {
-  const message = missingBaselineMessage({ name: 'orders-remote', contractVersion: 2 }, '');
-  assert.match(message, /orders-remote v2/);
+  const message = missingBaselineMessage({ product: 'bim', module: 'orders', name: 'orders-remote', contractVersion: 2 }, '');
+  assert.match(message, /bim-orders-remote v2/);
   assert.match(message, /NEW contract version/);
   assert.match(message, /intentional/);
 });
 
 test('missing-baseline message includes the subpath for localized builds', () => {
-  const message = missingBaselineMessage({ name: 'orders-remote', contractVersion: 3 }, 'en');
-  assert.match(message, /orders-remote v3/);
+  const message = missingBaselineMessage({ product: 'bim', module: 'orders', name: 'orders-remote', contractVersion: 3 }, 'en');
+  assert.match(message, /bim-orders-remote v3/);
   assert.match(message, /subpath en/);
 });

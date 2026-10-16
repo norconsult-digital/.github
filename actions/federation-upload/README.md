@@ -14,7 +14,7 @@ Used internally by `federation-publish`; usable standalone after an
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
 | `account` | yes | — | Storage account name (e.g. `stbimremotestest001`). |
-| `container` | yes | — | Blob container / remote app name (e.g. `admin-app`). |
+| `container` | yes | — | Blob container to upload into (e.g. `admin`). |
 | `source` | yes | — | Path to the built bundle (the native-federation `browser/` dir). |
 | `path` | no | `""` | Virtual-directory prefix inside the container (e.g. `v1`). Empty = container root. |
 | `no-cache-files` | no | `remoteEntry.json` | Comma-separated pointer **filenames** served no-cache and uploaded after all others. Each is matched **at any depth**. |

@@ -17,9 +17,10 @@ Compares a freshly built remoteEntry.json against the one already published for
 its contract version, and fails on contract-breaking changes.
 
 The published remoteEntry.json URL is derived from conventions:
-  <base-url>/<name>/v<version>/[<subpath>/]remoteEntry.json
-where <name> and <version> come from contract.json (in --project-dir) and
-<base-url> is the remote's public base (env FEDERATION_REMOTE_BASE_URL).
+  <base-url>/<module>/v<version>/[<subpath>/]remoteEntry.json
+where <module> (the container) and <version> come from contract.json (in
+--project-dir) and <base-url> is the remote's public base (env
+FEDERATION_REMOTE_BASE_URL).
 
 Usage:
   FEDERATION_REMOTE_BASE_URL=<url> federation-verify --candidate <path> [options]

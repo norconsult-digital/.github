@@ -1,7 +1,7 @@
 name: Publish native-federation remote
 description: >
   Orchestrates the versioned-registry publish flow for a native-federation
-  remote: resolves the contract name + version, logs in to Azure (OIDC), uploads
+  remote: resolves the contract module + version, logs in to Azure (OIDC), uploads
   the built bundle dir into its v<version>/ virtual directory (federation-upload)
   and stamps that version's orphaned blobs stale for deferred GC
   (federation-mark-stale). Keeps the CD workflow's per-environment jobs to a
@@ -13,10 +13,10 @@ description: >
   in a single build+publish job, pass the build output (e.g. dist/browser)
   directly.
 
-  The blob container is derived from contract.json's name — the same value
+  The blob container is derived from contract.json's module — the same value
   federation-verify reads. Versioned layout produced in the container:
-    <name>/v<version>/remoteEntry.json   (no-cache pointer)
-    <name>/v<version>/<hashed chunks>     (immutable, 1y cache)
+    <module>/v<version>/remoteEntry.json   (no-cache pointer)
+    <module>/v<version>/<hashed chunks>     (immutable, 1y cache)
 
 inputs:
   source:
@@ -46,7 +46,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Resolve contract version
+    - name: Read contract
       id: contract
       uses: $/actions/federation-read-contract
       with:
@@ -63,14 +63,14 @@ runs:
       uses: $/actions/federation-upload
       with:
         account: ${{ inputs.account }}
-        container: ${{ steps.contract.outputs.name }}
+        container: ${{ steps.contract.outputs.module }}
         source: ${{ inputs.source }}
-        path: ${{ steps.contract.outputs.version }}
+        path: v${{ steps.contract.outputs.contractVersion }}
 
     - name: Mark orphaned blobs stale (deferred GC)
       uses: $/actions/federation-mark-stale
       with:
         account: ${{ inputs.account }}
-        container: ${{ steps.contract.outputs.name }}
-        path: ${{ steps.contract.outputs.version }}
+        container: ${{ steps.contract.outputs.module }}
+        path: v${{ steps.contract.outputs.contractVersion }}
         source: ${{ inputs.source }}

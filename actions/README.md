@@ -7,10 +7,11 @@ Reusable composite actions for `norconsult-digital` repos. Reference them as
 
 Deploy and maintain [native-federation](https://github.com/angular-architects/module-federation-plugin)
 remotes in versioned blob storage. A remote's identity lives in a checked-in
-`contract.json` (`name` + integer `contractVersion`); the registry layout is
-`<account>/<container>/v<version>/`. Old builds are **marked stale** and removed
-by a scheduled GC after a retention window, so live clients keep loading the
-previous build during a rollout.
+`contract.json` (`product` + `module` + `name` + integer `contractVersion`); the
+registry layout is `<account>/<container>/v<version>/`, where the container is the
+`module` and the federation name is `<product>-<name>`. Old builds are **marked
+stale** and removed by a scheduled GC after a retention window, so live clients
+keep loading the previous build during a rollout.
 
 | Action | Purpose | Typical caller |
 | --- | --- | --- |
@@ -20,7 +21,7 @@ previous build during a rollout.
 | [`federation-mark-stale`](./federation-mark-stale/) | Idempotently stamp orphaned (or whole-scope) blobs with `stalesince` for deferred GC. | internal |
 | [`federation-gc`](./federation-gc/) | Scheduled: delete blobs stamped stale longer than the retention window. | scheduled |
 | [`federation-retire`](./federation-retire/) | Retire a whole contract version: stamp its `v<version>/` scope stale. | manual |
-| [`federation-read-contract`](./federation-read-contract/) | Read `name`/`v<version>` from `contract.json`. Shared helper, internal. | internal |
+| [`federation-read-contract`](./federation-read-contract/) | Read + validate `contract.json` fields (`product`/`module`/`name`/`contractVersion`). Shared helper, internal. | internal |
 
 ### Lifecycle
 
@@ -48,19 +49,21 @@ version-bump PR and, in CD, the environment approval are the human gates.
   (preinstalled on GitHub-hosted Ubuntu).
 - **Read path vs write path**: `federation-verify` fetches the published
   `remoteEntry.json` over public HTTPS, deriving
-  `<base-url>/<name>/v<version>/[<subpath>/]remoteEntry.json` (`name`/`version` from
-  `contract.json`, `<subpath>` only for localized/variant builds). The write actions
-  instead take `account`/`container` and drive the authenticated Azure control plane.
+  `<base-url>/<module>/v<version>/[<subpath>/]remoteEntry.json` (`module`/`version`
+  from `contract.json`, `<subpath>` only for localized/variant builds). The write
+  actions instead take `account`/`container` and drive the authenticated Azure
+  control plane.
   The public serving URL (static-website endpoint, CDN/Front Door, or custom domain)
   isn't derivable from `account`/`container`, so `base-url` is a deliberately separate
   per-repo variable.
 - Internal sibling references use the `$/actions/<name>` self-repository syntax,
   so the orchestrators resolve their sub-actions from this repo at the running
   commit — no checkout, no version pinning, works when consumed cross-repo.
-- **The container is the contract `name`.** `federation-verify` derives the
-  public baseline `<base-url>/<name>/v<version>/…`, and `federation-publish`/
+- **The container is the contract `module`.** `federation-verify` derives the
+  public baseline `<base-url>/<module>/v<version>/…`, and `federation-publish`/
   `federation-retire` derive the write container from the same `contract.json`
-  `name`. The low-level `federation-upload`/`federation-mark-stale`/
+  `module`; the federation name checked against the built remoteEntry is
+  `<product>-<name>`. The low-level `federation-upload`/`federation-mark-stale`/
   `federation-gc` take an explicit `container`.
 - **No-cache covers every locale.** `federation-upload`'s `no-cache-files` are
   filenames matched at any depth, so the default `remoteEntry.json` applies
@@ -158,6 +161,6 @@ jobs:
       - uses: norconsult-digital/.github/actions/federation-gc@main
         with:
           account: stbimremotestest001
-          containers: "admin-app viewer-app"
+          containers: "admin viewer"
           retention-days: "7"
 ```

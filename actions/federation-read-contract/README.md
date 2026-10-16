@@ -4,9 +4,11 @@ Reads the native-federation identity from a remote's checked-in `contract.json`
 and echoes it for downstream steps. Shared helper — internal to the
 `federation-*` suite.
 
-`contract.json` (at `project-dir`) declares `name` (kebab-case) and a positive
-integer `contractVersion`. Both are validated here (matching
-`federation-verify`'s schema); the step fails if either is missing or malformed.
+`contract.json` (at `project-dir`) declares kebab-case `product`, `module` and
+`name`, plus a positive integer `contractVersion`. All are validated here
+(matching `federation-verify`'s schema); the step fails if any is missing or
+malformed. Each field is echoed verbatim — how the fields map to a container,
+version segment or federation name is the caller's decision.
 
 ## Inputs
 
@@ -18,8 +20,10 @@ integer `contractVersion`. Both are validated here (matching
 
 | Output | Description |
 | --- | --- |
-| `name` | Federation/contract name (e.g. `admin-app`). |
-| `version` | Version segment `v<contractVersion>` for registry paths (e.g. `v1`). |
+| `product` | The `product` field from `contract.json` (e.g. `bim`). |
+| `module` | The `module` field from `contract.json` (e.g. `admin`). |
+| `name` | The `name` field from `contract.json` (e.g. `admin-app`). |
+| `contractVersion` | The integer contract version (e.g. `1`). |
 
 ## Example
 
@@ -27,7 +31,7 @@ integer `contractVersion`. Both are validated here (matching
 - id: contract
   uses: norconsult-digital/.github/actions/federation-read-contract@main
   with: { project-dir: . }
-- run: echo "${{ steps.contract.outputs.name }} ${{ steps.contract.outputs.version }}"
+- run: echo "${{ steps.contract.outputs.module }} v${{ steps.contract.outputs.contractVersion }}"
 ```
 
 Requires `jq` (preinstalled on GitHub-hosted Ubuntu runners).

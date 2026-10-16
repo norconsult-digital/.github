@@ -1,5 +1,6 @@
 import { appendFile } from 'node:fs/promises';
 import { BREAKING, WARNING, INFO } from './diff.mjs';
+import { federationName } from './contract.mjs';
 
 const ORDER = { [BREAKING]: 0, [WARNING]: 1, [INFO]: 2 };
 const ICON = { [BREAKING]: '✖', [WARNING]: '⚠', [INFO]: 'ℹ' };
@@ -38,7 +39,7 @@ export function emitAnnotations(violations, log = console.log) {
 }
 
 export function missingBaselineMessage(contract, subpath) {
-  const at = `${contract.name} v${contract.contractVersion}${subpath ? ` (subpath ${subpath})` : ''}`;
+  const at = `${federationName(contract)} v${contract.contractVersion}${subpath ? ` (subpath ${subpath})` : ''}`;
   return (
     `No published baseline for ${at} — treating as a NEW contract version. ` +
     `Nothing to compare against; ensure this version bump is intentional and human-reviewed.`

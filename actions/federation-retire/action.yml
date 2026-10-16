@@ -7,9 +7,9 @@ description: >
   version before GC runs rescues it). Nothing is deleted here.
 
   Run from the release branch whose version is being retired: federation-read-contract
-  resolves that branch's name + v<contractVersion> — the same mechanic
-  federation-publish and federation-verify use. The blob container is derived from
-  contract.json's name.
+  resolves that branch's container (module) + v<contractVersion> — the same
+  mechanic federation-publish and federation-verify use. The blob container is
+  derived from contract.json's module.
 
 inputs:
   project-dir:
@@ -33,7 +33,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Resolve contract version
+    - name: Read contract
       id: contract
       uses: $/actions/federation-read-contract
       with:
@@ -50,5 +50,5 @@ runs:
       uses: $/actions/federation-mark-stale
       with:
         account: ${{ inputs.account }}
-        container: ${{ steps.contract.outputs.name }}
-        path: ${{ steps.contract.outputs.version }}
+        container: ${{ steps.contract.outputs.module }}
+        path: v${{ steps.contract.outputs.contractVersion }}

@@ -2234,6 +2234,61 @@ function indexByPackage(sharedEntries) {
 
 // src/report.mjs
 import { appendFile } from "node:fs/promises";
+
+// src/contract.mjs
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+var KEBAB_CASE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+function parseContract(json, label) {
+  const issues = [];
+  if (typeof json !== "object" || json === null || Array.isArray(json)) {
+    throw new Error(`${label} is not a valid contract.json:
+  - (root): expected an object`);
+  }
+  for (const field of ["product", "module", "name"]) {
+    if (typeof json[field] !== "string" || !KEBAB_CASE.test(json[field])) {
+      issues.push(`  - ${field}: must be kebab-case, e.g. orders-remote`);
+    }
+  }
+  if (typeof json.contractVersion !== "number" || !Number.isInteger(json.contractVersion) || json.contractVersion < 1) {
+    issues.push("  - contractVersion: expected a positive integer");
+  }
+  if (issues.length > 0) {
+    throw new Error(`${label} is not a valid contract.json:
+${issues.join("\n")}`);
+  }
+  return json;
+}
+function federationName(contract) {
+  return `${contract.product}-${contract.name}`;
+}
+async function loadContract(projectDir) {
+  const path = join(projectDir, "contract.json");
+  let json;
+  try {
+    json = JSON.parse(await readFile(path, "utf8"));
+  } catch (error) {
+    throw new Error(`could not read '${path}': ${error.message}`);
+  }
+  return parseContract(json, path);
+}
+function derivePublishedRemoteEntryUrl(baseUrl, contract, subpath) {
+  const segments = [
+    baseUrl.replace(/\/+$/, ""),
+    `${contract.module}`,
+    `v${contract.contractVersion}`,
+    ...subpath ? [subpath.replace(/^\/+|\/+$/g, "")] : [],
+    "remoteEntry.json"
+  ];
+  return segments.join("/");
+}
+function contractNameMismatch(contract, candidateRemoteEntry) {
+  const expected = federationName(contract);
+  if (expected === candidateRemoteEntry.name) return null;
+  return `contract.json implies federation name '${expected}' but the built remoteEntry is named '${candidateRemoteEntry.name}' \u2014 align contract.json with federation.config`;
+}
+
+// src/report.mjs
 var ORDER = { [BREAKING]: 0, [WARNING]: 1, [INFO]: 2 };
 var ICON = { [BREAKING]: "\u2716", [WARNING]: "\u26A0", [INFO]: "\u2139" };
 function sortViolations(violations) {
@@ -2265,7 +2320,7 @@ function emitAnnotations(violations, log = console.log) {
   }
 }
 function missingBaselineMessage(contract, subpath) {
-  const at = `${contract.name} v${contract.contractVersion}${subpath ? ` (subpath ${subpath})` : ""}`;
+  const at = `${federationName(contract)} v${contract.contractVersion}${subpath ? ` (subpath ${subpath})` : ""}`;
   return `No published baseline for ${at} \u2014 treating as a NEW contract version. Nothing to compare against; ensure this version bump is intentional and human-reviewed.`;
 }
 async function reportMissingBaseline(contract, subpath, url, log = console.log) {
@@ -2297,53 +2352,6 @@ async function writeStepSummary(violations) {
   await appendFile(summaryPath, heading + formatMarkdown(violations) + "\n");
 }
 
-// src/contract.mjs
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-var KEBAB_CASE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
-function parseContract(json, label) {
-  const issues = [];
-  if (typeof json !== "object" || json === null || Array.isArray(json)) {
-    throw new Error(`${label} is not a valid contract.json:
-  - (root): expected an object`);
-  }
-  if (typeof json.name !== "string" || !KEBAB_CASE.test(json.name)) {
-    issues.push("  - name: must be kebab-case, e.g. orders-remote");
-  }
-  if (typeof json.contractVersion !== "number" || !Number.isInteger(json.contractVersion) || json.contractVersion < 1) {
-    issues.push("  - contractVersion: expected a positive integer");
-  }
-  if (issues.length > 0) {
-    throw new Error(`${label} is not a valid contract.json:
-${issues.join("\n")}`);
-  }
-  return json;
-}
-async function loadContract(projectDir) {
-  const path = join(projectDir, "contract.json");
-  let json;
-  try {
-    json = JSON.parse(await readFile(path, "utf8"));
-  } catch (error) {
-    throw new Error(`could not read '${path}': ${error.message}`);
-  }
-  return parseContract(json, path);
-}
-function derivePublishedRemoteEntryUrl(baseUrl, contract, subpath) {
-  const segments = [
-    baseUrl.replace(/\/+$/, ""),
-    `${contract.name}`,
-    `v${contract.contractVersion}`,
-    ...subpath ? [subpath.replace(/^\/+|\/+$/g, "")] : [],
-    "remoteEntry.json"
-  ];
-  return segments.join("/");
-}
-function contractNameMismatch(contract, candidateRemoteEntry) {
-  if (contract.name === candidateRemoteEntry.name) return null;
-  return `contract.json declares name '${contract.name}' but the built remoteEntry is named '${candidateRemoteEntry.name}' \u2014 align contract.json with federation.config`;
-}
-
 // src/index.mjs
 var MissingBaselineError = class extends Error {
 };
@@ -2353,9 +2361,10 @@ Compares a freshly built remoteEntry.json against the one already published for
 its contract version, and fails on contract-breaking changes.
 
 The published remoteEntry.json URL is derived from conventions:
-  <base-url>/<name>/v<version>/[<subpath>/]remoteEntry.json
-where <name> and <version> come from contract.json (in --project-dir) and
-<base-url> is the remote's public base (env FEDERATION_REMOTE_BASE_URL).
+  <base-url>/<module>/v<version>/[<subpath>/]remoteEntry.json
+where <module> (the container) and <version> come from contract.json (in
+--project-dir) and <base-url> is the remote's public base (env
+FEDERATION_REMOTE_BASE_URL).
 
 Usage:
   FEDERATION_REMOTE_BASE_URL=<url> federation-verify --candidate <path> [options]

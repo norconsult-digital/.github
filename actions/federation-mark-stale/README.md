@@ -16,7 +16,7 @@ deletion clock forward.
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
 | `account` | yes | — | Storage account name. |
-| `container` | yes | — | Blob container / remote app name. |
+| `container` | yes | — | Blob container to stamp (e.g. `admin`). |
 | `path` | no | `""` | Virtual-directory prefix (e.g. `v1`). Empty = whole container. |
 | `source` | no | `""` | Built bundle whose files must be protected (never stamped). Omit to retire the whole scope. |
 
