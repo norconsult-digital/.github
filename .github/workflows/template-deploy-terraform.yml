@@ -9,10 +9,6 @@ on:
       installKubelogin:
         type: boolean
         default: false
-      diagnoseKubelogin:
-        type: boolean
-        default: false
-        description: "Temporarily diagnose kubelogin during plan without logging credentials. Logs output metadata, preserves stdout, and suppresses raw stderr."
       deployfrombranch:
         type: string
         default: "refs/heads/main"
@@ -166,108 +162,6 @@ jobs:
         run: terraform validate
         working-directory: ${{ inputs.path }}
 
-      - name: Enable Token-Safe Kubelogin Diagnostics
-        if: ${{ inputs.diagnoseKubelogin }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          real_kubelogin=$(command -v kubelogin)
-          echo "Resolved kubelogin: $real_kubelogin"
-          type -a -p kubelogin
-          readlink -f "$real_kubelogin"
-          sha256sum "$real_kubelogin"
-          "$real_kubelogin" --version
-          node --version
-          diagnostics_dir=$(mktemp -d "$RUNNER_TEMP/kubelogin-diagnostics.XXXXXX")
-          cat > "$diagnostics_dir/kubelogin" <<'NODE'
-          #!/usr/bin/env node
-          const { spawnSync } = require('node:child_process');
-          const { appendFileSync } = require('node:fs');
-
-          const args = process.argv.slice(2);
-          const result = spawnSync(
-            process.env.KUBELOGIN_DIAGNOSTIC_REAL_BINARY,
-            args,
-            { maxBuffer: 1024 * 1024 }
-          );
-          const stdout = result.stdout ?? Buffer.alloc(0);
-          const stderr = result.stderr ?? Buffer.alloc(0);
-          const text = stdout.toString('utf8');
-          const safeArgs = [];
-          for (let i = 0; i < args.length; i++) {
-            const arg = args[i];
-            if (arg.startsWith('-')) {
-              safeArgs.push(arg.split('=', 1)[0]);
-              if (!arg.includes('=') && args[i + 1] && !args[i + 1].startsWith('-')) {
-                safeArgs.push('<value>');
-                i++;
-              }
-            } else if (i === 0 && [
-              'get-token',
-              'convert-kubeconfig',
-              'remove-tokens',
-              'version',
-              'help'
-            ].includes(arg)) {
-              safeArgs.push(arg);
-            } else {
-              safeArgs.push('<argument>');
-            }
-          }
-          let credential;
-          let jsonValid = false;
-          try {
-            credential = JSON.parse(text);
-            jsonValid = true;
-          } catch (error) {
-            if (!(error instanceof SyntaxError)) throw error;
-          }
-          const object = credential !== null
-            && typeof credential === 'object'
-            && !Array.isArray(credential);
-          const kindValid = object && credential.kind === 'ExecCredential';
-          const apiVersionValid = object && [
-            'client.authentication.k8s.io/v1',
-            'client.authentication.k8s.io/v1beta1'
-          ].includes(credential.apiVersion);
-          const tokenPresent = object
-            && typeof credential.status?.token === 'string'
-            && credential.status.token.length > 0;
-          const summary = {
-            exitCode: result.status,
-            terminatedBySignal: result.signal !== null,
-            spawnFailed: Boolean(result.error),
-            args: safeArgs,
-            stdoutBytes: stdout.length,
-            stderrBytes: stderr.length,
-            stdoutLines: text.length === 0 ? 0 : text.split('\n').length - Number(text.endsWith('\n')),
-            startsWithJsonObject: text.trimStart().startsWith('{'),
-            looksLikeHelp: /^\s*(Usage:|Available Commands:|Flags:|Options:)/m.test(text),
-            hasByteOrderMark: text.charCodeAt(0) === 0xfeff,
-            hasAnsiEscapes: text.includes('\u001b['),
-            jsonValid,
-            kindValid,
-            apiVersionValid,
-            apiVersion: apiVersionValid ? credential.apiVersion : null,
-            tokenPresent,
-            aadstsCodes: [...new Set(stderr.toString('utf8').match(/\bAADSTS\d{5,}\b/g) ?? [])]
-          };
-          const record = `${JSON.stringify(summary)}\n`;
-          appendFileSync(process.env.KUBELOGIN_DIAGNOSTIC_LOG, record, { mode: 0o600 });
-          process.stderr.write(`[kubelogin-diagnostics] ${record}`);
-          process.stdout.write(stdout);
-          if (result.error || result.signal !== null || result.status !== 0) {
-            process.exit(result.status > 0 ? result.status : 1);
-          }
-          if (!jsonValid || !kindValid || !apiVersionValid || !tokenPresent) {
-            process.stderr.write('[kubelogin-diagnostics] Output is not a valid ExecCredential; raw stdout/stderr withheld.\n');
-          }
-          NODE
-          chmod 700 "$diagnostics_dir/kubelogin"
-          echo "KUBELOGIN_DIAGNOSTIC_REAL_BINARY=$real_kubelogin" >> "$GITHUB_ENV"
-          echo "KUBELOGIN_DIAGNOSTIC_LOG=$diagnostics_dir/metadata.jsonl" >> "$GITHUB_ENV"
-          echo "$diagnostics_dir" >> "$GITHUB_PATH"
-
       # Generates an execution plan for Terraform
       # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes.
       - name: Terraform Plan
@@ -280,16 +174,6 @@ jobs:
             terraform plan -detailed-exitcode -no-color -out tfplan
           fi
         working-directory: ${{ inputs.path }}
-
-      - name: Print Token-Safe Kubelogin Diagnostics
-        if: ${{ always() && inputs.diagnoseKubelogin }}
-        shell: bash
-        run: |
-          if [[ -n "${KUBELOGIN_DIAGNOSTIC_LOG:-}" && -f "$KUBELOGIN_DIAGNOSTIC_LOG" ]]; then
-            cat "$KUBELOGIN_DIAGNOSTIC_LOG"
-          else
-            echo "::warning::No kubelogin diagnostic metadata was captured."
-          fi
 
       # Save plan to artifacts
       - name: Publish Terraform Plan
