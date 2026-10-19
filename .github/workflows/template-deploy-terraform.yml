@@ -12,7 +12,7 @@ on:
       diagnoseKubelogin:
         type: boolean
         default: false
-        description: "Temporarily diagnose kubelogin during plan without logging credentials. Logs only output metadata; rejects malformed credential output and suppresses raw stderr."
+        description: "Temporarily diagnose kubelogin during plan without logging credentials. Logs output metadata, preserves stdout, and suppresses raw stderr."
       deployfrombranch:
         type: string
         default: "refs/heads/main"
@@ -184,14 +184,36 @@ jobs:
           const { spawnSync } = require('node:child_process');
           const { appendFileSync } = require('node:fs');
 
+          const args = process.argv.slice(2);
           const result = spawnSync(
             process.env.KUBELOGIN_DIAGNOSTIC_REAL_BINARY,
-            process.argv.slice(2),
+            args,
             { maxBuffer: 1024 * 1024 }
           );
           const stdout = result.stdout ?? Buffer.alloc(0);
           const stderr = result.stderr ?? Buffer.alloc(0);
           const text = stdout.toString('utf8');
+          const safeArgs = [];
+          for (let i = 0; i < args.length; i++) {
+            const arg = args[i];
+            if (arg.startsWith('-')) {
+              safeArgs.push(arg.split('=', 1)[0]);
+              if (!arg.includes('=') && args[i + 1] && !args[i + 1].startsWith('-')) {
+                safeArgs.push('<value>');
+                i++;
+              }
+            } else if (i === 0 && [
+              'get-token',
+              'convert-kubeconfig',
+              'remove-tokens',
+              'version',
+              'help'
+            ].includes(arg)) {
+              safeArgs.push(arg);
+            } else {
+              safeArgs.push('<argument>');
+            }
+          }
           let credential;
           let jsonValid = false;
           try {
@@ -215,10 +237,12 @@ jobs:
             exitCode: result.status,
             terminatedBySignal: result.signal !== null,
             spawnFailed: Boolean(result.error),
+            args: safeArgs,
             stdoutBytes: stdout.length,
             stderrBytes: stderr.length,
             stdoutLines: text.length === 0 ? 0 : text.split('\n').length - Number(text.endsWith('\n')),
             startsWithJsonObject: text.trimStart().startsWith('{'),
+            looksLikeHelp: /^\s*(Usage:|Available Commands:|Flags:|Options:)/m.test(text),
             hasByteOrderMark: text.charCodeAt(0) === 0xfeff,
             hasAnsiEscapes: text.includes('\u001b['),
             jsonValid,
@@ -231,14 +255,13 @@ jobs:
           const record = `${JSON.stringify(summary)}\n`;
           appendFileSync(process.env.KUBELOGIN_DIAGNOSTIC_LOG, record, { mode: 0o600 });
           process.stderr.write(`[kubelogin-diagnostics] ${record}`);
+          process.stdout.write(stdout);
           if (result.error || result.signal !== null || result.status !== 0) {
             process.exit(result.status > 0 ? result.status : 1);
           }
           if (!jsonValid || !kindValid || !apiVersionValid || !tokenPresent) {
-            process.stderr.write('[kubelogin-diagnostics] Invalid credential output; raw stdout/stderr withheld.\n');
-            process.exit(1);
+            process.stderr.write('[kubelogin-diagnostics] Output is not a valid ExecCredential; raw stdout/stderr withheld.\n');
           }
-          process.stdout.write(stdout);
           NODE
           chmod 700 "$diagnostics_dir/kubelogin"
           echo "KUBELOGIN_DIAGNOSTIC_REAL_BINARY=$real_kubelogin" >> "$GITHUB_ENV"
