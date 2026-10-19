@@ -40,8 +40,11 @@ inputs:
     description: Azure tenant id.
     required: true
   subscription:
-    description: Azure subscription id.
-    required: true
+    description: >-
+      Optional Azure subscription id. Omit for identities scoped to resources
+      without subscription-level access.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -58,6 +61,7 @@ runs:
         client-id: ${{ inputs.client-id }}
         tenant-id: ${{ inputs.tenant-id }}
         subscription-id: ${{ inputs.subscription }}
+        allow-no-subscriptions: ${{ inputs.subscription == '' }}
 
     - name: Upload bundle
       uses: $/actions/federation-upload

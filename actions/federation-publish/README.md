@@ -27,7 +27,7 @@ Produces (the container is the contract `module`, derived from `contract.json`):
 | `account` | yes | Remotes storage account name. |
 | `client-id` | yes | Azure service principal client id (OIDC). |
 | `tenant-id` | yes | Azure tenant id. |
-| `subscription` | yes | Azure subscription id. |
+| `subscription` | no | Azure subscription id. Omit for an identity scoped to resources without subscription-level access; the action enables `allow-no-subscriptions` for Azure login. |
 
 The blob container is derived from `contract.json`'s `module` — the same value
 `federation-verify` reads.
