@@ -25,6 +25,11 @@ on:
         required: false
         default: 'container-image'
         type: string
+      migrationBundleArtifactName:
+        description: Name of the migrations bundle artifact. Must match migrationBundleArtifactName in dotnet-ci-jobs.
+        required: false
+        default: 'migrations-bundle'
+        type: string
       repositoryName:
         required: true
         type: string
@@ -47,6 +52,10 @@ on:
         required: false
         type: string
         description: "TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
+    outputs:
+      imageTag:
+        description: "Tag of the image pushed to ACR, e.g. test-1761055200"
+        value: ${{ jobs.deploy.outputs.imageTag }}
 
 permissions:
   id-token: write
@@ -65,6 +74,8 @@ jobs:
     runs-on: private-ubuntu-runner
     environment: ${{ inputs.environment }}
     if: ${{ contains(fromJSON(inputs.allowedBranches), github.ref_name) || (startsWith(github.ref_name, 'release/') && contains(fromJSON(inputs.allowedBranches), 'release')) }}
+    outputs:
+      imageTag: ${{ steps.image_tag.outputs.imageTag }}
     steps:      
       - name: Determine ACR name and ACR subscription based on environment
         run: |
@@ -87,7 +98,7 @@ jobs:
         if: ${{ inputs.migrationBundleArguments != '' }}
         uses: actions/download-artifact@v8
         with:
-          name: migrations-bundle
+          name: ${{ inputs.migrationBundleArtifactName }}
           path: migrations-bundle
 
       - name: Set executable permission for migrations-bundle and run
@@ -131,7 +142,11 @@ jobs:
         run: docker load --input image.tar
 
       - name: Set Docker image tag
-        run: echo "imageTag=${{ inputs.environmentName }}-$(date +%s)" >> $GITHUB_ENV
+        id: image_tag
+        run: |
+          imageTag="${{ inputs.environmentName }}-$(date +%s)"
+          echo "imageTag=$imageTag" >> $GITHUB_ENV
+          echo "imageTag=$imageTag" >> $GITHUB_OUTPUT
 
       - name: Log in to the Azure Container Registry
         run: |
@@ -144,3 +159,8 @@ jobs:
       - name: Push Docker image to ACR
         run: |
           docker push ${{ env.ACR_NAME }}/${{ inputs.repositoryName }}:${{ env.imageTag }}
+
+      - name: Write deployment summary
+        run: |
+          echo "### ${{ inputs.repositoryName }} → ${{ inputs.environmentName }}" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`${{ env.ACR_NAME }}/${{ inputs.repositoryName }}:${{ env.imageTag }}\`" >> $GITHUB_STEP_SUMMARY

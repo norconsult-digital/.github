@@ -51,6 +51,11 @@ on:
         required: false
         type: string
         default: "bicep-deploy"  
+      artifactName:
+        description: "Name of the Bicep artifact. Must match artifactName in publish-bicep-files."
+        required: false
+        type: string
+        default: "bicep"
 
 permissions:
   id-token: write
@@ -70,7 +75,7 @@ jobs:
       - name: Download Bicep artifact
         uses: actions/download-artifact@v8
         with:
-          name: bicep
+          name: ${{ inputs.artifactName }}
           path: ./b2c-poc/resources 
 
       - name: Set artifact path
