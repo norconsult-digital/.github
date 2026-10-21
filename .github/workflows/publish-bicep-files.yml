@@ -19,6 +19,11 @@ on:
         description: "Optional allowed branches"
         required: false
         type: string  
+      artifactName:
+        description: "Name of the Bicep artifact. Set a unique value per deployment when several publish in the same workflow run."
+        required: false
+        type: string
+        default: "bicep"
 
 jobs:
   publish-artifact:
@@ -42,5 +47,5 @@ jobs:
       - name: Upload Bicep files as artifact
         uses: actions/upload-artifact@v7
         with:
-          name: bicep
+          name: ${{ inputs.artifactName }}
           path: ${{ inputs.bicepFolder }}

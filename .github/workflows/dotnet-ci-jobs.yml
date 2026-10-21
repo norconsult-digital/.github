@@ -76,6 +76,16 @@ on:
         required: false
         type: boolean
         default: false
+      artifactName:
+        description: Name of the Docker image artifact. Set a unique value per service when several services build in the same workflow run.
+        required: false
+        type: string
+        default: 'container-image'
+      migrationBundleArtifactName:
+        description: Name of the migrations bundle artifact. Set a unique value per service when several services build in the same workflow run.
+        required: false
+        type: string
+        default: 'migrations-bundle'
 
 jobs:
   test:
@@ -105,6 +115,7 @@ jobs:
       nugetCacheDependencyPath: ${{ inputs.nugetCacheDependencyPath }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
       toolManifestPath: ${{ inputs.toolManifestPath }}
+      projectName: ${{ inputs.migrationBundleArtifactName }}
 
   build_docker_image:
     needs: [test, create_migration_bundle]
@@ -120,3 +131,4 @@ jobs:
       nugetConfigPath: ${{ inputs.nugetConfigPath }}
       sparseCheckout: ${{ inputs.sparseCheckout }}
       dockerCacheScope: ${{ inputs.dockerCacheScope }}
+      artifactName: ${{ inputs.artifactName }}
