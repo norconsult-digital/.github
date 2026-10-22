@@ -12,6 +12,7 @@ Part of the `federation-*` native-federation action suite in this repo — see
 | Change (baseline → candidate) | Level |
 | --- | --- |
 | Added package with `singleton: true, strictVersion: true` | ❌ breaking |
+| Added secondary entry point (`@angular/forms/signals`) whose root was already a strict singleton, with a range every version the root accepted satisfies | ℹ️ info |
 | Added package, non-singleton or non-strict | ⚠️ warning |
 | Removed package (incl. shared → `skip`) | ⚠️ warning |
 | `requiredVersion` narrowed or non-overlapping | ❌ breaking |

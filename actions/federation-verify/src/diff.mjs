@@ -74,7 +74,7 @@ function diffShared(baselineShared, candidateShared) {
   }
   for (const [packageName, candidateEntry] of candidateByPackage) {
     if (!baselineByPackage.has(packageName)) {
-      violations.push(addedPackage(packageName, candidateEntry));
+      violations.push(addedPackage(packageName, candidateEntry, baselineByPackage));
     }
   }
   return violations;
@@ -112,8 +112,16 @@ function removedPackage(packageName) {
   };
 }
 
-function addedPackage(packageName, entry) {
+function addedPackage(packageName, entry, baselineByPackage) {
   if (entry.singleton && entry.strictVersion) {
+    const coveredBy = coveringRoot(packageName, entry, baselineByPackage);
+    if (coveredBy) {
+      return {
+        level: INFO,
+        subject: packageName,
+        message: `secondary entry point '${packageName}' added under '${coveredBy.packageName}@${coveredBy.requiredVersion}', which is already a strict singleton; versions are negotiated per package, so every host that satisfied it still does`
+      };
+    }
     return {
       level: BREAKING,
       subject: packageName,
@@ -125,6 +133,26 @@ function addedPackage(packageName, entry) {
     subject: packageName,
     message: `shared package added (singleton=${entry.singleton}, strictVersion=${entry.strictVersion}); review runtime fallback behavior`
   };
+}
+
+// A secondary entry point (`@angular/forms/signals`) belongs to the same npm package as its
+// root (`@angular/forms`): the orchestrator negotiates one version per package, not per
+// specifier. Adding one asks nothing new of a host when the root was already a strict
+// singleton in the baseline and every version the root accepted also satisfies the new range.
+function coveringRoot(packageName, entry, baselineByPackage) {
+  const segments = packageName.split('/');
+  const rootLength = packageName.startsWith('@') ? 2 : 1;
+  if (segments.length <= rootLength) return null;
+
+  const root = baselineByPackage.get(segments.slice(0, rootLength).join('/'));
+  if (!root?.singleton || !root.strictVersion) return null;
+  try {
+    return semver.subset(root.requiredVersion, entry.requiredVersion, { includePrerelease: true })
+      ? root
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function requiredVersionChanged(packageName, oldRange, newRange) {
