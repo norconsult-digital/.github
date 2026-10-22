@@ -2139,7 +2139,7 @@ function diffShared(baselineShared, candidateShared) {
   }
   for (const [packageName, candidateEntry] of candidateByPackage) {
     if (!baselineByPackage.has(packageName)) {
-      violations.push(addedPackage(packageName, candidateEntry));
+      violations.push(addedPackage(packageName, candidateEntry, baselineByPackage));
     }
   }
   return violations;
@@ -2171,8 +2171,16 @@ function removedPackage(packageName) {
     message: "shared package removed; the remote now bundles it (harmless unless another module consumed it through this remote)"
   };
 }
-function addedPackage(packageName, entry) {
+function addedPackage(packageName, entry, baselineByPackage) {
   if (entry.singleton && entry.strictVersion) {
+    const coveredBy = coveringRoot(packageName, entry, baselineByPackage);
+    if (coveredBy) {
+      return {
+        level: INFO,
+        subject: packageName,
+        message: `secondary entry point '${packageName}' added under '${coveredBy.packageName}@${coveredBy.requiredVersion}', which is already a strict singleton; versions are negotiated per package, so every host that satisfied it still does`
+      };
+    }
     return {
       level: BREAKING,
       subject: packageName,
@@ -2184,6 +2192,18 @@ function addedPackage(packageName, entry) {
     subject: packageName,
     message: `shared package added (singleton=${entry.singleton}, strictVersion=${entry.strictVersion}); review runtime fallback behavior`
   };
+}
+function coveringRoot(packageName, entry, baselineByPackage) {
+  const segments = packageName.split("/");
+  const rootLength = packageName.startsWith("@") ? 2 : 1;
+  if (segments.length <= rootLength) return null;
+  const root = baselineByPackage.get(segments.slice(0, rootLength).join("/"));
+  if (!root?.singleton || !root.strictVersion) return null;
+  try {
+    return import_semver.default.subset(root.requiredVersion, entry.requiredVersion, { includePrerelease: true }) ? root : null;
+  } catch {
+    return null;
+  }
 }
 function requiredVersionChanged(packageName, oldRange, newRange) {
   if (oldRange === "auto" || newRange === "auto") {

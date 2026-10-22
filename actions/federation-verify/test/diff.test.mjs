@@ -55,6 +55,34 @@ const cases = [
     expectLevels: [BREAKING]
   },
   {
+    name: 'added secondary entry point of a strict singleton root is info when the root range is covered',
+    candidate: baselineRemote({
+      shared: [...baselineRemote().shared, shared('@ngrx/signals/entities', { requiredVersion: '^21' })]
+    }),
+    expectLevels: [INFO]
+  },
+  {
+    name: 'added secondary entry point with a narrower range than its root is breaking',
+    candidate: baselineRemote({
+      shared: [...baselineRemote().shared, shared('@ngrx/signals/entities', { requiredVersion: '^21.2.0' })]
+    }),
+    expectLevels: [BREAKING]
+  },
+  {
+    name: 'added strict secondary entry point of a non-strict root is breaking',
+    candidate: baselineRemote({
+      shared: [...baselineRemote().shared, shared('rxjs/operators', { version: '7.8.2', requiredVersion: '^7.8.0' })]
+    }),
+    expectLevels: [BREAKING]
+  },
+  {
+    name: 'added secondary entry point whose root is not shared is breaking',
+    candidate: baselineRemote({
+      shared: [...baselineRemote().shared, shared('@angular/forms/signals')]
+    }),
+    expectLevels: [BREAKING]
+  },
+  {
     name: 'added non-strict singleton is a warning',
     candidate: baselineRemote({
       shared: [...baselineRemote().shared, shared('chart.js', { requiredVersion: '^4.0.0', strictVersion: false })]
