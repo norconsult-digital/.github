@@ -16,8 +16,9 @@ on:
         required: true
         type: string
       migrationBundleAppSettingsPath:
-        description: Path to appsettings.json for the migrations bundle
-        required: true
+        description: Folder with appsettings.json to copy into the migrations bundle. Leave empty when the app has none.
+        required: false
+        default: ''
         type: string
       dotnetVersion:
         description: .NET SDK version to use
@@ -156,6 +157,7 @@ jobs:
         run: dotnet ef migrations bundle ${{ inputs.migrationBundleArguments }} --self-contained --verbose --output migrations-bundle/migrations-bundle.exe
 
       - name: Copy appsettings.json to migrations-bundle
+        if: ${{ inputs.migrationBundleAppSettingsPath != '' }}
         run: cp -v ${{ inputs.migrationBundleAppSettingsPath }}/appsettings.json migrations-bundle/
 
       - name: Upload migrations bundle as artifact

@@ -39,6 +39,21 @@ on:
       dbConnection: 
         required: false
         type: string
+      appConfigurationEndpoint:
+        description: "App Configuration store to read the migration connection from, e.g. https://appcs-nexus-common.azconfig.io. Used with dbConnectionKey, instead of dbConnection."
+        required: false
+        default: ''
+        type: string
+      dbConnectionKey:
+        description: "Key in appConfigurationEndpoint that holds the connection. Read with environmentName as label."
+        required: false
+        default: ''
+        type: string
+      migrationCommandTimeout:
+        description: "Seconds, added as Command Timeout to the connection read from App Configuration, for migrations that run longer than the app's own timeout. 0 adds nothing."
+        required: false
+        default: 0
+        type: number
       dbConnections:
         description: "Multiple DB connections as JSON array"
         required: false
@@ -107,6 +122,26 @@ jobs:
           chmod +x ./migrations-bundle.exe
           ./migrations-bundle.exe --connection '${{ inputs.dbConnection }}' --verbose
         working-directory: ./migrations-bundle  
+
+      - name: Run migrations with the connection from App Configuration
+        if: ${{ inputs.migrationBundleArguments != '' && inputs.dbConnectionKey != '' }}
+        env:
+          ENDPOINT: ${{ inputs.appConfigurationEndpoint }}
+          KEY: ${{ inputs.dbConnectionKey }}
+          LABEL: ${{ inputs.environmentName }}
+          TIMEOUT: ${{ inputs.migrationCommandTimeout }}
+        run: |
+          set -euo pipefail
+          connection="$(az appconfig kv show --endpoint "$ENDPOINT" --auth-mode login --key "$KEY" --label "$LABEL" --query value -o tsv)"
+          if [ -z "$connection" ]; then
+            echo "::error::$KEY has no value for label $LABEL in $ENDPOINT"
+            exit 1
+          fi
+          echo "::add-mask::$connection"
+          if [ "$TIMEOUT" != "0" ]; then connection="${connection%;};Command Timeout=$TIMEOUT;"; fi
+          chmod +x ./migrations-bundle.exe
+          ./migrations-bundle.exe --connection "$connection" --verbose
+        working-directory: ./migrations-bundle
 
       - name: Run migrations for multiple DB connections
         if: ${{ inputs.migrationBundleArguments != '' && inputs.dbConnections != '[]' }}
