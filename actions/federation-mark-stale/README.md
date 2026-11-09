@@ -20,5 +20,8 @@ deletion clock forward.
 | `path` | no | `""` | Virtual-directory prefix (e.g. `v1`). Empty = whole container. |
 | `source` | no | `""` | Built bundle whose files must be protected (never stamped). Omit to retire the whole scope. |
 
-Auth: `az storage ... --auth-mode login` — run `azure/login` first. Requires
-`runs-on: ubuntu-*`.
+Auth: `az storage blob list --auth-mode login` and a storage token from
+`az account get-access-token` — run `azure/login` first. The stamps are set
+with parallel Set Blob Metadata REST calls (16 at a time), since one `az` call
+per blob took tens of minutes on large bundles. Requires `runs-on: ubuntu-*`
+(`jq`, `curl`, GNU `xargs`).
