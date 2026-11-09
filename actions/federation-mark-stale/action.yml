@@ -96,8 +96,9 @@ runs:
         az storage blob list "${list_args[@]}" > "${LIST}"
 
         NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        TOMARK="${WORK}/tomark.txt"
+        : > "${TOMARK}"
         ORPHANS=0
-        MARKED=0
         while IFS=$'\t' read -r blob since; do
           [ -z "${blob}" ] && continue
           # Protected by the current build → not an orphan.
@@ -109,16 +110,42 @@ runs:
           if [ -n "${since}" ] && [ "${since}" != "None" ]; then
             continue
           fi
-          az storage blob metadata update \
-            --account-name "${ACCOUNT}" \
-            --auth-mode login \
-            --container-name "${CONTAINER}" \
-            --name "${blob}" \
-            --metadata "stalesince=${NOW}" \
-            --output none
-          echo "  marked stale: ${blob}"
-          MARKED=$((MARKED + 1))
+          printf '%s\n' "${blob}" >> "${TOMARK}"
         done < "${LIST}"
+        MARKED="$(wc -l < "${TOMARK}" | tr -d ' ')"
+
+        # One `az storage blob metadata update` per blob costs a CLI start and a
+        # token lookup each, which took tens of minutes for a few hundred
+        # orphans. Instead: one token, then Set Blob Metadata over REST in
+        # parallel. Like the CLI call it replaces the blob's metadata, and these
+        # blobs have none besides the stamp.
+        if [ "${MARKED}" -gt 0 ]; then
+          TOKEN="$(az account get-access-token \
+            --resource https://storage.azure.com/ \
+            --query accessToken -o tsv)"
+          echo "::add-mask::${TOKEN}"
+          export TOKEN ACCOUNT CONTAINER NOW
+
+          mark_one() {
+            local blob="$1" path
+            path="$(jq -rn --arg b "${blob}" '$b | @uri' | sed 's#%2F#/#g')"
+            curl --silent --show-error --fail-with-body \
+              --retry 5 --retry-all-errors --retry-max-time 120 \
+              -X PUT \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "x-ms-version: 2023-11-03" \
+              -H "x-ms-date: $(date -u '+%a, %d %b %Y %H:%M:%S GMT')" \
+              -H "x-ms-meta-stalesince: ${NOW}" \
+              -H "Content-Length: 0" \
+              "https://${ACCOUNT}.blob.core.windows.net/${CONTAINER}/${path}?comp=metadata" \
+              || { echo "::error::Could not mark ${blob} stale"; return 1; }
+            echo "  marked stale: ${blob}"
+          }
+          export -f mark_one
+
+          # xargs exits non-zero if any call failed, which fails the step.
+          xargs -d '\n' -n 1 -P 16 bash -c 'mark_one "$1"' _ < "${TOMARK}"
+        fi
 
         if [ -n "${SOURCE}" ]; then
           MODE="publish (protect current build)"
