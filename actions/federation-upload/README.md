@@ -19,8 +19,11 @@ Used internally by `federation-publish`; usable standalone after an
 | `path` | no | `""` | Virtual-directory prefix inside the container (e.g. `v1`). Empty = container root. |
 | `no-cache-files` | no | `remoteEntry.json` | Comma-separated pointer **filenames** served no-cache and uploaded after all others. Each is matched **at any depth**. |
 
-Auth: `az storage ... --auth-mode login` — run `azure/login` first. Requires
-`runs-on: ubuntu-*`.
+Auth: run `azure/login` first. The immutable files are uploaded in parallel
+with `azcopy` (preinstalled on GitHub's Ubuntu runners), which reuses the
+az CLI session (`AZCOPY_AUTO_LOGIN_TYPE=AZCLI`). Without `azcopy` it falls back
+to the slower `az storage blob upload-batch`. The no-cache pointers are uploaded
+with `az storage blob upload --auth-mode login`. Requires `runs-on: ubuntu-*`.
 
 ### No-cache matching (localized builds)
 
