@@ -109,15 +109,18 @@ runs:
             --source "${STAGE}"
             --overwrite
             --content-cache-control "public, max-age=31536000, immutable"
+            --output none
           )
           [ -n "${PREFIX}" ] && batch_args+=(--destination-path "${PREFIX}")
           az storage blob upload-batch "${batch_args[@]}"
         fi
+        ( cd "${STAGE}" && find . -type f -printf '%P\n' ) | sort \
+          | sed "s#^#  uploaded: ${PREFIX:+${PREFIX}/}#"
 
         echo "Uploading no-cache pointer(s) last"
         for p in "${NC_PATHS[@]:-}"; do
           [ -z "${p}" ] && continue
-          echo "  - ${p}"
+          echo "  uploaded: ${PREFIX:+${PREFIX}/}${p} (no-cache)"
           az storage blob upload \
             --account-name "${ACCOUNT}" \
             --auth-mode login \
