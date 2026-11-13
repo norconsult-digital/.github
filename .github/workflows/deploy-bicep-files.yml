@@ -108,7 +108,6 @@ jobs:
           deploymentName: ${{ env.DEPLOYMENT_NAME }}
 
       - name: Deploy Bicep file
-        if: ${{ always() && inputs.runWhatIf == false || inputs.runWhatIf == true }}
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ inputs.subscription }}
