@@ -151,6 +151,8 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ steps.tf-required-version.outputs.version }}
+          # The wrapper returns process status 0 for both plan exit codes 0 and 2.
+          terraform_wrapper: false
 
       # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
       - name: Terraform Init
@@ -166,14 +168,78 @@ jobs:
       # An exit code of 0 indicated no changes, 1 a terraform failure, 2 there are pending changes.
       - name: Terraform Plan
         id: tf-plan
+        env:
+          SKIP_STATE_REFRESH: ${{ inputs.skipStateRefresh }}
         run: |
-          if [ "${{ inputs.skipStateRefresh }}" = "true" ]; then
-            terraform plan -detailed-exitcode -no-color -out tfplan -refresh=false
+          exit_code=0
+          if [ "$SKIP_STATE_REFRESH" = "true" ]; then
+            terraform plan -detailed-exitcode -no-color -out tfplan -refresh=false || exit_code=$?
             echo "⚡ State refresh skipped for faster execution"
           else
-            terraform plan -detailed-exitcode -no-color -out tfplan
+            terraform plan -detailed-exitcode -no-color -out tfplan || exit_code=$?
+          fi
+          echo "exitcode=$exit_code" >> "$GITHUB_OUTPUT"
+          if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 2 ]; then
+            exit "$exit_code"
           fi
         working-directory: ${{ inputs.path }}
+
+      - name: Prepare Terraform plan result
+        id: plan-result
+        if: github.event_name == 'pull_request'
+        env:
+          ROOT: ${{ inputs.path }}
+          REFRESHED: ${{ !inputs.skipStateRefresh }}
+          EXIT_CODE: ${{ steps.tf-plan.outputs.exitcode }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const crypto = require('crypto');
+
+          const inputRoot = process.env.ROOT;
+          if (!inputRoot || path.posix.isAbsolute(inputRoot)) {
+            throw new Error('Terraform root must be a repository-relative path');
+          }
+          const root = path.posix.normalize(inputRoot).replace(/\/+$/, '') || '.';
+          if (root === '..' || root.startsWith('../')) {
+            throw new Error('Terraform root must be a repository-relative path');
+          }
+          if (!['0', '2'].includes(process.env.EXIT_CODE)) {
+            throw new Error('Terraform plan did not complete successfully');
+          }
+          const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const pr = event.pull_request;
+          if (!pr || !Number.isSafeInteger(pr.number) || !pr.head?.sha || !pr.base?.sha) {
+            throw new Error('Pull request metadata is missing');
+          }
+          const hash = crypto.createHash('sha256').update(root, 'utf8').digest('hex');
+          const dir = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'terraform-plan-result-'));
+          const result = {
+            schema_version: 1,
+            repository: process.env.GITHUB_REPOSITORY,
+            pr_number: pr.number,
+            head_sha: pr.head.sha,
+            base_sha: pr.base.sha,
+            merge_sha: process.env.GITHUB_SHA,
+            run_id: process.env.GITHUB_RUN_ID,
+            run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+            root,
+            refreshed: process.env.REFRESHED === 'true',
+            exit_code: Number(process.env.EXIT_CODE),
+          };
+          fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result) + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=terraform-plan-result-${hash}\npath=${dir}/result.json\n`);
+          NODE
+
+      - name: Publish Terraform plan result
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.plan-result.outputs.name }}
+          path: ${{ steps.plan-result.outputs.path }}
+          if-no-files-found: error
+          retention-days: 7
 
       # Save plan to artifacts
       - name: Publish Terraform Plan
