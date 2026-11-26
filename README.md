@@ -13,6 +13,22 @@ Actions → New workflow → Pick a Norconsult Digital template → Commit. Edit
 ### Add or update a template
 PR with the `.yml` plus matching `.properties.json`. Keep it small, clear, and tested.
 
+### Terraform plan result
+The reusable [Terraform deploy workflow](.github/workflows/template-deploy-terraform.yml)
+uploads a machine-readable result for successful pull request plans (exit code
+0 or 2). The artifact is named `terraform-plan-result-<sha256>`, where the
+suffix is the lowercase SHA-256 of the UTF-8 POSIX-normalized, repository-relative
+root (`.` for the repository root). Absolute and escaping paths are rejected.
+It contains only `result.json` and is retained for seven days.
+
+The JSON contains `schema_version` (integer 1), `repository`, `pr_number`
+(integer), `head_sha`, `base_sha`, `merge_sha`, `run_id` and `run_attempt`
+(strings), `root` (string), `refreshed` (boolean), and `exit_code` (integer 0
+or 2). `merge_sha` is the pull request workflow's checkout revision. Consumers
+must verify the result against the trusted workflow run, PR revisions and
+expected roots; a no-change decision also requires `refreshed: true` and
+`exit_code: 0`. A failed or skipped plan does not produce a result.
+
 ### APIM specification updates
 The reusable workflow [apim-push-spec-pr.yml](.github/workflows/apim-push-spec-pr.yml)
 turns backend OpenAPI exports into a pull request in the target repository.
