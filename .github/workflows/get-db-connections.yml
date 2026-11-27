@@ -23,6 +23,11 @@ on:
         description: "Connection string template with {DATABASE_NAME} placeholder (e.g., Server=sql.server.net,1433;Initial Catalog={DATABASE_NAME};Authentication=Active Directory Default;)"
         required: true
         type: string
+      githubEnvironment:
+        description: "GitHub environment whose environment-scoped variables and secrets are available to this job"
+        required: false
+        type: string
+        default: ""
     outputs:
       connectionStrings:
         description: "JSON array of database connection strings"
@@ -31,6 +36,7 @@ on:
 jobs:
   fetch-db-instances:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.githubEnvironment || null }}
     outputs:
       connectionStrings: ${{ steps.parse_instances.outputs.connectionStrings }}
     
