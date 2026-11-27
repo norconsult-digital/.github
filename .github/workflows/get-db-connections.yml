@@ -61,6 +61,9 @@ jobs:
           ACCESS_TOKEN=$(az account get-access-token \
             --resource "https://${{ inputs.b2cDomain }}/${{ inputs.clientId }}" \
             --query accessToken -o tsv)
+          if [ -n "$ACCESS_TOKEN" ]; then
+            echo "::add-mask::$ACCESS_TOKEN"
+          fi
           echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
 
       - name: Verify Access Token
