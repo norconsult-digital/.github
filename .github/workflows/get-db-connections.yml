@@ -23,6 +23,11 @@ on:
         description: "Connection string template with {DATABASE_NAME} placeholder (e.g., Server=sql.server.net,1433;Initial Catalog={DATABASE_NAME};Authentication=Active Directory Default;)"
         required: true
         type: string
+      githubEnvironment:
+        description: "GitHub environment whose environment-scoped variables and secrets are available to this job"
+        required: false
+        type: string
+        default: ""
     outputs:
       connectionStrings:
         description: "JSON array of database connection strings"
@@ -31,6 +36,7 @@ on:
 jobs:
   fetch-db-instances:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.githubEnvironment || null }}
     outputs:
       connectionStrings: ${{ steps.parse_instances.outputs.connectionStrings }}
     
@@ -55,6 +61,9 @@ jobs:
           ACCESS_TOKEN=$(az account get-access-token \
             --resource "https://${{ inputs.b2cDomain }}/${{ inputs.clientId }}" \
             --query accessToken -o tsv)
+          if [ -n "$ACCESS_TOKEN" ]; then
+            echo "::add-mask::$ACCESS_TOKEN"
+          fi
           echo "token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
 
       - name: Verify Access Token
@@ -87,9 +96,10 @@ jobs:
         id: parse_instances
         env:
           CONNECTION_TEMPLATE: ${{ inputs.connectionStringTemplate }}
+          API_RESPONSE: ${{ steps.call_api.outputs.response }}
         run: |
           # Parse database names from API response
-          INSTANCES=$(echo '${{ steps.call_api.outputs.response }}' | jq -c '[.databaseInstances[].name]')
+          INSTANCES=$(printf '%s' "$API_RESPONSE" | jq -c '[.databaseInstances[].name]')
           echo "instances=$INSTANCES" >> $GITHUB_OUTPUT
           
           # Build connection strings from template
