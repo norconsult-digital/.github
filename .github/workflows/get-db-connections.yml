@@ -96,9 +96,10 @@ jobs:
         id: parse_instances
         env:
           CONNECTION_TEMPLATE: ${{ inputs.connectionStringTemplate }}
+          API_RESPONSE: ${{ steps.call_api.outputs.response }}
         run: |
           # Parse database names from API response
-          INSTANCES=$(echo '${{ steps.call_api.outputs.response }}' | jq -c '[.databaseInstances[].name]')
+          INSTANCES=$(printf '%s' "$API_RESPONSE" | jq -c '[.databaseInstances[].name]')
           echo "instances=$INSTANCES" >> $GITHUB_OUTPUT
           
           # Build connection strings from template
