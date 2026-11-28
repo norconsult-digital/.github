@@ -54,6 +54,11 @@ on:
         required: false
         default: 0
         type: number
+      migrationSummary:
+        description: "Write a summary of migration command results by database. A successful command does not mean new migrations were applied."
+        required: false
+        default: false
+        type: boolean
       dbConnections:
         description: "Multiple DB connections as JSON array"
         required: false
@@ -116,11 +121,55 @@ jobs:
           name: ${{ inputs.migrationBundleArtifactName }}
           path: migrations-bundle
 
+      - name: Prepare migration summary
+        if: ${{ inputs.migrationBundleArguments != '' && inputs.migrationSummary }}
+        run: |
+          helper="$(mktemp "$RUNNER_TEMP/migration-summary.XXXXXXXX")"
+          cat > "$helper" <<'HELPER'
+          run_migration_with_summary() {
+            local connection="$1" database status result
+            if ! database="$(MIGRATION_CONNECTION="$connection" pwsh -NoLogo -NoProfile -NonInteractive -Command '
+              try {
+                $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+                $builder.set_ConnectionString($env:MIGRATION_CONNECTION)
+                $keys = @($builder.get_Keys() | Where-Object { $_ -in @("database", "initial catalog") })
+                if ($keys.Count -ne 1) { exit 1 }
+                $name = [string]$builder.get_Item($keys[0])
+                if ($name -cnotmatch "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$") { exit 1 }
+                [Console]::Write($name)
+              } catch { exit 1 }
+            ' 2>/dev/null)"; then
+              echo "::warning::Could not safely determine the migration database name."
+              database="unknown"
+            fi
+            if ./migrations-bundle.exe --connection "$connection" --verbose; then
+              status=0
+              result="Migration command completed; new migrations may not have been applied"
+            else
+              status=$?
+              result="Migration command failed"
+            fi
+            if ! printf -- '- `%s`: %s (exit %s)\n' "$database" "$result" "$status" >> "$GITHUB_STEP_SUMMARY"; then
+              echo "::warning::Could not write the migration summary."
+            fi
+            return "$status"
+          }
+          HELPER
+          printf 'MIGRATION_SUMMARY_HELPER=%s\n' "$helper" >> "$GITHUB_ENV"
+
       - name: Set executable permission for migrations-bundle and run
         if: ${{ inputs.migrationBundleArguments != '' && inputs.dbConnection != '' }}
+        env:
+          CONNECTION: ${{ inputs.dbConnection }}
+          MIGRATION_SUMMARY: ${{ inputs.migrationSummary }}
         run: |
           chmod +x ./migrations-bundle.exe
-          ./migrations-bundle.exe --connection '${{ inputs.dbConnection }}' --verbose
+          if [ "$MIGRATION_SUMMARY" = "true" ]; then
+            source "$MIGRATION_SUMMARY_HELPER"
+            run_migration_with_summary "$CONNECTION"
+          else
+            ./migrations-bundle.exe --connection "$CONNECTION" --verbose
+          fi
         working-directory: ./migrations-bundle  
 
       - name: Run migrations with the connection from App Configuration
@@ -130,6 +179,7 @@ jobs:
           KEY: ${{ inputs.dbConnectionKey }}
           LABEL: ${{ inputs.environmentName }}
           TIMEOUT: ${{ inputs.migrationCommandTimeout }}
+          MIGRATION_SUMMARY: ${{ inputs.migrationSummary }}
         run: |
           set -euo pipefail
           connection="$(az appconfig kv show --endpoint "$ENDPOINT" --auth-mode login --key "$KEY" --label "$LABEL" --query value -o tsv)"
@@ -140,34 +190,63 @@ jobs:
           echo "::add-mask::$connection"
           if [ "$TIMEOUT" != "0" ]; then connection="${connection%;};Command Timeout=$TIMEOUT;"; fi
           chmod +x ./migrations-bundle.exe
-          ./migrations-bundle.exe --connection "$connection" --verbose
+          if [ "$MIGRATION_SUMMARY" = "true" ]; then
+            source "$MIGRATION_SUMMARY_HELPER"
+            run_migration_with_summary "$connection"
+          else
+            ./migrations-bundle.exe --connection "$connection" --verbose
+          fi
         working-directory: ./migrations-bundle
 
       - name: Run migrations for multiple DB connections
         if: ${{ inputs.migrationBundleArguments != '' && inputs.dbConnections != '[]' }}
         env:
           DB_CONNECTIONS: ${{ inputs.dbConnections }}
+          MIGRATION_SUMMARY: ${{ inputs.migrationSummary }}
         run: |
           chmod +x ./migrations-bundle.exe
+          if [ "$MIGRATION_SUMMARY" = "true" ]; then
+            source "$MIGRATION_SUMMARY_HELPER"
+          fi
           printf '%s\n' "$DB_CONNECTIONS" | jq -r '.[]' | while read -r connection; do
-            ./migrations-bundle.exe --connection "$connection" --verbose
+            if [ "$MIGRATION_SUMMARY" = "true" ]; then
+              run_migration_with_summary "$connection"
+            else
+              ./migrations-bundle.exe --connection "$connection" --verbose
+            fi
           done
         working-directory: ./migrations-bundle
 
       # TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
       - name: Run migrations for optionalDbConnection1 if provided
         if: ${{ inputs.migrationBundleArguments != '' && inputs.optionalDbConnection1 != '' }}
+        env:
+          CONNECTION: ${{ inputs.optionalDbConnection1 }}
+          MIGRATION_SUMMARY: ${{ inputs.migrationSummary }}
         run: |
           chmod +x ./migrations-bundle.exe
-          ./migrations-bundle.exe --connection '${{ inputs.optionalDbConnection1 }}' --verbose
+          if [ "$MIGRATION_SUMMARY" = "true" ]; then
+            source "$MIGRATION_SUMMARY_HELPER"
+            run_migration_with_summary "$CONNECTION"
+          else
+            ./migrations-bundle.exe --connection "$CONNECTION" --verbose
+          fi
         working-directory: ./migrations-bundle
         
       # TEMPORARY: DO NOT USE OPTIONAL DB CONNECTIONS, THESE ARE TEMPORARY AND WILL BE REMOVED WITHOUT WARNING!"
       - name: Run migrations for optionalDbConnection2 if provided
         if: ${{ inputs.migrationBundleArguments != '' && inputs.optionalDbConnection2 != '' }}
+        env:
+          CONNECTION: ${{ inputs.optionalDbConnection2 }}
+          MIGRATION_SUMMARY: ${{ inputs.migrationSummary }}
         run: |
           chmod +x ./migrations-bundle.exe
-          ./migrations-bundle.exe --connection '${{ inputs.optionalDbConnection2 }}' --verbose
+          if [ "$MIGRATION_SUMMARY" = "true" ]; then
+            source "$MIGRATION_SUMMARY_HELPER"
+            run_migration_with_summary "$CONNECTION"
+          else
+            ./migrations-bundle.exe --connection "$CONNECTION" --verbose
+          fi
         working-directory: ./migrations-bundle
       
       - name: Download Docker image artifact
